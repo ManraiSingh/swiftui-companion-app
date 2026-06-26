@@ -1,0 +1,727 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B51F06A02FAE888F009B8146 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B51F069F2FAE888F009B8146 /* ContentView.swift */; };
+		B51F06B32FAE8FF5009B8146 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51F06B22FAE8FF5009B8146 /* WidgetKit.framework */; };
+		B51F06B52FAE8FF5009B8146 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51F06B42FAE8FF5009B8146 /* SwiftUI.framework */; };
+		B51F06C22FAE8FF7009B8146 /* ZiggyWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B51F06B02FAE8FF5009B8146 /* ZiggyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B54457AA2FDEC2A700A6F47A /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = B54457A92FDEC2A700A6F47A /* FirebaseCore */; };
+		B54457AC2FDEC2B600A6F47A /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = B54457AB2FDEC2B600A6F47A /* FirebaseFirestore */; };
+		B54457AE2FDEEF7300A6F47A /* FirestoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457AD2FDEEF7300A6F47A /* FirestoreManager.swift */; };
+		B54457B02FDF0BF000A6F47A /* UserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457AF2FDF0BF000A6F47A /* UserManager.swift */; };
+		B54457B12FDF0BF000A6F47A /* UserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457AF2FDF0BF000A6F47A /* UserManager.swift */; };
+		B54457B32FDF0EEA00A6F47A /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457B22FDF0EEA00A6F47A /* OnboardingView.swift */; };
+		B54457B52FDF16CC00A6F47A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457B42FDF16CC00A6F47A /* SettingsView.swift */; };
+		B57A3A342FDC1A4C00332034 /* Pet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A332FDC1A4C00332034 /* Pet.swift */; };
+		B57A3A362FDC1A7200332034 /* PetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A352FDC1A7200332034 /* PetViewModel.swift */; };
+		B57A3A382FDDE8A500332034 /* PersistenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A372FDDE8A500332034 /* PersistenceManager.swift */; };
+		B57A3A3A2FDDF50600332034 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A392FDDF50600332034 /* Event.swift */; };
+		B57A3A3D2FDE156700332034 /* WidgetDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A3C2FDE156700332034 /* WidgetDataManager.swift */; };
+		B57A3A3E2FDE160800332034 /* Pet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A332FDC1A4C00332034 /* Pet.swift */; };
+		B57A3A3F2FDE161100332034 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A392FDDF50600332034 /* Event.swift */; };
+		B57A3A402FDE1A3800332034 /* WidgetDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A3C2FDE156700332034 /* WidgetDataManager.swift */; };
+		B57A3A432FDE21FB00332034 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A422FDE21FB00332034 /* ActivityView.swift */; };
+		B57A3A452FDE281100332034 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A442FDE281100332034 /* NotificationManager.swift */; };
+		B5AD651E2FE0A3C5007BFF84 /* RelationshipManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */; };
+		B5AD65202FE15315007BFF84 /* RelationshipSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */; };
+		B5AD65222FE17C0D007BFF84 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65212FE17C0D007BFF84 /* FeedView.swift */; };
+		B5AD65242FE2A8D0007BFF84 /* DrawingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65232FE2A8D0007BFF84 /* DrawingGameView.swift */; };
+		B5AD65462FE327CA007BFF84 /* InstantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65452FE327CA007BFF84 /* InstantView.swift */; };
+		B5AD65482FE6C890007BFF84 /* PlayCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */; };
+		B5AD654A2FE6C891007BFF84 /* PizzaMakingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */; };
+		B5AD656A2FE5F5CB007BFF84 /*   DailyQuestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B51F06C02FAE8FF7009B8146 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B51F06922FAE888F009B8146 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B51F06AF2FAE8FF5009B8146;
+			remoteInfo = ZiggyWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B51F06C72FAE8FF7009B8146 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B51F06C22FAE8FF7009B8146 /* ZiggyWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		B51F069A2FAE888F009B8146 /* Ziggy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ziggy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B51F069F2FAE888F009B8146 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B51F06B02FAE8FF5009B8146 /* ZiggyWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZiggyWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B51F06B22FAE8FF5009B8146 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		B51F06B42FAE8FF5009B8146 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		B54457AD2FDEEF7300A6F47A /* FirestoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreManager.swift; sourceTree = "<group>"; };
+		B54457AF2FDF0BF000A6F47A /* UserManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserManager.swift; sourceTree = "<group>"; };
+		B54457B22FDF0EEA00A6F47A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		B54457B42FDF16CC00A6F47A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B57A3A332FDC1A4C00332034 /* Pet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pet.swift; sourceTree = "<group>"; };
+		B57A3A352FDC1A7200332034 /* PetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetViewModel.swift; sourceTree = "<group>"; };
+		B57A3A372FDDE8A500332034 /* PersistenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceManager.swift; sourceTree = "<group>"; };
+		B57A3A392FDDF50600332034 /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
+		B57A3A3C2FDE156700332034 /* WidgetDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataManager.swift; sourceTree = "<group>"; };
+		B57A3A412FDE1CE300332034 /* ZiggyWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZiggyWidgetExtension.entitlements; sourceTree = "<group>"; };
+		B57A3A422FDE21FB00332034 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
+		B57A3A442FDE281100332034 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipManager.swift; sourceTree = "<group>"; };
+		B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipSetupView.swift; sourceTree = "<group>"; };
+		B5AD65212FE17C0D007BFF84 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
+		B5AD65232FE2A8D0007BFF84 /* DrawingGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingGameView.swift; sourceTree = "<group>"; };
+		B5AD65452FE327CA007BFF84 /* InstantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantView.swift; sourceTree = "<group>"; };
+		B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayCenterView.swift; sourceTree = "<group>"; };
+		B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PizzaMakingGameView.swift; sourceTree = "<group>"; };
+		B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "  DailyQuestionManager.swift"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B51F06C32FAE8FF7009B8146 /* Exceptions for "ZiggyWidget" folder in "ZiggyWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B51F06AF2FAE8FF5009B8146 /* ZiggyWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B51F069C2FAE888F009B8146 /* Ziggy */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Ziggy;
+			sourceTree = "<group>";
+		};
+		B51F06B62FAE8FF5009B8146 /* ZiggyWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B51F06C32FAE8FF7009B8146 /* Exceptions for "ZiggyWidget" folder in "ZiggyWidgetExtension" target */,
+			);
+			path = ZiggyWidget;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B51F06972FAE888F009B8146 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B54457AA2FDEC2A700A6F47A /* FirebaseCore in Frameworks */,
+				B54457AC2FDEC2B600A6F47A /* FirebaseFirestore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B51F06AD2FAE8FF5009B8146 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B51F06B52FAE8FF5009B8146 /* SwiftUI.framework in Frameworks */,
+				B51F06B32FAE8FF5009B8146 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B51F06912FAE888F009B8146 = {
+			isa = PBXGroup;
+			children = (
+				B57A3A412FDE1CE300332034 /* ZiggyWidgetExtension.entitlements */,
+				B51F06AB2FAE8912009B8146 /* Services */,
+				B51F06AA2FAE890B009B8146 /* Views */,
+				B51F06A82FAE88E5009B8146 /* Models */,
+				B51F069C2FAE888F009B8146 /* Ziggy */,
+				B51F06B62FAE8FF5009B8146 /* ZiggyWidget */,
+				B51F06B12FAE8FF5009B8146 /* Frameworks */,
+				B51F069B2FAE888F009B8146 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B51F069B2FAE888F009B8146 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B51F069A2FAE888F009B8146 /* Ziggy.app */,
+				B51F06B02FAE8FF5009B8146 /* ZiggyWidgetExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B51F06A82FAE88E5009B8146 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B57A3A332FDC1A4C00332034 /* Pet.swift */,
+				B57A3A392FDDF50600332034 /* Event.swift */,
+				B54457AF2FDF0BF000A6F47A /* UserManager.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		B51F06AA2FAE890B009B8146 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B51F069F2FAE888F009B8146 /* ContentView.swift */,
+				B57A3A422FDE21FB00332034 /* ActivityView.swift */,
+				B54457B22FDF0EEA00A6F47A /* OnboardingView.swift */,
+				B54457B42FDF16CC00A6F47A /* SettingsView.swift */,
+				B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */,
+				B5AD65212FE17C0D007BFF84 /* FeedView.swift */,
+				B5AD65232FE2A8D0007BFF84 /* DrawingGameView.swift */,
+				B5AD65452FE327CA007BFF84 /* InstantView.swift */,
+				B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */,
+				B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B51F06AB2FAE8912009B8146 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B57A3A352FDC1A7200332034 /* PetViewModel.swift */,
+				B57A3A372FDDE8A500332034 /* PersistenceManager.swift */,
+				B57A3A3C2FDE156700332034 /* WidgetDataManager.swift */,
+				B57A3A442FDE281100332034 /* NotificationManager.swift */,
+				B54457AD2FDEEF7300A6F47A /* FirestoreManager.swift */,
+				B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */,
+				B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		B51F06B12FAE8FF5009B8146 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B51F06B22FAE8FF5009B8146 /* WidgetKit.framework */,
+				B51F06B42FAE8FF5009B8146 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B51F06992FAE888F009B8146 /* Ziggy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B51F06A52FAE8890009B8146 /* Build configuration list for PBXNativeTarget "Ziggy" */;
+			buildPhases = (
+				B51F06962FAE888F009B8146 /* Sources */,
+				B51F06972FAE888F009B8146 /* Frameworks */,
+				B51F06982FAE888F009B8146 /* Resources */,
+				B51F06C72FAE8FF7009B8146 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B51F06C12FAE8FF7009B8146 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B51F069C2FAE888F009B8146 /* Ziggy */,
+			);
+			name = Ziggy;
+			packageProductDependencies = (
+				B54457A92FDEC2A700A6F47A /* FirebaseCore */,
+				B54457AB2FDEC2B600A6F47A /* FirebaseFirestore */,
+			);
+			productName = Ziggy;
+			productReference = B51F069A2FAE888F009B8146 /* Ziggy.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B51F06AF2FAE8FF5009B8146 /* ZiggyWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B51F06C42FAE8FF7009B8146 /* Build configuration list for PBXNativeTarget "ZiggyWidgetExtension" */;
+			buildPhases = (
+				B51F06AC2FAE8FF5009B8146 /* Sources */,
+				B51F06AD2FAE8FF5009B8146 /* Frameworks */,
+				B51F06AE2FAE8FF5009B8146 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B51F06B62FAE8FF5009B8146 /* ZiggyWidget */,
+			);
+			name = ZiggyWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = ZiggyWidgetExtension;
+			productReference = B51F06B02FAE8FF5009B8146 /* ZiggyWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B51F06922FAE888F009B8146 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					B51F06992FAE888F009B8146 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
+					B51F06AF2FAE8FF5009B8146 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
+				};
+			};
+			buildConfigurationList = B51F06952FAE888F009B8146 /* Build configuration list for PBXProject "Ziggy" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B51F06912FAE888F009B8146;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B51F069B2FAE888F009B8146 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B51F06992FAE888F009B8146 /* Ziggy */,
+				B51F06AF2FAE8FF5009B8146 /* ZiggyWidgetExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B51F06982FAE888F009B8146 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B51F06AE2FAE8FF5009B8146 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B51F06962FAE888F009B8146 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B57A3A342FDC1A4C00332034 /* Pet.swift in Sources */,
+				B54457AE2FDEEF7300A6F47A /* FirestoreManager.swift in Sources */,
+				B57A3A3D2FDE156700332034 /* WidgetDataManager.swift in Sources */,
+				B57A3A382FDDE8A500332034 /* PersistenceManager.swift in Sources */,
+				B57A3A452FDE281100332034 /* NotificationManager.swift in Sources */,
+				B57A3A362FDC1A7200332034 /* PetViewModel.swift in Sources */,
+				B57A3A432FDE21FB00332034 /* ActivityView.swift in Sources */,
+				B57A3A3A2FDDF50600332034 /* Event.swift in Sources */,
+				B5AD65222FE17C0D007BFF84 /* FeedView.swift in Sources */,
+				B51F06A02FAE888F009B8146 /* ContentView.swift in Sources */,
+				B54457B32FDF0EEA00A6F47A /* OnboardingView.swift in Sources */,
+				B54457B02FDF0BF000A6F47A /* UserManager.swift in Sources */,
+				B5AD65202FE15315007BFF84 /* RelationshipSetupView.swift in Sources */,
+				B54457B52FDF16CC00A6F47A /* SettingsView.swift in Sources */,
+				B5AD65242FE2A8D0007BFF84 /* DrawingGameView.swift in Sources */,
+				B5AD656A2FE5F5CB007BFF84 /*   DailyQuestionManager.swift in Sources */,
+				B5AD65462FE327CA007BFF84 /* InstantView.swift in Sources */,
+				B5AD65482FE6C890007BFF84 /* PlayCenterView.swift in Sources */,
+				B5AD654A2FE6C891007BFF84 /* PizzaMakingGameView.swift in Sources */,
+				B5AD651E2FE0A3C5007BFF84 /* RelationshipManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B51F06AC2FAE8FF5009B8146 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B57A3A3E2FDE160800332034 /* Pet.swift in Sources */,
+				B54457B12FDF0BF000A6F47A /* UserManager.swift in Sources */,
+				B57A3A402FDE1A3800332034 /* WidgetDataManager.swift in Sources */,
+				B57A3A3F2FDE161100332034 /* Event.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B51F06C12FAE8FF7009B8146 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B51F06AF2FAE8FF5009B8146 /* ZiggyWidgetExtension */;
+			targetProxy = B51F06C02FAE8FF7009B8146 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B51F06A32FAE8890009B8146 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 77U7WYYQ99;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B51F06A42FAE8890009B8146 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 77U7WYYQ99;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		B51F06A62FAE8890009B8146 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Ziggy/Ziggy.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 77U7WYYQ99;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ziggy needs camera access so you can snap a photo and send an Instant to your love.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		B51F06A72FAE8890009B8146 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Ziggy/Ziggy.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 77U7WYYQ99;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ziggy needs camera access so you can snap a photo and send an Instant to your love.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+		B51F06C52FAE8FF7009B8146 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = ZiggyWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 77U7WYYQ99;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZiggyWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZiggyWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy.ZiggyWidget;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.Manrai.Ziggy.ZiggyWidget123;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = xros;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Debug;
+		};
+		B51F06C62FAE8FF7009B8146 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = ZiggyWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 77U7WYYQ99;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ZiggyWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ZiggyWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy.ZiggyWidget;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.Manrai.Ziggy.ZiggyWidget123;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = xros;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				VALIDATE_PRODUCT = YES;
+				XROS_DEPLOYMENT_TARGET = 26.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B51F06952FAE888F009B8146 /* Build configuration list for PBXProject "Ziggy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B51F06A32FAE8890009B8146 /* Debug */,
+				B51F06A42FAE8890009B8146 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B51F06A52FAE8890009B8146 /* Build configuration list for PBXNativeTarget "Ziggy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B51F06A62FAE8890009B8146 /* Debug */,
+				B51F06A72FAE8890009B8146 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B51F06C42FAE8FF7009B8146 /* Build configuration list for PBXNativeTarget "ZiggyWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B51F06C52FAE8FF7009B8146 /* Debug */,
+				B51F06C62FAE8FF7009B8146 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.14.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B54457A92FDEC2A700A6F47A /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		B54457AB2FDEC2B600A6F47A /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B51F06922FAE888F009B8146 /* Project object */;
+}
