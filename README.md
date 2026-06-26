@@ -1,6 +1,6 @@
 # Ziggy 🐶
 
-A SwiftUI + Firebase **couple's companion app** built around one shared virtual pet. Two partners connect with a private code and raise **Ziggy** together — feeding, playing, sending photos and little love notes that sync between their phones in real time.
+A SwiftUI + Firebase **couple's companion app** built around one shared virtual pet. Two partners connect with a private code and raise **Ziggy** together  feeding, playing, sending photos and little love notes that sync between their phones in real time.
 
 > Think of it as a Tamagotchi you and your partner keep alive together — every action one person takes shows up instantly on the other's screen.
 
@@ -74,46 +74,7 @@ Ziggy/
 - iOS 17+ device or simulator
 - A Firebase project (free Spark plan works for development)
 
-### Setup
 
-1. **Clone**
-   ```bash
-   git clone https://github.com/ManraiSingh/swiftui-companion-app.git
-   cd swiftui-companion-app
-   ```
-
-2. **Add your Firebase config** *(required — it's intentionally not in the repo)*
-   - In the [Firebase Console](https://console.firebase.google.com), create a project and add an iOS app with bundle id `com.Manrai.Ziggy`.
-   - Download **`GoogleService-Info.plist`** and drop it into the `Ziggy/` folder (added to the app target).
-   - Enable **Cloud Firestore**.
-
-3. **Set Firestore rules** (development example — tighten before any public release):
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /relationships/{code}/{document=**} {
-         allow read, write: if true;
-       }
-     }
-   }
-   ```
-
-4. **Open & run**
-   ```bash
-   open Ziggy.xcodeproj
-   ```
-   Build the **Ziggy** scheme on a device or simulator. To test pairing, run on two simulators/devices and connect them with the same love code.
-
----
-
-## 🔒 Notes
-
-- `GoogleService-Info.plist` is git-ignored so API keys aren't published — each contributor supplies their own.
-- The example Firestore rules are **open for development only**. Lock them down and enable App Check before shipping.
-- Instant photos are compressed and travel as base64 inside Firestore documents (kept well under the 1 MB document limit).
-
----
 
 ## 🗺️ Roadmap
 
@@ -125,10 +86,4 @@ Ziggy/
 
 ---
 
-## 📄 License
 
-Currently unlicensed / all rights reserved. Add a license file if you intend others to reuse the code.
-
----
-
-<p align="center">Made with 💕 in SwiftUI</p>
