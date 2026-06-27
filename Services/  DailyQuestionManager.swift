@@ -178,6 +178,7 @@
 import Foundation
 import Combine
 import FirebaseFirestore
+import FirebaseAuth
 
 // MARK: - Model
 
@@ -257,25 +258,35 @@ class DailyQuestionManager: ObservableObject {
 
     // MARK: - Listen to today
 
+    private func ensureSignedIn(_ completion: @escaping () -> Void) {
+        if Auth.auth().currentUser != nil { completion(); return }
+        Auth.auth().signInAnonymously { _, _ in completion() }
+    }
+
     func startListening() {
         guard !relationshipCode.isEmpty else { return }
 
-        db.collection("relationships")
-            .document(relationshipCode)
-            .collection("dailyQuestions")
-            .document(todayKey)
-            .addSnapshotListener { [weak self] snapshot, _ in
-                guard let self else { return }
-                let data = snapshot?.data() ?? [:]
-                DispatchQueue.main.async {
-                    self.question = self.parseQuestion(
-                        data: data,
-                        dateKey: self.todayKey
-                    )
-                }
-            }
+        // Wait for anonymous sign-in so listeners attach authenticated.
+        ensureSignedIn { [weak self] in
+            guard let self, !self.relationshipCode.isEmpty else { return }
 
-        fetchHistory()
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("dailyQuestions")
+                .document(self.todayKey)
+                .addSnapshotListener { [weak self] snapshot, _ in
+                    guard let self else { return }
+                    let data = snapshot?.data() ?? [:]
+                    DispatchQueue.main.async {
+                        self.question = self.parseQuestion(
+                            data: data,
+                            dateKey: self.todayKey
+                        )
+                    }
+                }
+
+            self.fetchHistory()
+        }
     }
 
     // MARK: - Fetch history (all past answered days)

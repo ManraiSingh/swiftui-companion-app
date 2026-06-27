@@ -129,28 +129,23 @@ class FirestoreManager {
         guard !relationshipCode.isEmpty else {
             return
         }
-        db.collection("relationships")
-            .document(relationshipCode)
-            .collection("data")
-            .document("pet")
-            .addSnapshotListener { snapshot, error in
+        // Wait for anonymous sign-in so the listener attaches authenticated
+        // (secure rules deny unauthenticated requests).
+        ensureSignedIn { [weak self] _ in
+            guard let self = self, !self.relationshipCode.isEmpty else { return }
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("data")
+                .document("pet")
+                .addSnapshotListener { snapshot, error in
 
-                if let error = error {
-                    return
+                    if error != nil { return }
+
+                    guard let data = snapshot?.data() else { return }
+
+                    completion(data)
                 }
-
-                guard
-                    let data = snapshot?.data()
-                else {
-                    return
-                }
-
-                let source = snapshot?.metadata.isFromCache == true
-                    ? "CACHE (no server connection!)"
-                    : "SERVER"
-
-                completion(data)
-            }
+        }
     }
     func renamePet(
         to newName: String
@@ -193,21 +188,22 @@ class FirestoreManager {
         guard !relationshipCode.isEmpty else {
             return
         }
-        db.collection("relationships")
-            .document(relationshipCode)
-            .collection("emotions")
-            .order(by: "timestamp", descending: true)
-            .limit(to: 1)
-            .addSnapshotListener { snapshot, error in
+        ensureSignedIn { [weak self] _ in
+            guard let self = self, !self.relationshipCode.isEmpty else { return }
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("emotions")
+                .order(by: "timestamp", descending: true)
+                .limit(to: 1)
+                .addSnapshotListener { snapshot, error in
 
-                guard
-                    let document = snapshot?.documents.first
-                else {
-                    return
+                    guard let document = snapshot?.documents.first else {
+                        return
+                    }
+
+                    completion(document.data(), document.documentID)
                 }
-
-                completion(document.data(), document.documentID)
-            }
+        }
     }
     func addEvent(
         title: String,
@@ -670,15 +666,18 @@ class FirestoreManager {
         completion: @escaping ([String: Any]?) -> Void
     ) {
         guard !relationshipCode.isEmpty else { return }
-        instantBadgeListener?.remove()
-        // Listen to the tiny metadata doc, NOT the big image doc — saves quota.
-        instantBadgeListener = db.collection("relationships")
-            .document(relationshipCode)
-            .collection("data")
-            .document("instant_meta")
-            .addSnapshotListener { snapshot, _ in
-                completion(snapshot?.data())
-            }
+        ensureSignedIn { [weak self] _ in
+            guard let self = self, !self.relationshipCode.isEmpty else { return }
+            self.instantBadgeListener?.remove()
+            // Listen to the tiny metadata doc, not the big image — saves quota.
+            self.instantBadgeListener = self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("data")
+                .document("instant_meta")
+                .addSnapshotListener { snapshot, _ in
+                    completion(snapshot?.data())
+                }
+        }
     }
 
     func listenForInstantView(
