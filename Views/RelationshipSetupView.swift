@@ -146,7 +146,11 @@ struct RelationshipSetupView: View {
 
                             guard !code.isEmpty else { return }
 
-                            RelationshipManager.shared.saveCode(code)
+                            // Become a member first, then connect (so the
+                            // realtime listeners start with access granted).
+                            FirestoreManager.shared.joinRelationship(code: code) {
+                                RelationshipManager.shared.saveCode(code)
+                            }
 
                         } label: {
 
@@ -183,8 +187,11 @@ struct RelationshipSetupView: View {
             }
 
             Button("OK") {
-                RelationshipManager.shared.saveCode(generatedCode)
-                FirestoreManager.shared.createRelationshipIfNeeded()
+                // Create the relationship (membership + pet) first, then
+                // connect so listeners start with access granted.
+                FirestoreManager.shared.createRelationship(code: generatedCode) {
+                    RelationshipManager.shared.saveCode(generatedCode)
+                }
             }
 
         } message: {

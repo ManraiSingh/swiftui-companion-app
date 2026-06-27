@@ -31,12 +31,20 @@
 import SwiftUI
 import UserNotifications
 import FirebaseCore
+import FirebaseAuth
 
 @main
 struct ZiggyApp: App {
 
     init() {
         FirebaseApp.configure()
+
+        // Silent anonymous sign-in so every device has a stable identity.
+        // Used by Firestore security rules to limit access to the two
+        // partners in a relationship.
+        if Auth.auth().currentUser == nil {
+            Auth.auth().signInAnonymously()
+        }
     }
 
     var body: some Scene {

@@ -6,6 +6,7 @@
 //
 
 import FirebaseFirestore
+import FirebaseAuth
 
 class FirestoreManager {
 
@@ -15,6 +16,17 @@ class FirestoreManager {
     private var relationshipCode: String {
 
         RelationshipManager.shared.relationshipCode
+    }
+
+    /// Ensures there's an anonymous user, then returns its uid.
+    private func ensureSignedIn(_ completion: @escaping (String?) -> Void) {
+        if let uid = Auth.auth().currentUser?.uid {
+            completion(uid)
+            return
+        }
+        Auth.auth().signInAnonymously { result, _ in
+            completion(result?.user.uid)
+        }
     }
 
     func savePet(_ pet: Pet) {
@@ -45,37 +57,71 @@ class FirestoreManager {
                 }
             }
     }
-    func createRelationshipIfNeeded() {
+    /// Creates a new relationship with the current user as the first member,
+    /// then seeds the default pet. `completion` runs after membership is
+    /// committed so listeners only start once access is granted.
+    func createRelationship(
+        code: String,
+        completion: @escaping () -> Void = {}
+    ) {
+        guard !code.isEmpty else { completion(); return }
 
-        let code = RelationshipManager.shared.relationshipCode
+        ensureSignedIn { [weak self] uid in
 
-        guard !code.isEmpty else {
-            return
+            guard let self = self, let uid = uid else {
+                DispatchQueue.main.async { completion() }
+                return
+            }
+
+            let ref = self.db.collection("relationships").document(code)
+
+            // 1) Write membership first.
+            ref.setData([
+                "createdAt": Timestamp(),
+                "members": [uid]
+            ], merge: true) { _ in
+
+                // 2) Now that we're a member, seed the pet.
+                ref.collection("data").document("pet").setData([
+                    "name": "Ziggy",
+                    "hunger": 50,
+                    "happiness": 50,
+                    "energy": 50,
+                    "loveScore": 50,
+                    "lastAction": "",
+                    "lastActionBy": "",
+                    "updatedAt": Timestamp()
+                ], merge: true) { _ in
+                    DispatchQueue.main.async { completion() }
+                }
+            }
         }
+    }
 
-        let relationshipRef = db
-            .collection("relationships")
-            .document(code)
+    /// Joins an existing relationship by adding the current user as a member.
+    /// `completion` runs after the membership write so listeners start with
+    /// access already granted.
+    func joinRelationship(
+        code: String,
+        completion: @escaping () -> Void = {}
+    ) {
+        guard !code.isEmpty else { completion(); return }
 
-        relationshipRef.setData([
-            "createdAt": Timestamp()
-        ], merge: true)
+        ensureSignedIn { [weak self] uid in
 
-        relationshipRef
-            .collection("data")
-            .document("pet")
-            .setData([
+            guard let self = self, let uid = uid else {
+                DispatchQueue.main.async { completion() }
+                return
+            }
 
-                "name": "Ziggy",
-                "hunger": 50,
-                "happiness": 50,
-                "energy": 50,
-                "loveScore": 50,
-                "lastAction": "",
-                "lastActionBy": "",
-                "updatedAt": Timestamp()
-
-            ], merge: true)
+            self.db.collection("relationships")
+                .document(code)
+                .setData([
+                    "members": FieldValue.arrayUnion([uid])
+                ], merge: true) { _ in
+                    DispatchQueue.main.async { completion() }
+                }
+        }
     }
     func listenForPetUpdates(
         completion: @escaping ([String: Any]) -> Void
