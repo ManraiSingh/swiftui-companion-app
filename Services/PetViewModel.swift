@@ -401,7 +401,6 @@ class PetViewModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
 
-            print("RELATIONSHIP CHANGED")
 
             self?.startListening()
             self?.listenForEmotions()
@@ -551,8 +550,6 @@ class PetViewModel: ObservableObject {
                     updatedPet.lastActionBy =
                         data["lastActionBy"] as? String ?? updatedPet.lastActionBy
 
-                    print("UPDATING UI")
-                    print(updatedPet.loveScore)
                     self.pet = updatedPet
 
                     PersistenceManager.shared.savePet(updatedPet)

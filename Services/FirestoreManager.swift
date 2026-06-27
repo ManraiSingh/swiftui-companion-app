@@ -19,7 +19,6 @@ class FirestoreManager {
 
     func savePet(_ pet: Pet) {
 
-        print("TRYING TO SAVE TO:", relationshipCode)
         guard !relationshipCode.isEmpty else {
             return
         }
@@ -40,12 +39,9 @@ class FirestoreManager {
 
                 if let error = error {
 
-                    print("FIRESTORE ERROR:")
-                    print(error.localizedDescription)
 
                 } else {
 
-                    print("PET SAVED SUCCESSFULLY")
                 }
             }
     }
@@ -87,7 +83,6 @@ class FirestoreManager {
         guard !relationshipCode.isEmpty else {
             return
         }
-        print("LISTENING TO:", relationshipCode)
         db.collection("relationships")
             .document(relationshipCode)
             .collection("data")
@@ -95,22 +90,18 @@ class FirestoreManager {
             .addSnapshotListener { snapshot, error in
 
                 if let error = error {
-                    print("‼️ PET LISTENER ERROR:", error.localizedDescription)
                     return
                 }
 
                 guard
                     let data = snapshot?.data()
                 else {
-                    print("⚠️ PET LISTENER: no data (doc missing at this code?)")
                     return
                 }
 
                 let source = snapshot?.metadata.isFromCache == true
                     ? "CACHE (no server connection!)"
                     : "SERVER"
-                print("PET UPDATE RECEIVED from", source)
-                print(data)
 
                 completion(data)
             }
@@ -370,8 +361,6 @@ class FirestoreManager {
         } completion: { side, error in
 
             if let error = error {
-                print("TRACE GAME JOIN ERROR:")
-                print(error.localizedDescription)
             }
 
             completion(side as? String)
@@ -455,8 +444,6 @@ class FirestoreManager {
         } completion: { _, error in
 
             if let error = error {
-                print("TRACE GAME READY ERROR:")
-                print(error.localizedDescription)
             }
         }
     }
@@ -476,8 +463,6 @@ class FirestoreManager {
             .addSnapshotListener { snapshot, error in
 
                 if let error = error {
-                    print("TRACE GAME LISTEN ERROR:")
-                    print(error.localizedDescription)
                     return
                 }
 
@@ -731,8 +716,6 @@ class FirestoreManager {
         } completion: { didClaim, error in
 
             if let error = error {
-                print("TRACE GAME REWARD ERROR:")
-                print(error.localizedDescription)
             }
 
             completion(didClaim as? Bool ?? false)
@@ -809,8 +792,6 @@ class FirestoreManager {
         } completion: { side, error in
 
             if let error = error {
-                print("PIZZA GAME JOIN ERROR:")
-                print(error.localizedDescription)
             }
 
             completion(side as? String)
@@ -832,8 +813,6 @@ class FirestoreManager {
             .addSnapshotListener { snapshot, error in
 
                 if let error = error {
-                    print("PIZZA GAME LISTEN ERROR:")
-                    print(error.localizedDescription)
                     return
                 }
 
@@ -917,8 +896,6 @@ class FirestoreManager {
         } completion: { _, error in
 
             if let error = error {
-                print("PIZZA READY ERROR:")
-                print(error.localizedDescription)
             }
         }
     }
@@ -1046,8 +1023,6 @@ class FirestoreManager {
         } completion: { didClaim, error in
 
             if let error = error {
-                print("PIZZA REWARD ERROR:")
-                print(error.localizedDescription)
             }
 
             completion(didClaim as? Bool ?? false)

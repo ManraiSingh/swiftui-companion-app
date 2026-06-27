@@ -56,7 +56,6 @@ struct ZiggyApp: App {
                 options: [.alert, .sound, .badge]
             ) { granted, error in
 
-                print("Permission:", granted)
             }
     }
 }

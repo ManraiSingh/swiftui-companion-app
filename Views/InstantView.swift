@@ -500,7 +500,6 @@ struct InstantView: View {
 
                 if let error = error {
 
-                    print("INSTANT SEND ERROR:", error.localizedDescription)
                     sendErrorMessage = "Couldn't send. Check your connection 💕"
                     showSendError = true
                     return
