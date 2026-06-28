@@ -2,7 +2,7 @@
 
 A SwiftUI + Firebase **couple's companion app** built around one shared virtual pet. Two partners connect with a private code and raise **Ziggy** together  feeding, playing, sending photos and little love notes that sync between their phones in real time.
 
-> Think of it as a Tamagotchi you and your partner keep alive together — every action one person takes shows up instantly on the other's screen.
+> Think of it as a Tamagotchi you and your partner keep alive together  every action one person takes shows up instantly on the other's screen.
 
 ---
 
