@@ -9,6 +9,7 @@ struct PlayCenterView: View {
 
     @State private var showTraceGame = false
     @State private var showPizzaGame = false
+    @State private var showAirHockey = false
 
     var body: some View {
 
@@ -72,6 +73,15 @@ struct PlayCenterView: View {
                     ) {
                         showPizzaGame = true
                     }
+
+                    gameCard(
+                        emoji: "🏒",
+                        title: "Air Hockey",
+                        subtitle: "Grab one phone, a paddle each — first to 11 wins!",
+                        tint: .blue
+                    ) {
+                        showAirHockey = true
+                    }
                 }
 
                 Spacer()
@@ -91,6 +101,14 @@ struct PlayCenterView: View {
         ) {
 
             PizzaMakingGameView(
+                petVM: petVM
+            )
+        }
+        .fullScreenCover(
+            isPresented: $showAirHockey
+        ) {
+
+            AirHockeyGameView(
                 petVM: petVM
             )
         }

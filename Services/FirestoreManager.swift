@@ -320,6 +320,160 @@ class FirestoreManager {
         }
     }
 
+    // MARK: - Air Hockey (networked, host-authoritative)
+
+    private var airHockeyListener: ListenerRegistration?
+
+    private func airHockeyRef() -> DocumentReference {
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("airHockey")
+    }
+
+    /// Assigns a role ("host"/"guest"). First in becomes host; second becomes
+    /// guest and starts the match. A finished/empty match resets to a fresh one.
+    func joinAirHockey(
+        name: String,
+        completion: @escaping (_ role: String?) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else { completion(nil); return }
+
+        ensureSignedIn { [weak self] uid in
+
+            guard let self = self, let uid = uid else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            let ref = self.airHockeyRef()
+
+            self.db.runTransaction { txn, _ in
+
+                let snap = try? txn.getDocument(ref)
+                let data = snap?.data() ?? [:]
+                let status = data["status"] as? String ?? ""
+                let hostUid = data["hostUid"] as? String ?? ""
+                let guestUid = data["guestUid"] as? String ?? ""
+
+                if hostUid == uid { return "host" }
+                if guestUid == uid { return "guest" }
+
+                if hostUid.isEmpty {
+                    txn.setData([
+                        "hostUid": uid, "hostName": name,
+                        "guestUid": "", "guestName": "",
+                        "status": "waiting",
+                        "hostReady": false, "guestReady": false,
+                        "puckX": 150.0, "puckY": 300.0, "velX": 0.0, "velY": 0.0,
+                        "hostScore": 0, "guestScore": 0,
+                        "hostPaddleX": 150.0, "hostPaddleY": 520.0,
+                        "guestPaddleX": 150.0, "guestPaddleY": 80.0,
+                        "winner": "",
+                        "updatedAt": Timestamp()
+                    ], forDocument: ref)
+                    return "host"
+                }
+
+                if guestUid.isEmpty {
+                    // Both present now → go to the ready lobby.
+                    txn.setData([
+                        "guestUid": uid, "guestName": name,
+                        "status": "lobby",
+                        "hostReady": false, "guestReady": false,
+                        "updatedAt": Timestamp()
+                    ], forDocument: ref, merge: true)
+                    return "guest"
+                }
+
+                return "host"
+
+            } completion: { result, _ in
+                DispatchQueue.main.async { completion(result as? String) }
+            }
+        }
+    }
+
+    func listenAirHockey(completion: @escaping ([String: Any]) -> Void) {
+        guard !relationshipCode.isEmpty else { return }
+        airHockeyListener?.remove()
+        airHockeyListener = airHockeyRef().addSnapshotListener { snap, _ in
+            if let d = snap?.data() { completion(d) }
+        }
+    }
+
+    func stopAirHockeyListener() {
+        airHockeyListener?.remove()
+        airHockeyListener = nil
+    }
+
+    func writeAirHockeyHost(
+        puckX: Double, puckY: Double, velX: Double, velY: Double,
+        hostScore: Int, guestScore: Int,
+        hostPaddleX: Double, hostPaddleY: Double,
+        status: String, winner: String
+    ) {
+        guard !relationshipCode.isEmpty else { return }
+        airHockeyRef().setData([
+            "puckX": puckX, "puckY": puckY, "velX": velX, "velY": velY,
+            "hostScore": hostScore, "guestScore": guestScore,
+            "hostPaddleX": hostPaddleX, "hostPaddleY": hostPaddleY,
+            "status": status, "winner": winner,
+            "updatedAt": Timestamp()
+        ], merge: true)
+    }
+
+    func writeAirHockeyGuestPaddle(x: Double, y: Double) {
+        guard !relationshipCode.isEmpty else { return }
+        airHockeyRef().setData([
+            "guestPaddleX": x, "guestPaddleY": y,
+            "updatedAt": Timestamp()
+        ], merge: true)
+    }
+
+    /// Toggles a player's ready flag. When BOTH are ready (and both present),
+    /// the board resets and the match starts — used for both first start and
+    /// rematch, so either player can trigger it.
+    func setAirHockeyReady(role: String, ready: Bool) {
+        guard !relationshipCode.isEmpty else { return }
+        let ref = airHockeyRef()
+
+        db.runTransaction { txn, _ in
+
+            let snap = try? txn.getDocument(ref)
+            let data = snap?.data() ?? [:]
+
+            let key = role == "host" ? "hostReady" : "guestReady"
+            let hr = key == "hostReady" ? ready : (data["hostReady"] as? Bool ?? false)
+            let gr = key == "guestReady" ? ready : (data["guestReady"] as? Bool ?? false)
+            let hostPresent = !((data["hostUid"] as? String ?? "").isEmpty)
+            let guestPresent = !((data["guestUid"] as? String ?? "").isEmpty)
+
+            var updates: [String: Any] = [key: ready, "updatedAt": Timestamp()]
+
+            if hr && gr && hostPresent && guestPresent {
+                // Start / rematch — fresh board.
+                updates["status"] = "playing"
+                updates["hostReady"] = false
+                updates["guestReady"] = false
+                updates["hostScore"] = 0
+                updates["guestScore"] = 0
+                updates["winner"] = ""
+                updates["puckX"] = 150.0; updates["puckY"] = 300.0
+                updates["velX"] = 0.0; updates["velY"] = 0.0
+                updates["hostPaddleX"] = 150.0; updates["hostPaddleY"] = 520.0
+                updates["guestPaddleX"] = 150.0; updates["guestPaddleY"] = 80.0
+            } else if hostPresent && guestPresent {
+                let st = data["status"] as? String ?? "lobby"
+                if st != "finished" { updates["status"] = "lobby" }
+            }
+
+            txn.setData(updates, forDocument: ref, merge: true)
+            return nil
+
+        } completion: { _, _ in }
+    }
+
     func joinTraceGame(
         username: String,
         completion: @escaping (String?) -> Void
