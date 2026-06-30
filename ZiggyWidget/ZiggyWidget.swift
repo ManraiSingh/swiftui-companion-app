@@ -38,6 +38,20 @@ struct Provider: AppIntentTimelineProvider {
         )
         ?? "Someone is thinking about you ❤️"
     }
+
+    /// The latest cute message + Ziggy emotion your partner sent, if it's
+    /// still fresh (within 12 hours). Returns nil to fall back to the
+    /// default mood-based widget.
+    func partnerMessage() -> (text: String, image: String)? {
+        let d = UserDefaults(suiteName: "group.com.manrai.ziggy")
+        guard
+            let text = d?.string(forKey: "ziggy_widget_msg"),
+            let image = d?.string(forKey: "ziggy_widget_img"),
+            let time = d?.object(forKey: "ziggy_widget_msg_time") as? Date,
+            Date().timeIntervalSince(time) < 12 * 3600
+        else { return nil }
+        return (text, image)
+    }
     func placeholder(in context: Context) -> SimpleEntry {
         let pet = loadPet()
 
@@ -107,6 +121,9 @@ struct Provider: AppIntentTimelineProvider {
     }
     func widgetImage(for pet: Pet) -> String {
 
+        // Prefer the emotion your partner just sent.
+        if let pm = partnerMessage() { return pm.image }
+
         let hour = currentHour()
 
         let hoursAway = hoursSinceLastOpen()
@@ -140,6 +157,9 @@ struct Provider: AppIntentTimelineProvider {
     }
 
     func widgetMessage(for pet: Pet) -> String {
+
+        // Prefer the actual cute message your partner just sent.
+        if let pm = partnerMessage() { return pm.text }
 
         let hour = currentHour()
 
@@ -274,7 +294,7 @@ struct ZiggyWidgetEntryView: View {
 
     var body: some View {
 
-        VStack(spacing: 0) {
+        VStack(spacing: 4) {
 
             Text(entry.message)
                 .font(
@@ -286,19 +306,17 @@ struct ZiggyWidgetEntryView: View {
                 )
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .padding(.top, 10)
-                .padding(.horizontal, 10)
-
-            Spacer()
+                .lineLimit(3)
+                .minimumScaleFactor(0.6)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+                .padding(.horizontal, 8)
 
             Image(entry.imageName)
                 .resizable()
                 .scaledToFit()
-                .scaleEffect(1.8)
-
-            Spacer()
-                .frame(height: 10)
+                .frame(maxHeight: .infinity)
+                .padding(.bottom, 6)
         }
     }
 }

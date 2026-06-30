@@ -29,6 +29,15 @@ class WidgetDataManager {
         }
     }
 
+    /// Stores the latest cute message + Ziggy emotion image for the widget
+    /// (so the partner's widget shows what was just sent), then refreshes it.
+    func savePartnerMessage(text: String, image: String) {
+        sharedDefaults?.set(text, forKey: "ziggy_widget_msg")
+        sharedDefaults?.set(image, forKey: "ziggy_widget_img")
+        sharedDefaults?.set(Date(), forKey: "ziggy_widget_msg_time")
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     func loadPet() -> Pet? {
 
         guard

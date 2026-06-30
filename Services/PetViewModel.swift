@@ -630,6 +630,13 @@ class PetViewModel: ObservableObject {
                             // Mark seen in Firestore immediately (app is open)
                             FirestoreManager.shared.markEmotionSeen(documentID: docID)
 
+                            // Update the Home Screen widget with the cute
+                            // message + the chosen Ziggy emotion.
+                            WidgetDataManager.shared.savePartnerMessage(
+                                text: message,
+                                image: self.widgetImage(forEmotion: emotionKey)
+                            )
+
                             // Start 15s countdown
                             self.startEphemeralCountdown(
                                 docID: docID,
@@ -668,6 +675,12 @@ class PetViewModel: ObservableObject {
                                 docID: docID
                             ),
                             disappearAfter: nil
+                        )
+
+                        // Update the widget with the activity + a happy face.
+                        WidgetDataManager.shared.savePartnerMessage(
+                            text: text,
+                            image: action == "hug" ? "ziggy_loveeyes" : "ziggy_happie"
                         )
 
                         // Mark seen, then delete from both after 5s
@@ -713,11 +726,30 @@ class PetViewModel: ObservableObject {
                     if date > lastSeen {
                         self.instantSender = sender
                         self.hasPendingInstant = true
+
+                        // Surface the new instant on the widget too.
+                        WidgetDataManager.shared.savePartnerMessage(
+                            text: "\(sender) sent you an Instant 📸",
+                            image: "ziggy_loveeyes"
+                        )
                     } else {
                         self.hasPendingInstant = false
                     }
                 }
             }
+    }
+
+    /// Maps a sent emotion key to a Ziggy image the widget can render.
+    private func widgetImage(forEmotion key: String) -> String {
+        switch key {
+        case "love":   return "ziggy_loveeyes"
+        case "happy":  return "ziggy_happie"
+        case "sleepy": return "ziggy_sleep"
+        case "sad":    return "ziggy_tears"
+        case "miss":   return "ziggy_tears"
+        case "grr":    return "ziggy_angrywithmark"
+        default:       return "ziggy_happie"
+        }
     }
 
     func clearEvents() {
