@@ -498,7 +498,7 @@ struct InstantView: View {
 
                 isSending = false
 
-                if let error = error {
+                if error != nil {
 
                     sendErrorMessage = "Couldn't send. Check your connection 💕"
                     showSendError = true

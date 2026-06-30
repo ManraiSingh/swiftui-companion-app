@@ -49,7 +49,7 @@ class FirestoreManager {
                 "updatedAt": Timestamp()
             ]) { error in
 
-                if let error = error {
+                if error != nil {
 
 
                 } else {
@@ -352,7 +352,6 @@ class FirestoreManager {
 
                 let snap = try? txn.getDocument(ref)
                 let data = snap?.data() ?? [:]
-                let status = data["status"] as? String ?? ""
                 let hostUid = data["hostUid"] as? String ?? ""
                 let guestUid = data["guestUid"] as? String ?? ""
 
@@ -556,7 +555,7 @@ class FirestoreManager {
 
         } completion: { side, error in
 
-            if let error = error {
+            if error != nil {
             }
 
             completion(side as? String)
@@ -639,7 +638,7 @@ class FirestoreManager {
 
         } completion: { _, error in
 
-            if let error = error {
+            if error != nil {
             }
         }
     }
@@ -658,7 +657,7 @@ class FirestoreManager {
             .document("traceDrawing")
             .addSnapshotListener { snapshot, error in
 
-                if let error = error {
+                if error != nil {
                     return
                 }
 
@@ -914,7 +913,7 @@ class FirestoreManager {
 
         } completion: { didClaim, error in
 
-            if let error = error {
+            if error != nil {
             }
 
             completion(didClaim as? Bool ?? false)
@@ -990,7 +989,7 @@ class FirestoreManager {
             }
         } completion: { side, error in
 
-            if let error = error {
+            if error != nil {
             }
 
             completion(side as? String)
@@ -1011,7 +1010,7 @@ class FirestoreManager {
             .document("pizzaKitchen")
             .addSnapshotListener { snapshot, error in
 
-                if let error = error {
+                if error != nil {
                     return
                 }
 
@@ -1094,7 +1093,7 @@ class FirestoreManager {
             }
         } completion: { _, error in
 
-            if let error = error {
+            if error != nil {
             }
         }
     }
@@ -1221,7 +1220,7 @@ class FirestoreManager {
             }
         } completion: { didClaim, error in
 
-            if let error = error {
+            if error != nil {
             }
 
             completion(didClaim as? Bool ?? false)
