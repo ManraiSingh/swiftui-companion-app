@@ -763,6 +763,9 @@ struct ContentView: View {
 
     @State private var showEmotionPopup = false
 
+    @AppStorage("ziggy_hasSeenWelcome")
+    private var hasSeenWelcome = false
+
     private var sortedQuickMessages: [QuickMessage] {
         allQuickMessages
             .enumerated()
@@ -778,7 +781,11 @@ struct ContentView: View {
     // MARK: - Body
 
     var body: some View {
-        if username.isEmpty {
+        if !hasSeenWelcome {
+            WelcomeCarouselView {
+                withAnimation { hasSeenWelcome = true }
+            }
+        } else if username.isEmpty {
             OnboardingView()
         } else if !relationshipManager.isConnected {
             RelationshipSetupView()

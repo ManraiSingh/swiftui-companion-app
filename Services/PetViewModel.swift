@@ -739,13 +739,17 @@ class PetViewModel: ObservableObject {
     func updateOverTime() {
 
         let now = Date()
-        let hoursPassed = Int(now.timeIntervalSince(pet.lastUpdated) / 60)
 
-        guard hoursPassed > 0 else { return }
+        // Stats gently decay only after a FULL day away.
+        // (Previously this divided seconds by 60, so it decayed every
+        //  minute — which is why love score dropped during testing.)
+        let daysPassed = Int(now.timeIntervalSince(pet.lastUpdated) / 86_400)
 
-        pet.hunger    = max(0, pet.hunger - (hoursPassed * 2))
-        pet.energy    = max(0, pet.energy - hoursPassed)
-        pet.loveScore = max(0, pet.loveScore - hoursPassed)
+        guard daysPassed > 0 else { return }
+
+        pet.hunger    = max(0, pet.hunger    - daysPassed * 8)
+        pet.energy    = max(0, pet.energy    - daysPassed * 5)
+        pet.loveScore = max(0, pet.loveScore - daysPassed * 4)
 
         if pet.hunger < 20 {
             NotificationManager.shared.sendHungryNotification()
@@ -757,7 +761,8 @@ class PetViewModel: ObservableObject {
             NotificationManager.shared.sendEnergyNotification()
         }
 
-        pet.lastUpdated = now
+        // Advance by whole days so a partial-day remainder carries over.
+        pet.lastUpdated = pet.lastUpdated.addingTimeInterval(Double(daysPassed) * 86_400)
         save()
     }
 

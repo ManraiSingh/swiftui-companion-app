@@ -13,7 +13,6 @@
 		B51F06C22FAE8FF7009B8146 /* ZiggyWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B51F06B02FAE8FF5009B8146 /* ZiggyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B54457AA2FDEC2A700A6F47A /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = B54457A92FDEC2A700A6F47A /* FirebaseCore */; };
 		B54457AC2FDEC2B600A6F47A /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = B54457AB2FDEC2B600A6F47A /* FirebaseFirestore */; };
-		B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5FAE0A10000000000000A22 /* FirebaseAuth */; };
 		B54457AE2FDEEF7300A6F47A /* FirestoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457AD2FDEEF7300A6F47A /* FirestoreManager.swift */; };
 		B54457B02FDF0BF000A6F47A /* UserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457AF2FDF0BF000A6F47A /* UserManager.swift */; };
 		B54457B12FDF0BF000A6F47A /* UserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457AF2FDF0BF000A6F47A /* UserManager.swift */; };
@@ -37,6 +36,7 @@
 		B5AD65482FE6C890007BFF84 /* PlayCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */; };
 		B5AD654A2FE6C891007BFF84 /* PizzaMakingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */; };
 		B5AD656A2FE5F5CB007BFF84 /*   DailyQuestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */; };
+		B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5FAE0A10000000000000A22 /* FirebaseAuth */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -503,8 +503,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Ziggy needs camera access so you can snap a photo and send an Instant to your love.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ziggy needs camera access so you can snap a photo and send an Instant to your love.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -550,8 +550,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Ziggy needs camera access so you can snap a photo and send an Instant to your love.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Ziggy needs camera access so you can snap a photo and send an Instant to your love.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
