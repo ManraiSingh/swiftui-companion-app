@@ -40,15 +40,17 @@ struct Provider: AppIntentTimelineProvider {
     }
 
     /// The latest cute message + Ziggy emotion your partner sent, if it's
-    /// still fresh (within 12 hours). Returns nil to fall back to the
+    /// still fresh. Returns nil to fall back to the
     /// default mood-based widget.
     func partnerMessage() -> (text: String, image: String)? {
         let d = UserDefaults(suiteName: "group.com.manrai.ziggy")
         guard
             let text = d?.string(forKey: "ziggy_widget_msg"),
             let image = d?.string(forKey: "ziggy_widget_img"),
-            let time = d?.object(forKey: "ziggy_widget_msg_time") as? Date,
-            Date().timeIntervalSince(time) < 12 * 3600
+            let expiresAt = d?.object(
+                forKey: "ziggy_widget_msg_expires_at"
+            ) as? Date,
+            expiresAt > Date()
         else { return nil }
         return (text, image)
     }
@@ -105,7 +107,8 @@ struct Provider: AppIntentTimelineProvider {
     }
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
         let currentDate = Date()
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
+        let nextUpdate = partnerMessageExpiry()
+            ?? Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
         let pet = loadPet()
 
         let entry = SimpleEntry(
@@ -118,6 +121,19 @@ struct Provider: AppIntentTimelineProvider {
             colors: widgetColors(for: pet)
         )
         return Timeline(entries: [entry], policy: .after(nextUpdate))
+    }
+
+    func partnerMessageExpiry() -> Date? {
+        guard
+            let expiresAt = UserDefaults(
+                suiteName: "group.com.manrai.ziggy"
+            )?.object(
+                forKey: "ziggy_widget_msg_expires_at"
+            ) as? Date,
+            expiresAt > Date()
+        else { return nil }
+
+        return expiresAt
     }
     func widgetImage(for pet: Pet) -> String {
 

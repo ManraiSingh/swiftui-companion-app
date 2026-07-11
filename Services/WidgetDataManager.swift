@@ -31,11 +31,212 @@ class WidgetDataManager {
 
     /// Stores the latest cute message + Ziggy emotion image for the widget
     /// (so the partner's widget shows what was just sent), then refreshes it.
-    func savePartnerMessage(text: String, image: String) {
+    func savePartnerMessage(
+        text: String,
+        image: String,
+        eventID: String = UUID().uuidString,
+        expiresAfter seconds: TimeInterval = 30 * 60
+    ) {
         sharedDefaults?.set(text, forKey: "ziggy_widget_msg")
         sharedDefaults?.set(image, forKey: "ziggy_widget_img")
         sharedDefaults?.set(Date(), forKey: "ziggy_widget_msg_time")
+        sharedDefaults?.set(eventID, forKey: "ziggy_widget_msg_id")
+        sharedDefaults?.set(
+            Date().addingTimeInterval(seconds),
+            forKey: "ziggy_widget_msg_expires_at"
+        )
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    func clearPartnerMessageIfExpired() {
+        guard
+            let expiresAt = sharedDefaults?.object(
+                forKey: "ziggy_widget_msg_expires_at"
+            ) as? Date,
+            expiresAt <= Date()
+        else { return }
+
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_msg")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_img")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_msg_time")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_msg_id")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_msg_expires_at")
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    func saveRemoteWidgetEvent(_ userInfo: [AnyHashable: Any]) {
+        guard
+            let title = userInfo["title"] as? String,
+            let sender = userInfo["sender"] as? String,
+            sender != UserDefaults.standard.string(
+                forKey: "ziggy_username"
+            )
+        else { return }
+
+        let relationshipCode = userInfo["relationshipCode"] as? String ?? ""
+        let savedRelationshipCode = UserDefaults.standard.string(
+            forKey: "relationship_code"
+        ) ?? ""
+        if !relationshipCode.isEmpty,
+           relationshipCode != savedRelationshipCode {
+            return
+        }
+
+        let type = userInfo["type"] as? String ?? "love"
+        let emotion = userInfo["emotion"] as? String ?? ""
+        let eventID = userInfo["eventID"] as? String
+            ?? userInfo["emotionID"] as? String
+            ?? UUID().uuidString
+
+        let payload = widgetPayload(
+            title: title,
+            sender: sender,
+            type: type,
+            emotion: emotion
+        )
+
+        savePartnerMessage(
+            text: payload.text,
+            image: payload.image,
+            eventID: eventID
+        )
+    }
+
+    private func widgetPayload(
+        title: String,
+        sender: String,
+        type: String,
+        emotion: String
+    ) -> (text: String, image: String) {
+
+        if type == "instant" {
+            // Matches the in-app instant widget (see PetViewModel.listenForInstant)
+            return (
+                "\(sender) sent you an Instant 📸",
+                "ziggy_loveeyes"
+            )
+        }
+
+        if type == "gameInvite" {
+            return (
+                "\(sender) is inviting you to play \(gameName(emotion)) 🎮",
+                "ziggy_happie"
+            )
+        }
+
+        if type == "activity" {
+            let action: String
+            if title.contains("fed") {
+                action = "fed"
+            } else if title.contains("played") {
+                action = "played"
+            } else if title.contains("pizza") {
+                action = "pizza"
+            } else if title.contains("hug") {
+                action = "hug"
+            } else {
+                action = "activity"
+            }
+
+            return (
+                activityText(action: action, sender: sender),
+                activityImage(action: action)
+            )
+        }
+
+        return (
+            loveText(title: title, sender: sender),
+            image(forEmotion: emotion)
+        )
+    }
+
+    private func loveText(title: String, sender: String) -> String {
+        if title.hasPrefix("custom:") {
+            let note = title.replacingOccurrences(of: "custom:", with: "")
+            return "\(sender) says: \(note)"
+        }
+
+        if title.contains("missing") {
+            return "I think \(sender) misses you 🥺"
+        }
+
+        if title.contains("good night") {
+            return "\(sender) wants you to sleep well 🌙"
+        }
+
+        if title.contains("good morning") {
+            return "\(sender) says good morning ☀️"
+        }
+
+        if title.contains("hug") {
+            return "\(sender) wants to hug you 🤗"
+        }
+
+        if title.contains("proud") {
+            return "\(sender) is so proud of you ⭐️"
+        }
+
+        if title.contains("safe") {
+            return "\(sender) feels safe with you 🏡"
+        }
+
+        return "\(sender) is thinking about you 💭"
+    }
+
+    private func activityText(action: String, sender: String) -> String {
+        switch action {
+        case "fed":
+            return "\(sender) fed me just now 🍖"
+        case "played":
+            return "\(sender) played with me just now 🎾"
+        case "pizza":
+            return "\(sender) made me pizza just now 🍕"
+        case "hug":
+            return "\(sender) gave me a hug just now 🤗"
+        default:
+            return "\(sender) was here just now ✨"
+        }
+    }
+
+    private func activityImage(action: String) -> String {
+        switch action {
+        case "hug":
+            return "ziggy_loveeyes"
+        case "fed", "played", "pizza":
+            return "ziggy_happie"
+        default:
+            return "ziggy_loveeyes"
+        }
+    }
+
+    private func gameName(_ gameID: String) -> String {
+        switch gameID {
+        case "traceDrawing":
+            return "Trace Together"
+        case "pizzaKitchen":
+            return "Pizza Kitchen"
+        case "airHockey":
+            return "Air Hockey"
+        default:
+            return "with Ziggy"
+        }
+    }
+
+    private func image(forEmotion emotion: String) -> String {
+        switch emotion {
+        case "love":
+            return "ziggy_loveeyes"
+        case "happy":
+            return "ziggy_happie"
+        case "sleepy":
+            return "ziggy_sleep"
+        case "sad", "miss":
+            return "ziggy_tears"
+        case "grr":
+            return "ziggy_angrywithmark"
+        default:
+            return "ziggy_happie"
+        }
     }
 
     func loadPet() -> Pet? {

@@ -6,6 +6,8 @@
 	<array>
 		<string>group.com.manrai.ziggy</string>
 	</array>
+	<key>aps-environment</key>
+	<string>development</string>
 	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>

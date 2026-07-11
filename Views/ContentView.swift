@@ -766,6 +766,9 @@ struct ContentView: View {
     @AppStorage("ziggy_hasSeenWelcome")
     private var hasSeenWelcome = false
 
+    @AppStorage("ziggy_pending_invite_code")
+    private var pendingInviteCode = ""
+
     private var sortedQuickMessages: [QuickMessage] {
         allQuickMessages
             .enumerated()
@@ -781,30 +784,69 @@ struct ContentView: View {
     // MARK: - Body
 
     var body: some View {
-        if !hasSeenWelcome {
-            WelcomeCarouselView {
-                withAnimation { hasSeenWelcome = true }
-            }
-        } else if username.isEmpty {
-            OnboardingView()
-        } else if !relationshipManager.isConnected {
-            RelationshipSetupView()
-        } else {
-            TabView {
-                homeView
-                    .tabItem { Label("Home", systemImage: "house.fill") }
-                ActivityView(petVM: petVM)
-                    .tabItem { Label("Activity", systemImage: "clock.fill") }
-                SettingsView()
-                    .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-            }
-            .onAppear {
-                loadUsage()
-                dailyQ.startListening()
-                UserDefaults(suiteName: "group.com.manrai.ziggy")?
-                    .set(Date(), forKey: "last_app_open_time")
+        Group {
+            if !hasSeenWelcome {
+                WelcomeCarouselView {
+                    withAnimation { hasSeenWelcome = true }
+                }
+            } else if username.isEmpty {
+                OnboardingView()
+            } else if !pendingInviteCode.isEmpty && !relationshipManager.isConnected {
+                InviteConnectionView(inviteCode: pendingInviteCode) {
+                    pendingInviteCode = ""
+                }
+            } else if !relationshipManager.isConnected {
+                RelationshipSetupView()
+            } else {
+                TabView {
+                    homeView
+                        .tabItem { Label("Home", systemImage: "house.fill") }
+                    ActivityView(petVM: petVM)
+                        .tabItem { Label("Activity", systemImage: "clock.fill") }
+                    SettingsView()
+                        .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                }
+                .onAppear {
+                    loadUsage()
+                    dailyQ.startListening()
+                    UserDefaults(suiteName: "group.com.manrai.ziggy")?
+                        .set(Date(), forKey: "last_app_open_time")
+                }
             }
         }
+        .onOpenURL { url in
+            handleInviteURL(url)
+        }
+        .onChange(of: username) { _, newValue in
+            if !pendingInviteCode.isEmpty,
+               !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                hasSeenWelcome = true
+            }
+        }
+    }
+
+    private func handleInviteURL(_ url: URL) {
+        // Already paired — ignore invites so we don't stash a stale code
+        // that would hijack the screen after a future disconnect.
+        guard !relationshipManager.isConnected else { return }
+
+        guard
+            url.scheme?.lowercased() == "ziggy",
+            url.host?.lowercased() == "invite",
+            let components = URLComponents(
+                url: url,
+                resolvingAgainstBaseURL: false
+            ),
+            let code = components.queryItems?
+                .first(where: { $0.name == "code" })?
+                .value?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased(),
+            !code.isEmpty
+        else { return }
+
+        pendingInviteCode = code
+        hasSeenWelcome = true
     }
 
     // MARK: - Mood helpers
@@ -895,8 +937,8 @@ struct ContentView: View {
                 messagePanel
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if showEmotionPopup {
                 emotionPopup
@@ -979,7 +1021,7 @@ struct ContentView: View {
                 Image(currentEmotionImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 130)
+                    .frame(maxHeight: 130)
                     .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
             }
             .padding(.top, 16)
@@ -987,7 +1029,9 @@ struct ContentView: View {
 
             activityTag.padding(.bottom, 14)
         }
-        .frame(height: 270)
+        // Flexes up to its full size on big iPhones and shrinks on smaller
+        // ones so the whole page always fits without scrolling.
+        .frame(maxWidth: .infinity, maxHeight: 270)
     }
 
     private var moodSurfaceColors: [Color] {
@@ -1324,6 +1368,105 @@ struct ContentView: View {
     private func saveUsage() {
         if let data = try? JSONEncoder().encode(messageUsage) {
             UserDefaults.standard.set(data, forKey: usageKey)
+        }
+    }
+}
+
+// MARK: - Invite Connection View
+
+struct InviteConnectionView: View {
+
+    let inviteCode: String
+    let onConnected: () -> Void
+
+    @State private var isConnecting = false
+    @State private var failed = false
+
+    private let cream = LinearGradient(
+        colors: [
+            Color(red: 0.98, green: 0.94, blue: 0.93),
+            Color(red: 0.95, green: 0.92, blue: 0.88)
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
+    var body: some View {
+        ZStack {
+            cream.ignoresSafeArea()
+
+            FloatingHearts()
+                .opacity(0.45)
+
+            VStack(spacing: 22) {
+                Image("ziggy_loveeyes")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 170)
+                    .shadow(radius: 12)
+
+                VStack(spacing: 8) {
+                    Text(failed ? "Invite needs a retry" : "Joining your Ziggy")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+
+                    Text(failed ? "Check your connection and try again." : "One moment while Ziggy connects you two.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                if failed {
+                    Button {
+                        connect()
+                    } label: {
+                        Text("Try Again")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(Color(red: 0.27, green: 0.24, blue: 0.21))
+                            .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                    .padding(.horizontal, 28)
+                } else {
+                    ProgressView()
+                        .tint(.pink)
+                        .scaleEffect(1.1)
+                }
+            }
+            .padding(.horizontal, 24)
+        }
+        .onAppear {
+            connect()
+        }
+    }
+
+    private func connect() {
+        guard !isConnecting else { return }
+
+        let code = inviteCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+
+        guard !code.isEmpty else { return }
+
+        isConnecting = true
+        failed = false
+
+        FirestoreManager.shared.joinRelationship(code: code) {
+            DispatchQueue.main.async {
+                RelationshipManager.shared.saveCode(code)
+                onConnected()
+                isConnecting = false
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+            if isConnecting {
+                isConnecting = false
+                failed = true
+            }
         }
     }
 }

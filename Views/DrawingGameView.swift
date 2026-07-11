@@ -178,6 +178,54 @@ private struct TraceTemplate {
                 x: 0.82 * sin(t),
                 y: 0.48 * sin(2 * t)
             )
+        },
+
+        TraceTemplate(
+            name: "Circle",
+            symbol: "circle"
+        ) { t in
+
+            return CGPoint(
+                x: cos(t),
+                y: sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Diamond",
+            symbol: "diamond"
+        ) { t in
+
+            let denom = abs(cos(t)) + abs(sin(t))
+
+            return CGPoint(
+                x: cos(t) / max(denom, 0.0001),
+                y: sin(t) / max(denom, 0.0001)
+            )
+        },
+
+        TraceTemplate(
+            name: "Egg",
+            symbol: "oval"
+        ) { t in
+
+            return CGPoint(
+                x: 0.72 * cos(t) * (1 - 0.14 * sin(t)),
+                y: sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Cloud",
+            symbol: "cloud"
+        ) { t in
+
+            let radius = 0.55 + 0.2 * cos(4 * t)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
         }
     ]
 }
@@ -390,15 +438,17 @@ struct DrawingGameView: View {
             VStack(spacing: 10) {
 
                 playerRow(
-                    name: leftPlayer.isEmpty ? "You" : leftPlayer,
-                    side: "Left",
-                    isReady: leftReady
+                    name: displayName(for: leftPlayer, isMe: assignedSide == .left),
+                    side: assignedSide == .left ? "Your side" : "Left side",
+                    isReady: leftReady,
+                    isMe: assignedSide == .left
                 )
 
                 playerRow(
-                    name: rightPlayer.isEmpty ? "Waiting for partner" : rightPlayer,
-                    side: "Right",
-                    isReady: rightReady
+                    name: displayName(for: rightPlayer, isMe: assignedSide == .right),
+                    side: assignedSide == .right ? "Your side" : "Right side",
+                    isReady: rightReady,
+                    isMe: assignedSide == .right
                 )
             }
 
@@ -448,10 +498,18 @@ struct DrawingGameView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
+    private func displayName(for player: String, isMe: Bool) -> String {
+        if !player.isEmpty {
+            return isMe ? "\(player) (You)" : player
+        }
+        return isMe ? "You" : "Waiting for partner…"
+    }
+
     private func playerRow(
         name: String,
         side: String,
-        isReady: Bool
+        isReady: Bool,
+        isMe: Bool
     ) -> some View {
 
         HStack {
@@ -479,8 +537,12 @@ struct DrawingGameView: View {
             .foregroundColor(isReady ? .green : .secondary)
         }
         .padding(12)
-        .background(.white.opacity(0.82))
+        .background(isMe ? Color.pink.opacity(0.12) : Color.white.opacity(0.82))
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isMe ? Color.pink.opacity(0.45) : Color.clear, lineWidth: 1.5)
+        )
     }
 
     private var liveStatusPanel: some View {
@@ -554,6 +616,19 @@ struct DrawingGameView: View {
         .clipShape(Capsule())
     }
 
+    private func sideBadge(text: String, mine: Bool) -> some View {
+
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.black)
+            .foregroundColor(mine ? .white : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(mine ? selectedColor : Color.white.opacity(0.9))
+            .clipShape(Capsule())
+            .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+    }
+
     private var traceBoard: some View {
 
         GeometryReader { geometry in
@@ -568,14 +643,31 @@ struct DrawingGameView: View {
 
                 if !bothComplete {
 
+                    // Tint the half you should trace so it's obvious which
+                    // side is yours.
+                    let myRect: CGRect = assignedSide == .left
+                        ? CGRect(x: 0, y: 0,
+                                 width: canvasSize.width / 2,
+                                 height: canvasSize.height)
+                        : CGRect(x: canvasSize.width / 2, y: 0,
+                                 width: canvasSize.width / 2,
+                                 height: canvasSize.height)
+
+                    context.fill(
+                        Path(myRect),
+                        with: .color(selectedColor.opacity(0.09))
+                    )
+
                     drawGuide(
                         side: .left,
+                        isMine: assignedSide == .left,
                         in: &context,
                         canvasSize: canvasSize
                     )
 
                     drawGuide(
                         side: .right,
+                        isMine: assignedSide == .right,
                         in: &context,
                         canvasSize: canvasSize
                     )
@@ -657,6 +749,26 @@ struct DrawingGameView: View {
                         .background(.black.opacity(0.35))
                         .clipShape(Capsule())
                         .padding(.top, 14)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+
+                if let assignedSide, !bothComplete {
+                    sideBadge(
+                        text: assignedSide == .left ? "You ✏️" : "Partner",
+                        mine: assignedSide == .left
+                    )
+                    .padding(12)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+
+                if let assignedSide, !bothComplete {
+                    sideBadge(
+                        text: assignedSide == .right ? "You ✏️" : "Partner",
+                        mine: assignedSide == .right
+                    )
+                    .padding(12)
                 }
             }
             .gesture(
@@ -801,7 +913,7 @@ struct DrawingGameView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
-    private func joinGame() {
+    private func joinGame(retriesLeft: Int = 2) {
 
         FirestoreManager.shared.joinTraceGame(
             username: username
@@ -812,6 +924,12 @@ struct DrawingGameView: View {
                 if let side,
                    let traceSide = TraceSide(rawValue: side) {
                     assignedSide = traceSide
+                } else if retriesLeft > 0 {
+                    // Transient failure (network/transaction) — retry so we
+                    // don't get stuck with a disabled Ready button.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        joinGame(retriesLeft: retriesLeft - 1)
+                    }
                 }
             }
         }
@@ -850,6 +968,16 @@ struct DrawingGameView: View {
                 traceID =
                     data["traceID"] as? Int
                     ?? 0
+
+                // Recover our side from the snapshot if the join callback was
+                // slow or failed — prevents "both in lobby but can't Ready".
+                if assignedSide == nil {
+                    if leftPlayer == username {
+                        assignedSide = .left
+                    } else if rightPlayer == username {
+                        assignedSide = .right
+                    }
+                }
 
                 updateStrokes(from: data)
             }
@@ -983,15 +1111,11 @@ struct DrawingGameView: View {
     private func startNewRound() {
 
         resetMyDrawing()
-        assignedSide = nil
+        partnerActiveStroke = nil
         didAwardLove = false
+        // Keep our assigned side and BOTH players — only the round state is
+        // reset — so neither person is dropped from the lobby.
         FirestoreManager.shared.resetTraceGame()
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.4
-        ) {
-            joinGame()
-        }
     }
 
     private func resetMyDrawing() {
@@ -1093,6 +1217,7 @@ struct DrawingGameView: View {
 
     private func drawGuide(
         side: TraceSide,
+        isMine: Bool,
         in context: inout GraphicsContext,
         canvasSize: CGSize
     ) {
@@ -1113,27 +1238,56 @@ struct DrawingGameView: View {
             guidePath.addLine(to: point)
         }
 
-        context.stroke(
-            guidePath,
-            with: .color(.white.opacity(0.95)),
-            style: StrokeStyle(
-                lineWidth: 16,
-                lineCap: .round,
-                lineJoin: .round,
-                dash: [6, 10]
-            )
-        )
+        if isMine {
 
-        context.stroke(
-            guidePath,
-            with: .color(.black.opacity(0.18)),
-            style: StrokeStyle(
-                lineWidth: 3,
-                lineCap: .round,
-                lineJoin: .round,
-                dash: [6, 10]
+            // Bright, inviting guide on the half YOU should trace.
+            context.stroke(
+                guidePath,
+                with: .color(.white),
+                style: StrokeStyle(
+                    lineWidth: 18,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: [6, 10]
+                )
             )
-        )
+
+            context.stroke(
+                guidePath,
+                with: .color(selectedColor.opacity(0.6)),
+                style: StrokeStyle(
+                    lineWidth: 5,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: [6, 10]
+                )
+            )
+
+        } else {
+
+            // Faint, greyed guide on your partner's half.
+            context.stroke(
+                guidePath,
+                with: .color(.white.opacity(0.5)),
+                style: StrokeStyle(
+                    lineWidth: 12,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: [6, 10]
+                )
+            )
+
+            context.stroke(
+                guidePath,
+                with: .color(.gray.opacity(0.28)),
+                style: StrokeStyle(
+                    lineWidth: 2,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    dash: [6, 10]
+                )
+            )
+        }
     }
 
     private func drawStrokes(

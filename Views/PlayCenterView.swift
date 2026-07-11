@@ -8,8 +8,6 @@ struct PlayCenterView: View {
     @ObservedObject var petVM: PetViewModel
 
     @State private var showTraceGame = false
-    @State private var showPizzaGame = false
-    @State private var showAirHockey = false
 
     var body: some View {
 
@@ -64,24 +62,6 @@ struct PlayCenterView: View {
                     ) {
                         showTraceGame = true
                     }
-
-                    gameCard(
-                        emoji: "🍕",
-                        title: "Pizza for Ziggy",
-                        subtitle: "Build Ziggy's dream pizza together, bake it, then feed him.",
-                        tint: .orange
-                    ) {
-                        showPizzaGame = true
-                    }
-
-                    gameCard(
-                        emoji: "🏒",
-                        title: "Air Hockey",
-                        subtitle: "Grab one phone, a paddle each — first to 11 wins!",
-                        tint: .blue
-                    ) {
-                        showAirHockey = true
-                    }
                 }
 
                 Spacer()
@@ -93,22 +73,6 @@ struct PlayCenterView: View {
         ) {
 
             DrawingGameView(
-                petVM: petVM
-            )
-        }
-        .fullScreenCover(
-            isPresented: $showPizzaGame
-        ) {
-
-            PizzaMakingGameView(
-                petVM: petVM
-            )
-        }
-        .fullScreenCover(
-            isPresented: $showAirHockey
-        ) {
-
-            AirHockeyGameView(
                 petVM: petVM
             )
         }

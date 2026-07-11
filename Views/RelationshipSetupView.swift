@@ -1,11 +1,15 @@
 import SwiftUI
+import UIKit
 
 struct RelationshipSetupView: View {
 
     @State private var joinCode = ""
     @State private var generatedCode = ""
-    @State private var showGeneratedCode = false
     @State private var bounce = false
+    @State private var inviteCreated = false
+    @State private var showInviteShare = false
+    @State private var isCreatingInvite = false
+    @State private var inviteError = ""
 
     private let cream = LinearGradient(
         colors: [
@@ -20,6 +24,22 @@ struct RelationshipSetupView: View {
 
     private var canJoin: Bool {
         !joinCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var inviteURL: URL {
+        URL(string: "ziggy://invite?code=\(generatedCode)")!
+    }
+
+    private var inviteMessage: String {
+        """
+        Come raise Ziggy with me.
+
+        Tap this invite link:
+        \(inviteURL.absoluteString)
+
+        If the link does not open, enter this code in Ziggy:
+        \(generatedCode)
+        """
     }
 
     var body: some View {
@@ -68,34 +88,97 @@ struct RelationshipSetupView: View {
                             .multilineTextAlignment(.center)
                     }
 
-                    // Generate code card
+                    // Generate invite card
                     VStack(spacing: 14) {
 
-                        Text("Start a new connection")
+                        Text(inviteCreated ? "Invite your partner" : "Start a new connection")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(accent)
 
-                        Button {
+                        if inviteCreated {
 
-                            generatedCode = generateCode()
-                            showGeneratedCode = true
+                            VStack(spacing: 12) {
 
-                        } label: {
+                                HStack {
+                                    Image(systemName: "link")
+                                        .foregroundColor(.pink)
 
-                            Label("Generate Code", systemImage: "sparkles")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 15)
-                                .background(
-                                    LinearGradient(
-                                        colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
+                                    Text(generatedCode)
+                                        .font(.system(.title3, design: .rounded))
+                                        .fontWeight(.heavy)
+                                        .foregroundColor(accent)
+
+                                    Spacer()
+                                }
+                                .padding(14)
+                                .background(.white.opacity(0.72))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                                Button {
+                                    showInviteShare = true
+                                } label: {
+                                    Label("Invite Your Partner", systemImage: "square.and.arrow.up.fill")
+                                        .font(.headline)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 15)
+                                        .background(
+                                            LinearGradient(
+                                                colors: [
+                                                    .pink,
+                                                    Color(red: 0.95, green: 0.55, blue: 0.6)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .foregroundColor(.white)
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                }
+
+                                Text("Share this invite. Once it is sent, Ziggy will open for you.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                        } else {
+
+                            Button {
+
+                                createInvite()
+
+                            } label: {
+
+                                Label("Create Partner Invite", systemImage: "sparkles")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 15)
+                                    .background(
+                                        LinearGradient(
+                                            colors: [
+                                                .pink,
+                                                Color(red: 0.95, green: 0.55, blue: 0.6)
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
                                     )
-                                )
-                                .foregroundColor(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .foregroundColor(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
+                            .disabled(isCreatingInvite)
+
+                            if isCreatingInvite {
+                                ProgressView()
+                                    .tint(.pink)
+                            }
+
+                            if !inviteError.isEmpty {
+                                Text(inviteError)
+                                    .font(.caption)
+                                    .foregroundColor(.red.opacity(0.8))
+                                    .multilineTextAlignment(.center)
+                            }
                         }
                     }
                     .padding(18)
@@ -177,32 +260,12 @@ struct RelationshipSetupView: View {
             }
         }
         .onAppear { bounce = true }
-        .alert(
-            "Your Love Code 💞",
-            isPresented: $showGeneratedCode
-        ) {
-
-            Button("Copy") {
-                UIPasteboard.general.string = generatedCode
-            }
-
-            Button("OK") {
-                // Create the relationship (membership + pet) first, then
-                // connect so listeners start with access granted.
-                FirestoreManager.shared.createRelationship(code: generatedCode) {
-                    RelationshipManager.shared.saveCode(generatedCode)
+        .sheet(isPresented: $showInviteShare) {
+            ActivityShareSheet(items: [inviteMessage]) { completed in
+                if completed {
+                    completeInvite()
                 }
             }
-
-        } message: {
-
-            Text(
-                """
-                Share this code with your partner:
-
-                \(generatedCode)
-                """
-            )
         }
     }
 
@@ -227,6 +290,54 @@ struct RelationshipSetupView: View {
 
         return randomLetters + randomNumbers
     }
+
+    private func createInvite() {
+        let code = generateCode()
+        isCreatingInvite = true
+        inviteError = ""
+        generatedCode = code
+
+        FirestoreManager.shared.createRelationship(code: code) { created in
+            isCreatingInvite = false
+
+            if created {
+                inviteCreated = true
+            } else {
+                generatedCode = ""
+                inviteError = "Could not create invite. Check your connection and try again."
+            }
+        }
+    }
+
+    private func completeInvite() {
+        guard !generatedCode.isEmpty else { return }
+        RelationshipManager.shared.saveCode(generatedCode)
+    }
+}
+
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    let onComplete: (Bool) -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(
+            activityItems: items,
+            applicationActivities: nil
+        )
+
+        controller.completionWithItemsHandler = { _, completed, _, _ in
+            DispatchQueue.main.async {
+                onComplete(completed)
+            }
+        }
+
+        return controller
+    }
+
+    func updateUIViewController(
+        _ uiViewController: UIActivityViewController,
+        context: Context
+    ) {}
 }
 
 #Preview {

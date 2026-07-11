@@ -505,7 +505,7 @@ struct InstantView: View {
                     return
                 }
 
-                petVM.pet.loveScore += 15
+                petVM.pet.loveScore = min(100, petVM.pet.loveScore + 15)
                 petVM.addEvent(
                     title: "Sent an Instant 📸",
                     person: me

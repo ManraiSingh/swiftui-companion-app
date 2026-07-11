@@ -18,6 +18,19 @@ class FirestoreManager {
         RelationshipManager.shared.relationshipCode
     }
 
+    private let deviceTokenKey = "ziggy_apns_device_token"
+    private let deviceIDKey = "ziggy_device_id"
+
+    private var deviceID: String {
+        if let id = UserDefaults.standard.string(forKey: deviceIDKey) {
+            return id
+        }
+
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: deviceIDKey)
+        return id
+    }
+
     /// Ensures there's an anonymous user, then returns its uid.
     private func ensureSignedIn(_ completion: @escaping (String?) -> Void) {
         if let uid = Auth.auth().currentUser?.uid {
@@ -29,47 +42,120 @@ class FirestoreManager {
         }
     }
 
+    private func ensureRelationshipMembership(
+        _ completion: @escaping (Bool) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else {
+            completion(false)
+            return
+        }
+
+        ensureSignedIn { [weak self] uid in
+
+            guard let self = self, let uid = uid else {
+                completion(false)
+                return
+            }
+
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .setData([
+                    "members": FieldValue.arrayUnion([uid])
+                ], merge: true) { error in
+                    completion(error == nil)
+                }
+        }
+    }
+
     func savePet(_ pet: Pet) {
 
         guard !relationshipCode.isEmpty else {
             return
         }
-        db.collection("relationships")
-            .document(relationshipCode)
-            .collection("data")
-            .document("pet")
-            .setData([
-                "name": pet.name,
-                "hunger": pet.hunger,
-                "happiness": pet.happiness,
-                "energy": pet.energy,
-                "loveScore": pet.loveScore,
-                "lastAction": pet.lastAction,
-                "lastActionBy": pet.lastActionBy,
-                "updatedAt": Timestamp()
-            ]) { error in
 
-                if error != nil {
+        ensureRelationshipMembership { [weak self] canSync in
 
+            guard let self = self, canSync else { return }
 
-                } else {
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("data")
+                .document("pet")
+                .setData([
+                    "name": pet.name,
+                    "hunger": pet.hunger,
+                    "happiness": pet.happiness,
+                    "energy": pet.energy,
+                    "loveScore": pet.loveScore,
+                    "lastAction": pet.lastAction,
+                    "lastActionBy": pet.lastActionBy,
+                    "updatedAt": Timestamp()
+                ], merge: true)
+        }
+    }
 
-                }
+    func saveDeviceToken(_ token: String) {
+
+        UserDefaults.standard.set(token, forKey: deviceTokenKey)
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        ensureRelationshipMembership { [weak self] canSync in
+
+            guard let self = self, canSync else {
+                return
             }
+
+            self.ensureSignedIn { [weak self] uid in
+
+                guard let self = self, let uid = uid else {
+                    return
+                }
+
+                self.db.collection("relationships")
+                    .document(self.relationshipCode)
+                    .collection("devices")
+                    .document(uid)
+                    .setData([
+                        "deviceID": self.deviceID,
+                        "token": token,
+                        "username": UserManager.shared.username,
+                        "platform": "ios",
+                        "updatedAt": Timestamp()
+                    ], merge: true) { error in
+                        if let error {
+                            print("Device token save error:", error.localizedDescription)
+                        }
+                    }
+            }
+        }
+    }
+
+    func refreshSavedDeviceToken() {
+        guard
+            let token = UserDefaults.standard.string(forKey: deviceTokenKey)
+        else { return }
+
+        saveDeviceToken(token)
     }
     /// Creates a new relationship with the current user as the first member,
     /// then seeds the default pet. `completion` runs after membership is
     /// committed so listeners only start once access is granted.
     func createRelationship(
         code: String,
-        completion: @escaping () -> Void = {}
+        completion: @escaping (Bool) -> Void = { _ in }
     ) {
-        guard !code.isEmpty else { completion(); return }
+        guard !code.isEmpty else {
+            completion(false)
+            return
+        }
 
         ensureSignedIn { [weak self] uid in
 
             guard let self = self, let uid = uid else {
-                DispatchQueue.main.async { completion() }
+                DispatchQueue.main.async { completion(false) }
                 return
             }
 
@@ -79,7 +165,11 @@ class FirestoreManager {
             ref.setData([
                 "createdAt": Timestamp(),
                 "members": [uid]
-            ], merge: true) { _ in
+            ], merge: true) { error in
+                guard error == nil else {
+                    DispatchQueue.main.async { completion(false) }
+                    return
+                }
 
                 // 2) Now that we're a member, seed the pet.
                 ref.collection("data").document("pet").setData([
@@ -91,8 +181,14 @@ class FirestoreManager {
                     "lastAction": "",
                     "lastActionBy": "",
                     "updatedAt": Timestamp()
-                ], merge: true) { _ in
-                    DispatchQueue.main.async { completion() }
+                ], merge: true) { error in
+                    guard error == nil else {
+                        DispatchQueue.main.async { completion(false) }
+                        return
+                    }
+
+                    self.refreshSavedDeviceToken()
+                    DispatchQueue.main.async { completion(true) }
                 }
             }
         }
@@ -119,6 +215,7 @@ class FirestoreManager {
                 .setData([
                     "members": FieldValue.arrayUnion([uid])
                 ], merge: true) { _ in
+                    self.refreshSavedDeviceToken()
                     DispatchQueue.main.async { completion() }
                 }
         }
@@ -129,17 +226,24 @@ class FirestoreManager {
         guard !relationshipCode.isEmpty else {
             return
         }
-        // Wait for anonymous sign-in so the listener attaches authenticated
-        // (secure rules deny unauthenticated requests).
-        ensureSignedIn { [weak self] _ in
-            guard let self = self, !self.relationshipCode.isEmpty else { return }
+
+        ensureRelationshipMembership { [weak self] canSync in
+            guard
+                let self = self,
+                canSync,
+                !self.relationshipCode.isEmpty
+            else { return }
+
             self.db.collection("relationships")
                 .document(self.relationshipCode)
                 .collection("data")
                 .document("pet")
                 .addSnapshotListener { snapshot, error in
 
-                    if error != nil { return }
+                    if let error = error {
+                        print("Pet listener error:", error.localizedDescription)
+                        return
+                    }
 
                     guard let data = snapshot?.data() else { return }
 
@@ -170,17 +274,24 @@ class FirestoreManager {
         guard !relationshipCode.isEmpty else {
             return
         }
-        db.collection("relationships")
-            .document(relationshipCode)
-            .collection("emotions")
-            .addDocument(data: [
-                "title": title,
-                "sender": sender,
-                "type": type,
-                "emotion": emotion,
-                "timestamp": Timestamp(),
-                "seenAt": NSNull()
-            ])
+
+        ensureRelationshipMembership { [weak self] canSync in
+
+            guard let self = self, canSync else { return }
+
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("emotions")
+                .addDocument(data: [
+                    "title": title,
+                    "sender": sender,
+                    "senderDeviceID": self.deviceID,
+                    "type": type,
+                    "emotion": emotion,
+                    "timestamp": Timestamp(),
+                    "seenAt": NSNull()
+                ])
+        }
     }
     func listenForEmotions(
         completion: @escaping ([String: Any], String) -> Void
@@ -188,14 +299,25 @@ class FirestoreManager {
         guard !relationshipCode.isEmpty else {
             return
         }
-        ensureSignedIn { [weak self] _ in
-            guard let self = self, !self.relationshipCode.isEmpty else { return }
+
+        ensureRelationshipMembership { [weak self] canSync in
+            guard
+                let self = self,
+                canSync,
+                !self.relationshipCode.isEmpty
+            else { return }
+
             self.db.collection("relationships")
                 .document(self.relationshipCode)
                 .collection("emotions")
                 .order(by: "timestamp", descending: true)
                 .limit(to: 1)
                 .addSnapshotListener { snapshot, error in
+
+                    if let error = error {
+                        print("Emotion listener error:", error.localizedDescription)
+                        return
+                    }
 
                     guard let document = snapshot?.documents.first else {
                         return
@@ -214,14 +336,19 @@ class FirestoreManager {
             return
         }
 
-        db.collection("relationships")
-            .document(relationshipCode)
-            .collection("events")
-            .addDocument(data: [
-                "title": title,
-                "person": person,
-                "timestamp": Timestamp()
-            ])
+        ensureRelationshipMembership { [weak self] canSync in
+
+            guard let self = self, canSync else { return }
+
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("events")
+                .addDocument(data: [
+                    "title": title,
+                    "person": person,
+                    "timestamp": Timestamp()
+                ])
+        }
     }
     func markEmotionSeen(
         documentID: String
@@ -495,55 +622,63 @@ class FirestoreManager {
                 let snapshot = try transaction.getDocument(gameRef)
                 let data = snapshot.data() ?? [:]
 
-                let leftPlayer = data["leftPlayer"] as? String
-                let rightPlayer = data["rightPlayer"] as? String
-                let status = data["status"] as? String
-                let needsFreshRound = status == "complete"
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let status = data["status"] as? String ?? "lobby"
+
+                var updates: [String: Any] = ["updatedAt": Timestamp()]
+
+                // If the previous round finished, start a fresh round but keep
+                // BOTH players so neither person gets dropped from the lobby.
+                if status == "complete" {
+                    updates["leftReady"] = false
+                    updates["rightReady"] = false
+                    updates["leftComplete"] = false
+                    updates["rightComplete"] = false
+                    updates["rewardClaimed"] = false
+                    updates["status"] = "lobby"
+                    updates["traceID"] = Int.random(in: 0...8)
+                    updates["leftStrokes"] = []
+                    updates["rightStrokes"] = []
+                    updates["leftActiveStroke"] = [:]
+                    updates["rightActiveStroke"] = [:]
+                }
+
+                // Assign a side without ever clearing the partner's slot.
                 let assignedSide: String
 
-                if needsFreshRound {
-                    assignedSide = "left"
-                    transaction.setData([
-                        "leftPlayer": username,
-                        "rightPlayer": "",
-                        "leftReady": false,
-                        "rightReady": false,
-                        "leftComplete": false,
-                        "rightComplete": false,
-                        "rewardClaimed": false,
-                        "status": "lobby",
-                        "traceID": Int.random(in: 0...4),
-                        "leftStrokes": [],
-                        "rightStrokes": [],
-                        "leftActiveStroke": [:],
-                        "rightActiveStroke": [:],
-                        "updatedAt": Timestamp()
-                    ], forDocument: gameRef, merge: true)
-                } else if leftPlayer == username {
+                if leftPlayer == username {
                     assignedSide = "left"
                 } else if rightPlayer == username {
                     assignedSide = "right"
-                } else if leftPlayer == nil || leftPlayer?.isEmpty == true {
+                } else if leftPlayer.isEmpty {
                     assignedSide = "left"
-                    transaction.setData([
-                        "leftPlayer": username,
-                        "leftReady": false,
-                        "leftComplete": false,
-                        "status": data["status"] as? String ?? "lobby",
-                        "traceID": data["traceID"] as? Int ?? Int.random(in: 0...4),
-                        "updatedAt": Timestamp()
-                    ], forDocument: gameRef, merge: true)
-                } else if rightPlayer == nil || rightPlayer?.isEmpty == true {
+                    updates["leftPlayer"] = username
+                    updates["leftReady"] = false
+                    updates["leftComplete"] = false
+                } else if rightPlayer.isEmpty {
                     assignedSide = "right"
-                    transaction.setData([
-                        "rightPlayer": username,
-                        "rightReady": false,
-                        "rightComplete": false,
-                        "updatedAt": Timestamp()
-                    ], forDocument: gameRef, merge: true)
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                    updates["rightComplete"] = false
                 } else {
-                    assignedSide = "left"
+                    // Both slots already taken by other names (stale data from a
+                    // previous pairing). Reclaim the right slot for this user.
+                    assignedSide = "right"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                    updates["rightComplete"] = false
                 }
+
+                // Seed a template / status on a very first join.
+                if data["traceID"] == nil && updates["traceID"] == nil {
+                    updates["traceID"] = Int.random(in: 0...8)
+                }
+                if data["status"] == nil && updates["status"] == nil {
+                    updates["status"] = "lobby"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
 
                 return assignedSide
 
@@ -554,9 +689,6 @@ class FirestoreManager {
             }
 
         } completion: { side, error in
-
-            if error != nil {
-            }
 
             completion(side as? String)
         }
@@ -744,26 +876,26 @@ class FirestoreManager {
             return
         }
 
+        // Keep both players (merge, and no leftPlayer/rightPlayer keys) so a new
+        // round drops nobody from the lobby — we only clear the round state.
         db.collection("relationships")
             .document(relationshipCode)
             .collection("games")
             .document("traceDrawing")
             .setData([
-                "leftPlayer": "",
-                "rightPlayer": "",
                 "leftReady": false,
                 "rightReady": false,
                 "leftComplete": false,
                 "rightComplete": false,
                 "rewardClaimed": false,
                 "status": "lobby",
-                "traceID": Int.random(in: 0...4),
+                "traceID": Int.random(in: 0...8),
                 "leftStrokes": [],
                 "rightStrokes": [],
                 "leftActiveStroke": [:],
                 "rightActiveStroke": [:],
                 "updatedAt": Timestamp()
-            ])
+            ], merge: true)
     }
 
     func sendInstant(
@@ -802,6 +934,7 @@ class FirestoreManager {
         // Tiny metadata doc (the always-on badge listener uses this)
         batch.setData([
             "sender": sender,
+            "senderDeviceID": self.deviceID,
             "sentAt": now
         ], forDocument: base.document("instant_meta"))
 
