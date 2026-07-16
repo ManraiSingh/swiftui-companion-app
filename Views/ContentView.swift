@@ -731,12 +731,20 @@
 //    ContentView()
 //}
 import SwiftUI
+import StoreKit
 
 struct ContentView: View {
     @AppStorage("ziggy_username")
     private var username = ""
     @StateObject private var petVM = PetViewModel()
     @StateObject private var dailyQ = DailyQuestionManager.shared
+
+    @Environment(\.requestReview) private var requestReview
+
+    @AppStorage("ziggy_has_asked_for_review")
+    private var hasAskedForReview = false
+
+    @State private var showRatingPrompt = false
 
     @State private var showFeedView        = false
     @State private var showInstantView     = false
@@ -811,6 +819,7 @@ struct ContentView: View {
                     dailyQ.startListening()
                     UserDefaults(suiteName: "group.com.manrai.ziggy")?
                         .set(Date(), forKey: "last_app_open_time")
+                    checkForRatingPrompt()
                 }
             }
         }
@@ -950,6 +959,11 @@ struct ContentView: View {
             if showEmotionPopup {
                 emotionPopup
                     .zIndex(10)
+            }
+
+            if showRatingPrompt {
+                ratingPromptView
+                    .zIndex(11)
             }
         }
         .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM) }
@@ -1281,6 +1295,91 @@ struct ContentView: View {
                 .padding(.top, 2)
             }
             .padding(22)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            .padding(.horizontal, 28)
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: - Rating Prompt
+
+    /// Shows a cute custom ask once, after a genuinely happy moment (high
+    /// love score + a few days together) — only "Yes" triggers Apple's
+    /// native review sheet, which decides on its own whether to actually
+    /// display it.
+    private func checkForRatingPrompt() {
+        guard !hasAskedForReview else { return }
+        guard
+            petVM.pet.loveScore >= 80,
+            petVM.pet.relationshipDays >= 3
+        else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showRatingPrompt = true
+            }
+        }
+    }
+
+    private var ratingPromptView: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+
+                Image("ziggy_loveeyes")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 90)
+
+                Text("Enjoying \(petVM.pet.name)? 💕")
+                    .font(.title3)
+                    .fontWeight(.black)
+                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+
+                Text("A quick rating helps other couples find us too 🥹")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+
+                Button {
+                    hasAskedForReview = true
+                    withAnimation(.easeOut(duration: 0.2)) { showRatingPrompt = false }
+                    requestReview()
+                } label: {
+                    Text("Yes, rate us! 😍")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                        .clipShape(Capsule())
+                }
+
+                Button {
+                    hasAskedForReview = true
+                    withAnimation(.easeOut(duration: 0.2)) { showRatingPrompt = false }
+                } label: {
+                    Text("Not right now")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 2)
+            }
+            .padding(24)
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .padding(.horizontal, 28)
