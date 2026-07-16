@@ -124,8 +124,17 @@ struct Provider: AppIntentTimelineProvider {
         return (imageData, sender)
     }
 
+    /// A dedicated, always-romantic pastel palette for the doodle card — it's
+    /// a deliberate cute gesture, so it shouldn't inherit the generic
+    /// hour-of-day mood gradient (which can turn moody indigo at night).
+    let doodleColors: [Color] = [
+        Color(red: 1.0, green: 0.75, blue: 0.85),
+        Color(red: 0.93, green: 0.80, blue: 1.0)
+    ]
+
     func placeholder(in context: Context) -> SimpleEntry {
         let pet = loadPet()
+        let doodle = partnerDoodle()
 
         return SimpleEntry(
             date: Date(),
@@ -134,14 +143,15 @@ struct Provider: AppIntentTimelineProvider {
             mood: pet.mood,
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
-            colors: widgetColors(for: pet),
-            doodleImageData: partnerDoodle()?.data,
-            doodleSender: partnerDoodle()?.sender ?? "Your partner"
+            colors: doodle != nil ? doodleColors : widgetColors(for: pet),
+            doodleImageData: doodle?.data,
+            doodleSender: doodle?.sender ?? "Your partner"
         )
     }
 
     func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
         let pet = loadPet()
+        let doodle = partnerDoodle()
 
         return SimpleEntry(
             date: Date(),
@@ -150,9 +160,9 @@ struct Provider: AppIntentTimelineProvider {
             mood: pet.mood,
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
-            colors: widgetColors(for: pet),
-            doodleImageData: partnerDoodle()?.data,
-            doodleSender: partnerDoodle()?.sender ?? "Your partner"
+            colors: doodle != nil ? doodleColors : widgetColors(for: pet),
+            doodleImageData: doodle?.data,
+            doodleSender: doodle?.sender ?? "Your partner"
         )
     }
     func hoursSinceLastOpen() -> Double {
@@ -195,7 +205,7 @@ struct Provider: AppIntentTimelineProvider {
             mood: pet.mood,
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
-            colors: widgetColors(for: pet),
+            colors: doodle != nil ? doodleColors : widgetColors(for: pet),
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
@@ -409,27 +419,13 @@ struct ZiggyWidgetEntryView: View {
 
     private func doodleBody(_ uiImage: UIImage) -> some View {
 
-        // Frame the doodle like a little card on the mood gradient — matches
-        // the app's look instead of a plain edge-to-edge white rectangle.
-        VStack(spacing: 6) {
-
-            Text("🎨 A doodle for you")
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.top, 8)
-
-            // scaledToFit so the WHOLE drawing is always visible, never
-            // cropped — any leftover space just shows the white card.
-            Image(uiImage: uiImage)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .padding(.horizontal, 10)
-                .padding(.bottom, 10)
-        }
+        // The drawing fully covers the widget, edge-to-edge — no card,
+        // no caption, just the doodle itself.
+        Image(uiImage: uiImage)
+            .resizable()
+            .scaledToFill()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
     }
 
     private var defaultBody: some View {

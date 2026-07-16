@@ -144,15 +144,19 @@ struct DoodleView: View {
     // MARK: - Canvas
 
     private var canvasCard: some View {
+        // Square canvas — matches the Home Screen widget's shape (especially
+        // the small widget, which is roughly square), so the exported doodle
+        // needs no cropping to cover it.
         DoodleCanvas(canvasView: canvasView)
             .background(.white)
+            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(
                 RoundedRectangle(cornerRadius: 24)
                     .stroke(.white, lineWidth: 3)
             )
             .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
-            .frame(maxHeight: .infinity)
     }
 
     // MARK: - Toolbar
