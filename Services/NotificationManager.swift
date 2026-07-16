@@ -12,11 +12,11 @@ class NotificationManager {
 
     static let shared = NotificationManager()
 
-    func sendTestNotification() {
+    func sendTestNotification(petName: String = "Ziggy") {
 
         let content = UNMutableNotificationContent()
 
-        content.title = "🐶 Ziggy misses you ❤️"
+        content.title = "🐶 \(petName) misses you ❤️"
         content.body = "Come play with me!"
         content.sound = .default
 
@@ -34,11 +34,11 @@ class NotificationManager {
         UNUserNotificationCenter.current()
             .add(request)
     }
-    func sendHungryNotification() {
+    func sendHungryNotification(petName: String = "Ziggy") {
 
         let content = UNMutableNotificationContent()
 
-        content.title = "🍖 Ziggy is hungry!"
+        content.title = "🍖 \(petName) is hungry!"
         content.body = "Feed me before I get grumpy."
         content.sound = .default
 
@@ -51,11 +51,11 @@ class NotificationManager {
         UNUserNotificationCenter.current()
             .add(request)
     }
-    func sendLoveNotification() {
+    func sendLoveNotification(petName: String = "Ziggy") {
 
         let content = UNMutableNotificationContent()
 
-        content.title = "🐶 Ziggy misses you ❤️"
+        content.title = "🐶 \(petName) misses you ❤️"
         content.body = "Love Score is getting low."
         content.sound = .default
 
@@ -68,11 +68,11 @@ class NotificationManager {
         UNUserNotificationCenter.current()
             .add(request)
     }
-    func sendEnergyNotification() {
+    func sendEnergyNotification(petName: String = "Ziggy") {
 
         let content = UNMutableNotificationContent()
 
-        content.title = "😴 Ziggy is tired"
+        content.title = "😴 \(petName) is tired"
         content.body = "Let's rest for a while."
         content.sound = .default
 

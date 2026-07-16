@@ -38,11 +38,11 @@ struct PlayCenterView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
 
-                        Text("Ziggy Play Center")
+                        Text("\(petVM.pet.name) Play Center")
                             .font(.title2)
                             .fontWeight(.black)
 
-                        Text("Pick a tiny date-night game and make Ziggy very, very spoiled.")
+                        Text("Pick a tiny date-night game and make \(petVM.pet.name) very, very spoiled.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }

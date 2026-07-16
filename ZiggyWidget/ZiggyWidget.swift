@@ -287,7 +287,7 @@ struct Provider: AppIntentTimelineProvider {
         }
 
         return [
-            "OPEN ZIGGY NOW 🔥",
+            "OPEN \(pet.name.uppercased()) NOW 🔥",
             "WE NEED TO TALK 😤",
             "I'M UPSET 😭",
             "HELLO HUMAN."

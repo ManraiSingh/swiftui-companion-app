@@ -78,7 +78,7 @@ struct FeedView: View {
 
                         } label: {
 
-                            Text("Let's Feed Ziggy 🍖")
+                            Text("Let's Feed \(petVM.pet.name) 🍖")
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 12)

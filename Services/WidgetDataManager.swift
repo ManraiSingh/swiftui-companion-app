@@ -310,7 +310,7 @@ class WidgetDataManager {
         case "airHockey":
             return "Air Hockey"
         default:
-            return "with Ziggy"
+            return "with \(loadPet()?.name ?? "Ziggy")"
         }
     }
 

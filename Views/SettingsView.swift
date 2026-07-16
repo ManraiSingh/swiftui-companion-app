@@ -9,6 +9,8 @@ import SwiftUI
 
 struct SettingsView: View {
 
+    @ObservedObject var petVM: PetViewModel
+
     @AppStorage("ziggy_username")
     private var username = ""
 
@@ -68,7 +70,7 @@ struct SettingsView: View {
                         // Pet
                         settingsCard(
                             icon: "🐶",
-                            title: "Rename Ziggy"
+                            title: "Rename \(petVM.pet.name)"
                         ) {
 
                             VStack(spacing: 12) {
@@ -79,11 +81,10 @@ struct SettingsView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
 
                                 fillButton(title: "Rename") {
-                                    FirestoreManager.shared.renamePet(to: petName)
-                                    UserDefaults.standard.set(
-                                        petName,
-                                        forKey: "ziggy_pet_name"
-                                    )
+                                    let trimmed = petName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    guard !trimmed.isEmpty else { return }
+                                    petVM.pet.name = trimmed
+                                    FirestoreManager.shared.renamePet(to: trimmed)
                                 }
                             }
                         }
@@ -144,7 +145,7 @@ struct SettingsView: View {
 
                             VStack(alignment: .leading, spacing: 12) {
 
-                                Text("Permanently delete your shared Ziggy, photos and messages from our servers. This can't be undone.")
+                                Text("Permanently delete your shared \(petVM.pet.name), photos and messages from our servers. This can't be undone.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
 
@@ -208,15 +209,12 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
 
             } message: {
-                Text("This permanently removes your shared Ziggy, photos and messages for both of you. This cannot be undone.")
+                Text("This permanently removes your shared \(petVM.pet.name), photos and messages for both of you. This cannot be undone.")
             }
             .onAppear {
 
                 editedName = username
-                petName =
-                    UserDefaults.standard.string(
-                        forKey: "ziggy_pet_name"
-                    ) ?? "Ziggy"
+                petName = petVM.pet.name
             }
         }
     }
@@ -291,5 +289,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView()
+    SettingsView(petVM: PetViewModel())
 }

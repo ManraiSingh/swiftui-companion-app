@@ -803,7 +803,7 @@ struct ContentView: View {
                         .tabItem { Label("Home", systemImage: "house.fill") }
                     ActivityView(petVM: petVM)
                         .tabItem { Label("Activity", systemImage: "clock.fill") }
-                    SettingsView()
+                    SettingsView(petVM: petVM)
                         .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                 }
                 .onAppear {
@@ -880,13 +880,20 @@ struct ContentView: View {
 
     var cuteActivityText: String {
         let person = petVM.pet.lastActionBy
-        switch petVM.pet.lastAction {
-        case "Fed Ziggy 🍖":            return "🍖 \(person) fed me!"
-        case "Played with Ziggy 🎾":    return "❤️ I love seeing you guys play together ❤️"
-        case "Made Pizza for Ziggy 🍕": return "🍕 Ziggy devoured your couple pizza!"
-        case "Sent a Hug ❤️":           return "\(person) hugged me!"
-        default:                         return "🐶 Waiting for someone..."
+        let action = petVM.pet.lastAction
+        if action.contains("Fed") {
+            return "🍖 \(person) fed me!"
         }
+        if action.contains("Played") {
+            return "❤️ I love seeing you guys play together ❤️"
+        }
+        if action.contains("Pizza") {
+            return "🍕 \(petVM.pet.name) devoured your couple pizza!"
+        }
+        if action.contains("Hug") {
+            return "\(person) hugged me!"
+        }
+        return "🐶 Waiting for someone..."
     }
 
     var speechBubbleText: String {
@@ -949,7 +956,7 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM) }
         .fullScreenCover(isPresented: $showDrawingGameView) { PlayCenterView(petVM: petVM) }
         .sheet(isPresented: $showAnswerSheet) {
-            AnswerSheetView(dailyQ: dailyQ) {
+            AnswerSheetView(dailyQ: dailyQ, petName: petVM.pet.name) {
                 showAnswerSheet = false
             }
         }
@@ -960,7 +967,7 @@ struct ContentView: View {
     private var compactHeader: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("You two & Ziggy 💞")
+                Text("You two & \(petVM.pet.name) 💞")
                     .font(.system(size: 22, weight: .black))
                     .foregroundStyle(.primary)
                 Text(shortMoodMessage)
@@ -1099,7 +1106,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
                         Text("🐾").font(.system(size: 13))
-                        Text("Ziggy asks today")
+                        Text("\(petVM.pet.name) asks today")
                             .font(.caption2).fontWeight(.black)
                             .foregroundStyle(.secondary)
                     }
@@ -1217,7 +1224,7 @@ struct ContentView: View {
 
             VStack(spacing: 16) {
 
-                Text("How should Ziggy feel? 💭")
+                Text("How should \(petVM.pet.name) feel? 💭")
                     .font(.headline)
                     .fontWeight(.black)
 
@@ -1477,6 +1484,7 @@ struct InviteConnectionView: View {
 struct AnswerSheetView: View {
 
     @ObservedObject var dailyQ: DailyQuestionManager
+    var petName: String = "Ziggy"
     let onDismiss: () -> Void
 
     @State private var revealed      = false
@@ -1514,7 +1522,7 @@ struct AnswerSheetView: View {
                     .padding(.top, 14)
                     .padding(.bottom, 20)
 
-                Text("🐾 Ziggy asks today")
+                Text("🐾 \(petName) asks today")
                     .font(.caption).fontWeight(.black)
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 10)
@@ -1573,7 +1581,7 @@ struct AnswerSheetView: View {
                     if dailyQ.isSubmitting {
                         ProgressView().tint(.white)
                     } else {
-                        Label("Send to Ziggy", systemImage: "paperplane.fill")
+                        Label("Send to \(petName)", systemImage: "paperplane.fill")
                             .fontWeight(.bold)
                     }
                 }

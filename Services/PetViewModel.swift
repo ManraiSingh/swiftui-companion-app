@@ -439,11 +439,11 @@ class PetViewModel: ObservableObject {
         pet.hunger = min(100, pet.hunger + 10)
         pet.loveScore = min(100, pet.loveScore + 5)
         pet.energy = min(100, pet.energy + 2)
-        pet.lastAction = "Fed Ziggy 🍖"
+        pet.lastAction = "Fed \(pet.name) 🍖"
         pet.lastActionBy = UserManager.shared.username
         pet.lastActionTime = Date()
         pet.lastUpdated = Date()
-        addEvent(title: "Fed Ziggy 🍖", person: UserManager.shared.username)
+        addEvent(title: "Fed \(pet.name) 🍖", person: UserManager.shared.username)
 
         // Send as activity type so partner sees neutral Ziggy message
         FirestoreManager.shared.sendEmotion(
@@ -469,11 +469,11 @@ class PetViewModel: ObservableObject {
 
         pet.happiness = min(100, pet.happiness + 10)
         pet.loveScore = min(100, pet.loveScore + 5)
-        pet.lastAction = "Played with Ziggy 🎾"
+        pet.lastAction = "Played with \(pet.name) 🎾"
         pet.lastActionBy = UserManager.shared.username
         pet.lastActionTime = Date()
         pet.lastUpdated = Date()
-        addEvent(title: "Played with Ziggy 🎾", person: UserManager.shared.username)
+        addEvent(title: "Played with \(pet.name) 🎾", person: UserManager.shared.username)
 
         FirestoreManager.shared.sendEmotion(
             title: "activity:played",
@@ -499,11 +499,11 @@ class PetViewModel: ObservableObject {
         pet.happiness = 100
         pet.energy = min(100, pet.energy + 8)
         pet.loveScore = 100
-        pet.lastAction = "Made Pizza for Ziggy 🍕"
+        pet.lastAction = "Made Pizza for \(pet.name) 🍕"
         pet.lastActionBy = UserManager.shared.username
         pet.lastActionTime = Date()
         pet.lastUpdated = Date()
-        addEvent(title: "Made Pizza for Ziggy 🍕", person: UserManager.shared.username)
+        addEvent(title: "Made Pizza for \(pet.name) 🍕", person: UserManager.shared.username)
 
         FirestoreManager.shared.sendEmotion(
             title: "activity:pizza",
@@ -810,13 +810,13 @@ class PetViewModel: ObservableObject {
         pet.loveScore = max(0, pet.loveScore - daysPassed * 4)
 
         if pet.hunger < 20 {
-            NotificationManager.shared.sendHungryNotification()
+            NotificationManager.shared.sendHungryNotification(petName: pet.name)
         }
         if pet.loveScore < 30 {
-            NotificationManager.shared.sendLoveNotification()
+            NotificationManager.shared.sendLoveNotification(petName: pet.name)
         }
         if pet.energy < 20 {
-            NotificationManager.shared.sendEnergyNotification()
+            NotificationManager.shared.sendEnergyNotification(petName: pet.name)
         }
 
         // Advance by whole days so a partial-day remainder carries over.
