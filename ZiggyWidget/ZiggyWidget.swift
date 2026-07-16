@@ -8,6 +8,7 @@
 import WidgetKit
 import SwiftUI
 import Foundation
+import UIKit
 // 1. THE PROVIDER
 struct Provider: AppIntentTimelineProvider {
     func loadPet() -> Pet {
@@ -54,6 +55,54 @@ struct Provider: AppIntentTimelineProvider {
         else { return nil }
         return (text, image)
     }
+
+    private func doodleFileURL() -> URL? {
+        FileManager.default
+            .containerURL(
+                forSecurityApplicationGroupIdentifier: "group.com.manrai.ziggy"
+            )?
+            .appendingPathComponent("partner_doodle.png")
+    }
+
+    /// The partner's latest hand-drawn doodle, if it's still fresh and newer
+    /// than any pending message. Returns image data + who drew it.
+    func partnerDoodle() -> (data: Data, sender: String)? {
+        let d = UserDefaults(suiteName: "group.com.manrai.ziggy")
+        guard
+            let time = d?.object(forKey: "ziggy_widget_doodle_time") as? Date,
+            let expiresAt = d?.object(
+                forKey: "ziggy_widget_doodle_expires_at"
+            ) as? Date,
+            expiresAt > Date()
+        else { return nil }
+
+        // Let a newer one-tap message / instant take priority over the doodle
+        // — but only if that message is still active. Otherwise a stale,
+        // already-expired message would permanently block every doodle.
+        if let msgTime = d?.object(forKey: "ziggy_widget_msg_time") as? Date,
+           let msgExpiresAt = d?.object(
+                forKey: "ziggy_widget_msg_expires_at"
+           ) as? Date,
+           msgExpiresAt > Date(),
+           msgTime > time {
+            return nil
+        }
+
+        let sender = d?.string(forKey: "ziggy_widget_doodle_sender")
+            ?? "Your partner"
+
+        if let imageData = d?.data(forKey: "ziggy_widget_doodle_png") {
+            return (imageData, sender)
+        }
+
+        guard
+            let url = doodleFileURL(),
+            let imageData = try? Data(contentsOf: url)
+        else { return nil }
+
+        return (imageData, sender)
+    }
+
     func placeholder(in context: Context) -> SimpleEntry {
         let pet = loadPet()
 
@@ -64,7 +113,9 @@ struct Provider: AppIntentTimelineProvider {
             mood: pet.mood,
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
-            colors: widgetColors(for: pet)
+            colors: widgetColors(for: pet),
+            doodleImageData: partnerDoodle()?.data,
+            doodleSender: partnerDoodle()?.sender ?? "Your partner"
         )
     }
 
@@ -78,7 +129,9 @@ struct Provider: AppIntentTimelineProvider {
             mood: pet.mood,
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
-            colors: widgetColors(for: pet)
+            colors: widgetColors(for: pet),
+            doodleImageData: partnerDoodle()?.data,
+            doodleSender: partnerDoodle()?.sender ?? "Your partner"
         )
     }
     func hoursSinceLastOpen() -> Double {
@@ -118,7 +171,9 @@ struct Provider: AppIntentTimelineProvider {
             mood: pet.mood,
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
-            colors: widgetColors(for: pet)
+            colors: widgetColors(for: pet),
+            doodleImageData: partnerDoodle()?.data,
+            doodleSender: partnerDoodle()?.sender ?? "Your partner"
         )
         return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
@@ -297,10 +352,13 @@ struct SimpleEntry: TimelineEntry {
     let imageName: String
     let message: String
     let mood: String
-    
+
     let loveScore: Int
     let relationshipDays: Int
     let colors: [Color]
+
+    var doodleImageData: Data? = nil
+    var doodleSender: String = "Your partner"
 }
 
 // 3. THE VIEW (The Look)
@@ -309,6 +367,28 @@ struct ZiggyWidgetEntryView: View {
     var entry: Provider.Entry
 
     var body: some View {
+
+        if let data = entry.doodleImageData,
+           let uiImage = UIImage(data: data) {
+
+            doodleBody(uiImage)
+
+        } else {
+
+            defaultBody
+        }
+    }
+
+    private func doodleBody(_ uiImage: UIImage) -> some View {
+
+        Image(uiImage: uiImage)
+            .resizable()
+            .scaledToFill()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+    }
+
+    private var defaultBody: some View {
 
         VStack(spacing: 4) {
 
@@ -369,6 +449,8 @@ struct ZiggyWidget: Widget {
         .supportedFamilies([.systemSmall, .systemMedium])
         .configurationDisplayName("Ziggy")
         .description("Your cute connected pet.")
+        // Let the doodle fill the whole widget edge-to-edge.
+        .contentMarginsDisabled()
     }
 }
 

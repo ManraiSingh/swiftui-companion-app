@@ -109,6 +109,46 @@ export const notifyPartnerInstant = onDocumentWritten(
   }
 );
 
+// A sent doodle -> partner widget. Like the instant, the meta doc has a fixed
+// id and is overwritten each send, so we listen for writes (not just creates).
+export const notifyPartnerDoodle = onDocumentWritten(
+  {
+    document: "relationships/{relationshipId}/data/doodle_meta",
+    region,
+    secrets,
+  },
+  async (event) => {
+    const after = event.data?.after;
+    if (!after || !after.exists) {
+      return;
+    }
+
+    const relationshipId = event.params.relationshipId;
+    const data = after.data() as {
+      sender?: string;
+      senderDeviceID?: string;
+      sentAt?: admin.firestore.Timestamp;
+    };
+
+    if (!data.sender) {
+      logger.info("Skipping doodle push without sender", {relationshipId});
+      return;
+    }
+
+    const eventID = data.sentAt ?
+      String(data.sentAt.toMillis()) :
+      String(Date.now());
+
+    await sendPartnerWidgetPush(relationshipId, eventID, {
+      title: "Doodle 🎨",
+      sender: data.sender,
+      senderDeviceID: data.senderDeviceID,
+      type: "doodle",
+      emotion: "",
+    });
+  }
+);
+
 // When one partner opens a game lobby first, invite the other partner to join.
 export const notifyPartnerGameInvite = onDocumentWritten(
   {
@@ -198,19 +238,43 @@ async function sendPartnerWidgetPush(
   });
 
   try {
-    const notification = createWidgetNotification(relationshipId, eventID, data);
+    const alertNotification = createWidgetNotification(
+      relationshipId,
+      eventID,
+      data,
+      true
+    );
+    const backgroundNotification = createWidgetNotification(
+      relationshipId,
+      eventID,
+      data,
+      false
+    );
 
     // Xcode installs use sandbox APNs tokens. App Store installs use
     // production APNs tokens. Sending to both lets the same function support
     // local testing and the released app; APNs rejects the wrong environment.
-    const [productionResponse, sandboxResponse] = await Promise.all([
-      productionProvider.send(notification, tokens),
-      sandboxProvider.send(notification, tokens),
+    //
+    // We send one visible alert plus one silent background signal. The silent
+    // signal is what gives the app a chance to cache big assets like doodles
+    // into the App Group so WidgetKit can render them.
+    const [
+      productionAlertResponse,
+      sandboxAlertResponse,
+      productionBackgroundResponse,
+      sandboxBackgroundResponse,
+    ] = await Promise.all([
+      productionProvider.send(alertNotification, tokens),
+      sandboxProvider.send(alertNotification, tokens),
+      productionProvider.send(backgroundNotification, tokens),
+      sandboxProvider.send(backgroundNotification, tokens),
     ]);
 
     const failed = [
-      ...productionResponse.failed,
-      ...sandboxResponse.failed,
+      ...productionAlertResponse.failed,
+      ...sandboxAlertResponse.failed,
+      ...productionBackgroundResponse.failed,
+      ...sandboxBackgroundResponse.failed,
     ];
     failed.forEach((failure: any) => {
       logger.warn("APNs widget push failed", {
@@ -225,8 +289,10 @@ async function sendPartnerWidgetPush(
     logger.info("Sent partner widget push", {
       relationshipId,
       eventID,
-      productionSent: productionResponse.sent.length,
-      sandboxSent: sandboxResponse.sent.length,
+      productionAlertSent: productionAlertResponse.sent.length,
+      sandboxAlertSent: sandboxAlertResponse.sent.length,
+      productionBackgroundSent: productionBackgroundResponse.sent.length,
+      sandboxBackgroundSent: sandboxBackgroundResponse.sent.length,
       failed: failed.length,
     });
   } finally {
@@ -238,21 +304,29 @@ async function sendPartnerWidgetPush(
 function createWidgetNotification(
   relationshipId: string,
   eventID: string,
-  data: WidgetEvent
+  data: WidgetEvent,
+  visible: boolean
 ): any {
   const notification = new apn.Notification();
-  const alert = notificationAlert(data);
   notification.topic = bundleID;
-  notification.pushType = "alert";
-  notification.priority = 10;
   notification.expiry = Math.floor(Date.now() / 1000) + 30 * 60;
   notification.contentAvailable = true;
-  notification.alert = {
-    title: alert.title,
-    body: alert.body,
-  };
-  notification.sound = "default";
   notification.threadId = "ziggy-partner-updates";
+
+  if (visible) {
+    const alert = notificationAlert(data);
+    notification.pushType = "alert";
+    notification.priority = 10;
+    notification.alert = {
+      title: alert.title,
+      body: alert.body,
+    };
+    notification.sound = "default";
+  } else {
+    notification.pushType = "background";
+    notification.priority = 5;
+  }
+
   notification.payload = {
     relationshipCode: relationshipId,
     eventID: eventID,
@@ -274,6 +348,13 @@ function notificationAlert(data: WidgetEvent): {title: string; body: string} {
     return {
       title: "Ziggy got you an Instant",
       body: `${sender} sent you a tiny moment. Tap to peek.`,
+    };
+  }
+
+  if (type === "doodle") {
+    return {
+      title: "A little doodle appeared",
+      body: `${sender} drew you something. Check your Home Screen 🎨`,
     };
   }
 

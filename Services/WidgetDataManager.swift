@@ -5,6 +5,7 @@
 
 import Foundation
 import WidgetKit
+import UIKit
 
 class WidgetDataManager {
 
@@ -46,6 +47,97 @@ class WidgetDataManager {
             forKey: "ziggy_widget_msg_expires_at"
         )
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    // MARK: - Partner doodle (dynamic hand-drawn image on the widget)
+
+    /// Shared file location for the partner's latest doodle PNG.
+    static func partnerDoodleURL() -> URL? {
+        FileManager.default
+            .containerURL(
+                forSecurityApplicationGroupIdentifier: "group.com.manrai.ziggy"
+            )?
+            .appendingPathComponent("partner_doodle.png")
+    }
+
+    /// Decodes a base64 doodle, downsizes it for the widget's memory budget,
+    /// writes it to the shared container, and refreshes the widget.
+    func cachePartnerDoodle(base64: String, sender: String) {
+        print("🎨 [Doodle] cachePartnerDoodle called, base64 length: \(base64.count), sender: \(sender)")
+
+        guard let raw = Data(base64Encoded: base64) else {
+            print("🎨 [Doodle] ❌ base64 decode failed")
+            return
+        }
+        guard let image = UIImage(data: raw) else {
+            print("🎨 [Doodle] ❌ UIImage(data:) failed, raw bytes: \(raw.count)")
+            return
+        }
+        guard let url = WidgetDataManager.partnerDoodleURL() else {
+            print("🎨 [Doodle] ❌ App Group container URL is nil — check entitlements")
+            return
+        }
+        print("🎨 [Doodle] target file: \(url.path)")
+
+        let resized = WidgetDataManager.downscale(image, maxDimension: 420)
+        guard let png = resized.pngData() else {
+            print("🎨 [Doodle] ❌ pngData() failed")
+            return
+        }
+
+        do {
+            try png.write(to: url, options: .atomic)
+            print("🎨 [Doodle] ✅ wrote \(png.count) bytes to shared container")
+        } catch {
+            print("🎨 [Doodle] ❌ file write failed: \(error)")
+            return
+        }
+
+        sharedDefaults?.set(png, forKey: "ziggy_widget_doodle_png")
+        sharedDefaults?.set(sender, forKey: "ziggy_widget_doodle_sender")
+        sharedDefaults?.set(Date(), forKey: "ziggy_widget_doodle_time")
+        sharedDefaults?.set(
+            Date().addingTimeInterval(12 * 3600),
+            forKey: "ziggy_widget_doodle_expires_at"
+        )
+        print("🎨 [Doodle] ✅ defaults saved, calling reloadAllTimelines()")
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    func clearDoodleIfExpired() {
+        guard
+            let expiresAt = sharedDefaults?.object(
+                forKey: "ziggy_widget_doodle_expires_at"
+            ) as? Date,
+            expiresAt <= Date()
+        else { return }
+
+        if let url = WidgetDataManager.partnerDoodleURL() {
+            try? FileManager.default.removeItem(at: url)
+        }
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_sender")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_time")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_expires_at")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_png")
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private static func downscale(
+        _ image: UIImage,
+        maxDimension: CGFloat
+    ) -> UIImage {
+        let longest = max(image.size.width, image.size.height)
+        guard longest > maxDimension, longest > 0 else { return image }
+
+        let scale = maxDimension / longest
+        let newSize = CGSize(
+            width: image.size.width * scale,
+            height: image.size.height * scale
+        )
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 
     func clearPartnerMessageIfExpired() {

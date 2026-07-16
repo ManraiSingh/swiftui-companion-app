@@ -376,6 +376,7 @@ class PetViewModel: ObservableObject {
     @Published var latestEmotion = ""
     @Published var hasPendingInstant = false
     @Published var instantSender = ""
+    @Published var isLoadingEvents = true
 
     // Ephemeral message state
     @Published var ephemeralMessage: EphemeralMessage? = nil
@@ -395,6 +396,8 @@ class PetViewModel: ObservableObject {
         startListening()
         listenForEmotions()
         listenForInstant()
+        listenForDoodleWidget()
+        listenForEvents()
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("RelationshipChanged"),
             object: nil,
@@ -405,6 +408,29 @@ class PetViewModel: ObservableObject {
             self?.startListening()
             self?.listenForEmotions()
             self?.listenForInstant()
+            self?.listenForDoodleWidget()
+            self?.listenForEvents()
+        }
+    }
+
+    /// Keeps the Home Screen widget in sync with the partner's latest doodle
+    /// while the app is running (the Cloud Function push covers app-closed).
+    private func listenForDoodleWidget() {
+        FirestoreManager.shared.observeDoodleForWidget { data in
+            // Compare device IDs, not display names — two partners can (and
+            // did) pick the same name, which would make every doodle look
+            // like "my own" and get silently skipped.
+            guard
+                let base64 = data?["imageBase64"] as? String,
+                let sender = data?["sender"] as? String,
+                let senderDeviceID = data?["senderDeviceID"] as? String,
+                senderDeviceID != FirestoreManager.shared.currentDeviceID
+            else { return }
+
+            WidgetDataManager.shared.cachePartnerDoodle(
+                base64: base64,
+                sender: sender
+            )
         }
     }
 
@@ -800,9 +826,20 @@ class PetViewModel: ObservableObject {
 
     func addEvent(title: String, person: String) {
 
-        let event = Event(title: title, person: person, timestamp: Date())
-        pet.events.insert(event, at: 0)
+        // No local insert here — listenForEvents is the single source of
+        // truth for both partners, so both people's memories show up.
         FirestoreManager.shared.addEvent(title: title, person: person)
+    }
+
+    /// Keeps "Our Memories" in sync with BOTH partners' actions, not just
+    /// whichever device performed them.
+    private func listenForEvents() {
+        FirestoreManager.shared.listenForEvents { [weak self] events in
+            DispatchQueue.main.async {
+                self?.pet.events = events
+                self?.isLoadingEvents = false
+            }
+        }
     }
 
     // MARK: - Ephemeral helpers

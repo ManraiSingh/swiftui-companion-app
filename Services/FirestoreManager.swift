@@ -31,6 +31,11 @@ class FirestoreManager {
         return id
     }
 
+    /// Public read-only access to this device's stable ID — used to tell "my
+    /// own doodle echoing back" apart from "partner's doodle" without relying
+    /// on display names (which two partners can set to the same value).
+    var currentDeviceID: String { deviceID }
+
     /// Ensures there's an anonymous user, then returns its uid.
     private func ensureSignedIn(_ completion: @escaping (String?) -> Void) {
         if let uid = Auth.auth().currentUser?.uid {
@@ -346,10 +351,54 @@ class FirestoreManager {
                 .addDocument(data: [
                     "title": title,
                     "person": person,
+                    "personDeviceID": self.deviceID,
                     "timestamp": Timestamp()
                 ])
         }
     }
+
+    private var eventsListener: ListenerRegistration?
+
+    /// Live feed of the shared "Our Memories" timeline — both partners' events.
+    func listenForEvents(
+        completion: @escaping ([Event]) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else { return }
+
+        ensureRelationshipMembership { [weak self] canSync in
+
+            guard let self = self, canSync else { return }
+
+            self.eventsListener?.remove()
+            self.eventsListener = self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("events")
+                .order(by: "timestamp", descending: true)
+                .limit(to: 100)
+                .addSnapshotListener { snapshot, _ in
+
+                    let events: [Event] = (snapshot?.documents ?? []).compactMap { doc in
+                        let data = doc.data()
+                        guard
+                            let title = data["title"] as? String,
+                            let person = data["person"] as? String,
+                            let ts = data["timestamp"] as? Timestamp
+                        else { return nil }
+
+                        return Event(
+                            id: doc.documentID,
+                            title: title,
+                            person: person,
+                            timestamp: ts.dateValue(),
+                            personDeviceID: data["personDeviceID"] as? String
+                        )
+                    }
+
+                    completion(events)
+                }
+        }
+    }
+
     func markEmotionSeen(
         documentID: String
     ) {
@@ -992,6 +1041,148 @@ class FirestoreManager {
             .collection("data")
         base.document("instant").delete()
         base.document("instant_meta").delete()
+    }
+
+    // MARK: - Doodle (shared canvas -> partner's widget)
+
+    private var doodleViewListener: ListenerRegistration?
+    // Separate, always-on listener that keeps the widget in sync app-wide.
+    private var doodleWidgetListener: ListenerRegistration?
+
+    /// Sends a hand-drawn doodle to your partner. Mirrors sendInstant: a full
+    /// image doc the in-app canvas listens to, plus a tiny meta doc the Cloud
+    /// Function watches to push it onto the partner's widget.
+    func sendDoodle(
+        imageBase64: String,
+        sender: String,
+        completion: @escaping (Error?) -> Void = { _ in }
+    ) {
+        guard !relationshipCode.isEmpty else {
+            completion(NSError(
+                domain: "Ziggy",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Not connected"]
+            ))
+            return
+        }
+
+        ensureRelationshipMembership { [weak self] canSync in
+            guard let self = self, canSync else {
+                completion(NSError(
+                    domain: "Ziggy",
+                    code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "Could not sync relationship"]
+                ))
+                return
+            }
+
+            let now = Timestamp()
+            let base = self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("data")
+
+            let batch = self.db.batch()
+
+            // Full image doc (the in-app canvas room listens to this).
+            batch.setData([
+                "imageBase64": imageBase64,
+                "sender": sender,
+                "senderDeviceID": self.deviceID,
+                "sentAt": now
+            ], forDocument: base.document("doodle"))
+
+            // Tiny meta doc — the Cloud Function watches this to notify the partner.
+            batch.setData([
+                "sender": sender,
+                "senderDeviceID": self.deviceID,
+                "sentAt": now
+            ], forDocument: base.document("doodle_meta"))
+
+            batch.commit { error in
+                completion(error)
+            }
+        }
+    }
+
+    /// Live updates of the partner's latest doodle (the full image doc).
+    func listenForDoodle(
+        completion: @escaping ([String: Any]?) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else { return }
+        ensureRelationshipMembership { [weak self] canSync in
+            guard
+                let self = self,
+                canSync,
+                !self.relationshipCode.isEmpty
+            else { return }
+
+            self.doodleViewListener?.remove()
+            self.doodleViewListener = self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("data")
+                .document("doodle")
+                .addSnapshotListener { snapshot, _ in
+                    completion(snapshot?.data())
+                }
+        }
+    }
+
+    func stopDoodleListener() {
+        doodleViewListener?.remove()
+        doodleViewListener = nil
+    }
+
+    /// App-wide listener (owned by PetViewModel) that stays active regardless of
+    /// the Doodle screen — uses its own registration so it never clobbers, or is
+    /// clobbered by, the in-screen `listenForDoodle`.
+    func observeDoodleForWidget(
+        completion: @escaping ([String: Any]?) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else { return }
+        ensureRelationshipMembership { [weak self] canSync in
+            guard
+                let self = self,
+                canSync,
+                !self.relationshipCode.isEmpty
+            else { return }
+
+            self.doodleWidgetListener?.remove()
+            self.doodleWidgetListener = self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("data")
+                .document("doodle")
+                .addSnapshotListener { snapshot, _ in
+                    completion(snapshot?.data())
+                }
+        }
+    }
+
+    /// One-shot fetch of the latest doodle — used by the push handler to cache
+    /// the image for the widget while the app is in the background.
+    func fetchLatestDoodle(
+        completion: @escaping ([String: Any]?) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else {
+            completion(nil)
+            return
+        }
+        ensureRelationshipMembership { [weak self] canSync in
+            guard
+                let self = self,
+                canSync,
+                !self.relationshipCode.isEmpty
+            else {
+                completion(nil)
+                return
+            }
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("data")
+                .document("doodle")
+                .getDocument { snapshot, _ in
+                    completion(snapshot?.data())
+                }
+        }
     }
 
     func claimTraceGameReward(

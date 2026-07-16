@@ -8,6 +8,7 @@ struct PlayCenterView: View {
     @ObservedObject var petVM: PetViewModel
 
     @State private var showTraceGame = false
+    @State private var showDoodle = false
 
     var body: some View {
 
@@ -62,6 +63,15 @@ struct PlayCenterView: View {
                     ) {
                         showTraceGame = true
                     }
+
+                    gameCard(
+                        emoji: "🎨",
+                        title: "Doodle",
+                        subtitle: "Draw something cute — it appears on their Home Screen widget.",
+                        tint: .pink
+                    ) {
+                        showDoodle = true
+                    }
                 }
 
                 Spacer()
@@ -75,6 +85,12 @@ struct PlayCenterView: View {
             DrawingGameView(
                 petVM: petVM
             )
+        }
+        .fullScreenCover(
+            isPresented: $showDoodle
+        ) {
+
+            DoodleView()
         }
     }
 

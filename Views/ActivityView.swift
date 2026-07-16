@@ -275,7 +275,14 @@ struct ActivityView: View {
 
     private var momentsTab: some View {
         Group {
-            if petVM.pet.events.isEmpty {
+            if petVM.isLoadingEvents {
+                VStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(accent)
+                    Spacer()
+                }
+            } else if petVM.pet.events.isEmpty {
                 emptyMoments
             } else {
                 ScrollView(showsIndicators: false) {
@@ -293,28 +300,67 @@ struct ActivityView: View {
     }
 
     private func eventCard(_ event: Event) -> some View {
-        HStack(spacing: 14) {
-            Text(emoji(for: event.title))
-                .font(.system(size: 30))
-                .frame(width: 52, height: 52)
-                .background(Circle().fill(Color.pink.opacity(0.12)))
+        // Prefer device-ID comparison — two partners can share the same
+        // display name, which would make a name-only check unreliable.
+        // Older events (written before this field existed) fall back to name.
+        let isMe: Bool
+        if let deviceID = event.personDeviceID {
+            isMe = deviceID == FirestoreManager.shared.currentDeviceID
+        } else {
+            isMe = event.person == UserManager.shared.username
+        }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title)
-                    .font(.headline)
-                    .foregroundColor(accent)
-                Text("by \(event.person)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(event.timestamp.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+        return HStack(spacing: 12) {
+            if isMe {
+                iconBubble(event)
+                eventText(event, isMe: true)
+                Spacer(minLength: 8)
+            } else {
+                Spacer(minLength: 8)
+                eventText(event, isMe: false)
+                iconBubble(event)
             }
-            Spacer()
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 22).fill(.white.opacity(0.9)))
+        .background(
+            RoundedRectangle(cornerRadius: 22)
+                .fill(isMe ? Color.white.opacity(0.9) : Color.pink.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(isMe ? Color.clear : Color.pink.opacity(0.16), lineWidth: 1.2)
+        )
         .shadow(color: .black.opacity(0.06), radius: 7, y: 3)
+    }
+
+    private func iconBubble(_ event: Event) -> some View {
+        Text(emoji(for: event.title))
+            .font(.system(size: 30))
+            .frame(width: 52, height: 52)
+            .background(Circle().fill(Color.pink.opacity(0.12)))
+    }
+
+    private func eventText(_ event: Event, isMe: Bool) -> some View {
+        VStack(alignment: isMe ? .leading : .trailing, spacing: 4) {
+            Text(isMe ? "You 💫" : "\(event.person) 💕")
+                .font(.caption2)
+                .fontWeight(.black)
+                .foregroundColor(.white)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule().fill(isMe ? accent : Color.pink)
+                )
+
+            Text(event.title)
+                .font(.headline)
+                .foregroundColor(accent)
+                .multilineTextAlignment(isMe ? .leading : .trailing)
+
+            Text(event.timestamp.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption2)
+                .foregroundColor(.gray)
+        }
     }
 
     private var emptyMoments: some View {
