@@ -375,8 +375,8 @@ function notificationAlert(data: WidgetEvent): {title: string; body: string} {
 
     if (title.includes("played")) {
       return {
-        title: "Ziggy had playtime",
-        body: `${sender} played with me. Your turn?`,
+        title: "Ziggy loves playtime",
+        body: `${sender} played with me — I love it when we play together! 🎮💕`,
       };
     }
 

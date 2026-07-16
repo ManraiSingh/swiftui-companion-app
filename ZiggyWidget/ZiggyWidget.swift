@@ -68,13 +68,20 @@ struct Provider: AppIntentTimelineProvider {
     /// than any pending message. Returns image data + who drew it.
     func partnerDoodle() -> (data: Data, sender: String)? {
         let d = UserDefaults(suiteName: "group.com.manrai.ziggy")
+        print("🖼️ [Widget] partnerDoodle() called. suite nil? \(d == nil)")
+
         guard
             let time = d?.object(forKey: "ziggy_widget_doodle_time") as? Date,
             let expiresAt = d?.object(
                 forKey: "ziggy_widget_doodle_expires_at"
             ) as? Date,
             expiresAt > Date()
-        else { return nil }
+        else {
+            let hasTime = d?.object(forKey: "ziggy_widget_doodle_time") != nil
+            let hasExpiry = d?.object(forKey: "ziggy_widget_doodle_expires_at") != nil
+            print("🖼️ [Widget] ❌ no fresh doodle. hasTime=\(hasTime) hasExpiry=\(hasExpiry)")
+            return nil
+        }
 
         // Let a newer one-tap message / instant take priority over the doodle
         // — but only if that message is still active. Otherwise a stale,
@@ -85,6 +92,7 @@ struct Provider: AppIntentTimelineProvider {
            ) as? Date,
            msgExpiresAt > Date(),
            msgTime > time {
+            print("🖼️ [Widget] ❌ suppressed — a newer active message exists")
             return nil
         }
 
@@ -92,14 +100,27 @@ struct Provider: AppIntentTimelineProvider {
             ?? "Your partner"
 
         if let imageData = d?.data(forKey: "ziggy_widget_doodle_png") {
+            print("🖼️ [Widget] ✅ got \(imageData.count) bytes from UserDefaults blob, sender=\(sender)")
             return (imageData, sender)
         }
 
-        guard
-            let url = doodleFileURL(),
-            let imageData = try? Data(contentsOf: url)
-        else { return nil }
+        print("🖼️ [Widget] UserDefaults blob missing, trying file fallback")
 
+        guard
+            let url = doodleFileURL()
+        else {
+            print("🖼️ [Widget] ❌ doodleFileURL() is nil — container URL unavailable")
+            return nil
+        }
+
+        print("🖼️ [Widget] file path: \(url.path), exists=\(FileManager.default.fileExists(atPath: url.path))")
+
+        guard let imageData = try? Data(contentsOf: url) else {
+            print("🖼️ [Widget] ❌ could not read file at that path")
+            return nil
+        }
+
+        print("🖼️ [Widget] ✅ got \(imageData.count) bytes from file, sender=\(sender)")
         return (imageData, sender)
     }
 
@@ -159,10 +180,13 @@ struct Provider: AppIntentTimelineProvider {
         )
     }
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
+        print("🖼️ [Widget] timeline(for:in:) called — building a fresh entry")
         let currentDate = Date()
         let nextUpdate = partnerMessageExpiry()
             ?? Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
         let pet = loadPet()
+        let doodle = partnerDoodle()
+        print("🖼️ [Widget] timeline entry doodle present? \(doodle != nil)")
 
         let entry = SimpleEntry(
             date: currentDate,
@@ -172,9 +196,10 @@ struct Provider: AppIntentTimelineProvider {
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
             colors: widgetColors(for: pet),
-            doodleImageData: partnerDoodle()?.data,
-            doodleSender: partnerDoodle()?.sender ?? "Your partner"
+            doodleImageData: doodle?.data,
+            doodleSender: doodle?.sender ?? "Your partner"
         )
+        print("🖼️ [Widget] returning timeline entry, doodleImageData bytes: \(entry.doodleImageData?.count ?? -1)")
         return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
 
@@ -368,24 +393,43 @@ struct ZiggyWidgetEntryView: View {
 
     var body: some View {
 
-        if let data = entry.doodleImageData,
-           let uiImage = UIImage(data: data) {
-
-            doodleBody(uiImage)
-
+        if let data = entry.doodleImageData {
+            if let uiImage = UIImage(data: data) {
+                let _ = print("🖼️ [Widget] View rendering DOODLE, \(data.count) bytes decoded fine")
+                doodleBody(uiImage)
+            } else {
+                let _ = print("🖼️ [Widget] ❌ View has \(data.count) bytes but UIImage(data:) failed to decode — falling back")
+                defaultBody
+            }
         } else {
-
+            let _ = print("🖼️ [Widget] View rendering DEFAULT — entry.doodleImageData is nil")
             defaultBody
         }
     }
 
     private func doodleBody(_ uiImage: UIImage) -> some View {
 
-        Image(uiImage: uiImage)
-            .resizable()
-            .scaledToFill()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+        // Frame the doodle like a little card on the mood gradient — matches
+        // the app's look instead of a plain edge-to-edge white rectangle.
+        VStack(spacing: 6) {
+
+            Text("🎨 A doodle for you")
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.top, 8)
+
+            // scaledToFit so the WHOLE drawing is always visible, never
+            // cropped — any leftover space just shows the white card.
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+        }
     }
 
     private var defaultBody: some View {

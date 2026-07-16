@@ -7,8 +7,9 @@ struct DoodleView: View {
 
     @State private var canvasView = PKCanvasView()
     @State private var selectedHex = "#FF4FA3"
-    @State private var brushWidth: CGFloat = 8
+    @State private var brushWidth: CGFloat = 18
     @State private var isEraser = false
+    @State private var inkType: PKInkingTool.InkType = .pen
     @State private var isSending = false
     @State private var showSentToast = false
 
@@ -36,7 +37,15 @@ struct DoodleView: View {
         ("#111827", .black)
     ]
 
+    private let inkTypes: [(type: PKInkingTool.InkType, label: String, icon: String)] = [
+        (.pen, "Pen", "pencil.tip"),
+        (.fountainPen, "Fountain", "paintbrush.pointed.fill"),
+        (.marker, "Marker", "highlighter"),
+        (.pencil, "Pencil", "pencil")
+    ]
+
     private var username: String { UserManager.shared.username }
+    private var selectedColor: Color { Color(UIColor(hex: selectedHex)) }
 
     var body: some View {
         ZStack {
@@ -68,6 +77,7 @@ struct DoodleView: View {
         .onChange(of: selectedHex) { configureTool() }
         .onChange(of: brushWidth) { configureTool() }
         .onChange(of: isEraser) { configureTool() }
+        .onChange(of: inkType) { configureTool() }
         .onDisappear {
             FirestoreManager.shared.stopDoodleListener()
         }
@@ -169,10 +179,48 @@ struct DoodleView: View {
                 }
             }
 
+            HStack(spacing: 8) {
+                ForEach(inkTypes, id: \.label) { item in
+                    Button {
+                        inkType = item.type
+                        isEraser = false
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 15, weight: .bold))
+                            Text(item.label)
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundColor(
+                            inkType == item.type && !isEraser ? .white : accent
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    inkType == item.type && !isEraser
+                                        ? accent
+                                        : Color.white.opacity(0.85)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             HStack(spacing: 14) {
                 Image(systemName: "pencil.tip").foregroundStyle(.secondary)
 
-                Slider(value: $brushWidth, in: 3...26)
+                Slider(value: $brushWidth, in: 4...90)
+
+                Circle()
+                    .fill(isEraser ? Color.secondary : selectedColor)
+                    .frame(
+                        width: min(brushWidth, 30),
+                        height: min(brushWidth, 30)
+                    )
+                    .frame(width: 30, height: 30)
 
                 toolButton(system: "eraser.fill", active: isEraser) {
                     isEraser.toggle()
@@ -246,7 +294,7 @@ struct DoodleView: View {
             canvasView.tool = PKEraserTool(.bitmap)
         } else {
             canvasView.tool = PKInkingTool(
-                .pen,
+                inkType,
                 color: UIColor(hex: selectedHex),
                 width: brushWidth
             )

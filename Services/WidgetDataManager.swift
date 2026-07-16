@@ -134,7 +134,15 @@ class WidgetDataManager {
             width: image.size.width * scale,
             height: image.size.height * scale
         )
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+
+        // Force scale = 1 so the OUTPUT PIXEL dimensions actually match
+        // newSize. UIGraphicsImageRenderer otherwise defaults to the
+        // device's Retina scale (2x/3x), silently doubling/tripling the
+        // real pixel size WidgetKit sees — which is what was blowing past
+        // WidgetKit's image-archival size limit and hiding the doodle.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: newSize))
         }
