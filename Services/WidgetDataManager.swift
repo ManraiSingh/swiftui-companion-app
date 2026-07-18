@@ -63,33 +63,16 @@ class WidgetDataManager {
     /// Decodes a base64 doodle, downsizes it for the widget's memory budget,
     /// writes it to the shared container, and refreshes the widget.
     func cachePartnerDoodle(base64: String, sender: String) {
-        print("🎨 [Doodle] cachePartnerDoodle called, base64 length: \(base64.count), sender: \(sender)")
-
-        guard let raw = Data(base64Encoded: base64) else {
-            print("🎨 [Doodle] ❌ base64 decode failed")
-            return
-        }
-        guard let image = UIImage(data: raw) else {
-            print("🎨 [Doodle] ❌ UIImage(data:) failed, raw bytes: \(raw.count)")
-            return
-        }
-        guard let url = WidgetDataManager.partnerDoodleURL() else {
-            print("🎨 [Doodle] ❌ App Group container URL is nil — check entitlements")
-            return
-        }
-        print("🎨 [Doodle] target file: \(url.path)")
+        guard let raw = Data(base64Encoded: base64) else { return }
+        guard let image = UIImage(data: raw) else { return }
+        guard let url = WidgetDataManager.partnerDoodleURL() else { return }
 
         let resized = WidgetDataManager.downscale(image, maxDimension: 420)
-        guard let png = resized.pngData() else {
-            print("🎨 [Doodle] ❌ pngData() failed")
-            return
-        }
+        guard let png = resized.pngData() else { return }
 
         do {
             try png.write(to: url, options: .atomic)
-            print("🎨 [Doodle] ✅ wrote \(png.count) bytes to shared container")
         } catch {
-            print("🎨 [Doodle] ❌ file write failed: \(error)")
             return
         }
 
@@ -100,7 +83,6 @@ class WidgetDataManager {
             Date().addingTimeInterval(12 * 3600),
             forKey: "ziggy_widget_doodle_expires_at"
         )
-        print("🎨 [Doodle] ✅ defaults saved, calling reloadAllTimelines()")
         WidgetCenter.shared.reloadAllTimelines()
     }
 

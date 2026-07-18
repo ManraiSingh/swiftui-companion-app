@@ -9,15 +9,17 @@ A SwiftUI + Firebase **couple's companion app** built around one shared virtual 
 ## ✨ Features
 
 - 🐶 **One shared pet, live-synced** — hunger, happiness, energy and a "love score" update in real time across both phones via Firestore snapshot listeners.
-- 💞 **Private pairing** — partners link up with a generated "love code"; all data lives under that relationship.
+- 💞 **Private pairing** — partners link up with a generated "love code" or a tap-to-join invite link; all data lives under that relationship.
 - 📸 **Instants** — snap a photo (in-app camera or gallery), drag a caption anywhere on it, and send it. Ephemeral by design: a new instant replaces the old one, so images don't pile up.
+- 🎨 **Doodle** — draw a quick sketch (PencilKit, multiple pen types, adjustable brush) and it shows up live on your partner's Home Screen widget.
 - 💌 **One-tap love notes** — quick emotion messages (Miss You, Good Night, Hug…) that reorder by how often you use them, plus a **custom note composer with an emotion picker** that sets the exact Ziggy face your partner sees.
-- 🎭 **Emotional Ziggy** — the mascot's expression reflects mood, incoming messages, and pending instants.
+- 🎭 **Emotional Ziggy** — the mascot's expression reflects mood, incoming messages, and pending instants. Rename Ziggy in Settings and the name propagates everywhere — header, activity feed, notifications, widget.
 - ❓ **Daily questions** — a shared question each day; answers reveal once both partners respond.
-- 🎮 **Mini-games** — feeding, collaborative drawing/tracing, and a pizza-making activity.
-- 🕰️ **Activity timeline** — "Our Memories," a cute log of everything you've done together, with one-tap clear.
-- 🔔 **Local notifications** for when Ziggy needs attention.
-- 🧩 **Home Screen widget** (WidgetKit) showing Ziggy's current state.
+- 🎮 **Trace Together** — a live, collaborative two-player drawing game across nine shapes.
+- 🕰️ **Activity timeline** — "Our Memories," a shared, live-synced log of everything **both** partners have done, styled as mirrored chat bubbles.
+- 🔔 **Push + local notifications** — real alerts (Cloud Functions + APNs) when your partner feeds, plays, sends a note, an Instant, or a Doodle — plus local reminders when Ziggy needs attention.
+- 🧩 **Home Screen widget** (WidgetKit) showing Ziggy's current state, your partner's latest message, or their live Doodle.
+- ⭐ **Cute rating prompt** — after a genuinely happy milestone, a custom in-app ask offers to open Apple's native App Store review sheet.
 - 🗑️ **Privacy-first** — in-app data deletion that wipes the relationship's data from the server.
 
 ---
@@ -28,9 +30,11 @@ A SwiftUI + Firebase **couple's companion app** built around one shared virtual 
 |------|------|
 | UI | SwiftUI |
 | Realtime backend | Firebase Firestore (snapshot listeners + transactions) |
+| Push notifications | Firebase Cloud Functions (TypeScript) + APNs |
 | Widget | WidgetKit + App Groups |
+| Drawing | PencilKit (Doodle, Trace Together) |
 | Media | PhotosUI, UIImagePickerController (camera) |
-| Notifications | UserNotifications (local) |
+| Notifications | UserNotifications (local + remote) |
 | Persistence | UserDefaults + local cache |
 | Architecture | MVVM with shared service singletons |
 
@@ -61,8 +65,9 @@ Ziggy/
 ├─ Models/         Pet, Event, UserManager
 ├─ Services/       PetViewModel + Firestore/Relationship/Persistence/Widget/Notification/DailyQuestion managers
 ├─ Views/          Onboarding, RelationshipSetup, Home (ContentView), Feed, Instant, Activity, Settings, games
-├─ Ziggy/          App entry point, assets, Firebase config
-└─ ZiggyWidget/    Home Screen widget extension
+├─ Ziggy/          App entry point, assets, Firebase config, Doodle (PencilKit)
+├─ ZiggyWidget/    Home Screen widget extension
+└─ functions/      Firebase Cloud Functions (TypeScript) — partner push notifications
 ```
 
 ---
@@ -78,11 +83,10 @@ Ziggy/
 
 ## 🗺️ Roadmap
 
-- [ ] Production-grade Firestore security rules
+- [ ] Harden Firestore join rules for the device-recovery edge case (re-pairing after losing local auth state)
 - [ ] App Check
-- [ ] Privacy manifest + App Store privacy labels
-- [ ] Move instant images to Firebase Storage
-- [ ] Lower deployment target for wider device support
+- [ ] Move Instant/Doodle images to Firebase Storage (currently base64 in Firestore docs)
+- [ ] iPad-native layout (currently iPhone-only)
 
 ---
 

@@ -68,7 +68,6 @@ struct Provider: AppIntentTimelineProvider {
     /// than any pending message. Returns image data + who drew it.
     func partnerDoodle() -> (data: Data, sender: String)? {
         let d = UserDefaults(suiteName: "group.com.manrai.ziggy")
-        print("🖼️ [Widget] partnerDoodle() called. suite nil? \(d == nil)")
 
         guard
             let time = d?.object(forKey: "ziggy_widget_doodle_time") as? Date,
@@ -76,12 +75,7 @@ struct Provider: AppIntentTimelineProvider {
                 forKey: "ziggy_widget_doodle_expires_at"
             ) as? Date,
             expiresAt > Date()
-        else {
-            let hasTime = d?.object(forKey: "ziggy_widget_doodle_time") != nil
-            let hasExpiry = d?.object(forKey: "ziggy_widget_doodle_expires_at") != nil
-            print("🖼️ [Widget] ❌ no fresh doodle. hasTime=\(hasTime) hasExpiry=\(hasExpiry)")
-            return nil
-        }
+        else { return nil }
 
         // Let a newer one-tap message / instant take priority over the doodle
         // — but only if that message is still active. Otherwise a stale,
@@ -92,7 +86,6 @@ struct Provider: AppIntentTimelineProvider {
            ) as? Date,
            msgExpiresAt > Date(),
            msgTime > time {
-            print("🖼️ [Widget] ❌ suppressed — a newer active message exists")
             return nil
         }
 
@@ -100,27 +93,14 @@ struct Provider: AppIntentTimelineProvider {
             ?? "Your partner"
 
         if let imageData = d?.data(forKey: "ziggy_widget_doodle_png") {
-            print("🖼️ [Widget] ✅ got \(imageData.count) bytes from UserDefaults blob, sender=\(sender)")
             return (imageData, sender)
         }
 
-        print("🖼️ [Widget] UserDefaults blob missing, trying file fallback")
-
         guard
-            let url = doodleFileURL()
-        else {
-            print("🖼️ [Widget] ❌ doodleFileURL() is nil — container URL unavailable")
-            return nil
-        }
+            let url = doodleFileURL(),
+            let imageData = try? Data(contentsOf: url)
+        else { return nil }
 
-        print("🖼️ [Widget] file path: \(url.path), exists=\(FileManager.default.fileExists(atPath: url.path))")
-
-        guard let imageData = try? Data(contentsOf: url) else {
-            print("🖼️ [Widget] ❌ could not read file at that path")
-            return nil
-        }
-
-        print("🖼️ [Widget] ✅ got \(imageData.count) bytes from file, sender=\(sender)")
         return (imageData, sender)
     }
 
@@ -190,13 +170,11 @@ struct Provider: AppIntentTimelineProvider {
         )
     }
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
-        print("🖼️ [Widget] timeline(for:in:) called — building a fresh entry")
         let currentDate = Date()
         let nextUpdate = partnerMessageExpiry()
             ?? Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
         let pet = loadPet()
         let doodle = partnerDoodle()
-        print("🖼️ [Widget] timeline entry doodle present? \(doodle != nil)")
 
         let entry = SimpleEntry(
             date: currentDate,
@@ -209,7 +187,6 @@ struct Provider: AppIntentTimelineProvider {
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
-        print("🖼️ [Widget] returning timeline entry, doodleImageData bytes: \(entry.doodleImageData?.count ?? -1)")
         return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
 
@@ -403,16 +380,10 @@ struct ZiggyWidgetEntryView: View {
 
     var body: some View {
 
-        if let data = entry.doodleImageData {
-            if let uiImage = UIImage(data: data) {
-                let _ = print("🖼️ [Widget] View rendering DOODLE, \(data.count) bytes decoded fine")
-                doodleBody(uiImage)
-            } else {
-                let _ = print("🖼️ [Widget] ❌ View has \(data.count) bytes but UIImage(data:) failed to decode — falling back")
-                defaultBody
-            }
+        if let data = entry.doodleImageData,
+           let uiImage = UIImage(data: data) {
+            doodleBody(uiImage)
         } else {
-            let _ = print("🖼️ [Widget] View rendering DEFAULT — entry.doodleImageData is nil")
             defaultBody
         }
     }

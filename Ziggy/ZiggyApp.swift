@@ -66,25 +66,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        print("🔔 [Push] didReceiveRemoteNotification userInfo: \(userInfo)")
-
         WidgetDataManager.shared.clearPartnerMessageIfExpired()
         WidgetDataManager.shared.clearDoodleIfExpired()
 
         // A doodle's image is far too big for a push payload, so the push is
         // just a signal — fetch the drawing, cache it for the widget, finish.
         if (userInfo["type"] as? String) == "doodle" {
-            print("🎨 [Doodle] push type=doodle received, fetching latest doodle…")
             let sender = userInfo["sender"] as? String ?? "Your partner"
             FirestoreManager.shared.fetchLatestDoodle { data in
                 if let base64 = data?["imageBase64"] as? String {
-                    print("🎨 [Doodle] fetchLatestDoodle got image, base64 length: \(base64.count)")
                     WidgetDataManager.shared.cachePartnerDoodle(
                         base64: base64,
                         sender: sender
                     )
-                } else {
-                    print("🎨 [Doodle] ❌ fetchLatestDoodle returned no imageBase64: \(String(describing: data))")
                 }
                 completionHandler(.newData)
             }
