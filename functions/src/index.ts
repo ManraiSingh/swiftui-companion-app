@@ -471,6 +471,8 @@ function gameName(gameId?: string): string {
     return "Pizza Kitchen";
   case "airHockey":
     return "Air Hockey";
+  case "ticTacToe":
+    return "Tic Tac Toe";
   default:
     return "with Ziggy";
   }

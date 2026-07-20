@@ -299,6 +299,8 @@ class WidgetDataManager {
             return "Pizza Kitchen"
         case "airHockey":
             return "Air Hockey"
+        case "ticTacToe":
+            return "Tic Tac Toe"
         default:
             return "with \(loadPet()?.name ?? "Ziggy")"
         }

@@ -947,6 +947,333 @@ class FirestoreManager {
             ], merge: true)
     }
 
+    // MARK: - Tic Tac Toe (mirrors Trace Together's lobby/ready pattern —
+    // "leftPlayer"/"rightPlayer" map to "X"/"O" so the existing generic
+    // game-invite Cloud Function picks it up with no backend changes.)
+
+    func joinTicTacToeGame(
+        username: String,
+        completion: @escaping (String?) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(nil)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("ticTacToe")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let status = data["status"] as? String ?? "lobby"
+
+                var updates: [String: Any] = ["updatedAt": Timestamp()]
+
+                // If the previous round finished, start a fresh round but keep
+                // BOTH players so neither person gets dropped from the lobby.
+                if status == "complete" {
+                    updates["leftReady"] = false
+                    updates["rightReady"] = false
+                    updates["status"] = "lobby"
+                    updates["board"] = Array(repeating: "", count: 9)
+                    updates["currentTurn"] = "X"
+                    updates["winner"] = ""
+                    updates["rewardClaimed"] = false
+                }
+
+                // Assign a side without ever clearing the partner's slot.
+                let assignedSide: String
+
+                if leftPlayer == username {
+                    assignedSide = "X"
+                } else if rightPlayer == username {
+                    assignedSide = "O"
+                } else if leftPlayer.isEmpty {
+                    assignedSide = "X"
+                    updates["leftPlayer"] = username
+                    updates["leftReady"] = false
+                } else if rightPlayer.isEmpty {
+                    assignedSide = "O"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                } else {
+                    // Both slots already taken by other names (stale data from a
+                    // previous pairing). Reclaim the right slot for this user.
+                    assignedSide = "O"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                }
+
+                // Seed board/status on a very first join.
+                if data["board"] == nil && updates["board"] == nil {
+                    updates["board"] = Array(repeating: "", count: 9)
+                }
+                if data["status"] == nil && updates["status"] == nil {
+                    updates["status"] = "lobby"
+                }
+                if data["currentTurn"] == nil && updates["currentTurn"] == nil {
+                    updates["currentTurn"] = "X"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return assignedSide
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { side, error in
+
+            completion(side as? String)
+        }
+    }
+
+    func setTicTacToeReady(
+        side: String,
+        username: String,
+        isReady: Bool
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("ticTacToe")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                var data = snapshot.data() ?? [:]
+                let readyKey = side == "X" ? "leftReady" : "rightReady"
+
+                data[readyKey] = isReady
+
+                let leftReady = data["leftReady"] as? Bool ?? false
+                let rightReady = data["rightReady"] as? Bool ?? false
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+
+                var updates: [String: Any] = [
+                    readyKey: isReady,
+                    (side == "X" ? "leftPlayer" : "rightPlayer"): username,
+                    "updatedAt": Timestamp()
+                ]
+
+                if isReady,
+                   leftReady,
+                   rightReady,
+                   !leftPlayer.isEmpty,
+                   !rightPlayer.isEmpty {
+
+                    updates["status"] = "playing"
+                    updates["board"] = Array(repeating: "", count: 9)
+                    updates["currentTurn"] = "X"
+                    updates["winner"] = ""
+                    updates["startedAt"] = Timestamp()
+                } else if !isReady {
+
+                    updates["status"] = "lobby"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    func listenForTicTacToeGame(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("ticTacToe")
+            .addSnapshotListener { snapshot, error in
+
+                if error != nil {
+                    return
+                }
+
+                completion(snapshot?.data() ?? [:])
+            }
+    }
+
+    func makeTicTacToeMove(index: Int, mark: String) {
+
+        guard !relationshipCode.isEmpty else { return }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("ticTacToe")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                guard
+                    data["status"] as? String == "playing",
+                    data["currentTurn"] as? String == mark,
+                    var board = data["board"] as? [String],
+                    index >= 0, index < board.count,
+                    board[index].isEmpty
+                else {
+                    return nil
+                }
+
+                board[index] = mark
+
+                let winner = FirestoreManager.ticTacToeWinner(board: board)
+                let isDraw = winner == nil && !board.contains("")
+
+                var updates: [String: Any] = [
+                    "board": board,
+                    "currentTurn": mark == "X" ? "O" : "X",
+                    "updatedAt": Timestamp()
+                ]
+
+                if let winner {
+                    updates["status"] = "complete"
+                    updates["winner"] = winner
+                } else if isDraw {
+                    updates["status"] = "complete"
+                    updates["winner"] = "draw"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    static let ticTacToeWinningLines = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+    ]
+
+    static func ticTacToeWinner(board: [String]) -> String? {
+        for line in ticTacToeWinningLines {
+            let a = board[line[0]], b = board[line[1]], c = board[line[2]]
+            if !a.isEmpty, a == b, b == c {
+                return a
+            }
+        }
+        return nil
+    }
+
+    func claimTicTacToeReward(
+        completion: @escaping (Bool) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(false)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("ticTacToe")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let status = data["status"] as? String ?? ""
+                let rewardClaimed = data["rewardClaimed"] as? Bool ?? false
+
+                guard status == "complete", !rewardClaimed else {
+                    return false
+                }
+
+                transaction.setData([
+                    "rewardClaimed": true,
+                    "rewardClaimedAt": Timestamp(),
+                    "updatedAt": Timestamp()
+                ], forDocument: gameRef, merge: true)
+
+                return true
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return false
+            }
+
+        } completion: { didClaim, _ in
+
+            completion(didClaim as? Bool ?? false)
+        }
+    }
+
+    func resetTicTacToeGame() {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        // Keep both players (merge, no leftPlayer/rightPlayer keys) so a new
+        // round drops nobody from the lobby — we only clear the round state.
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("ticTacToe")
+            .setData([
+                "leftReady": false,
+                "rightReady": false,
+                "status": "lobby",
+                "board": Array(repeating: "", count: 9),
+                "currentTurn": "X",
+                "winner": "",
+                "rewardClaimed": false,
+                "updatedAt": Timestamp()
+            ], merge: true)
+    }
+
     func sendInstant(
         imageBase64: String,
         caption: String,

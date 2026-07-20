@@ -9,6 +9,7 @@ struct PlayCenterView: View {
 
     @State private var showTraceGame = false
     @State private var showDoodle = false
+    @State private var showTicTacToe = false
 
     var body: some View {
 
@@ -72,6 +73,15 @@ struct PlayCenterView: View {
                     ) {
                         showDoodle = true
                     }
+
+                    gameCard(
+                        emoji: "❌⭕️",
+                        title: "Tic Tac Toe",
+                        subtitle: "A quick live match — first to line up three wins.",
+                        tint: .blue
+                    ) {
+                        showTicTacToe = true
+                    }
                 }
 
                 Spacer()
@@ -91,6 +101,14 @@ struct PlayCenterView: View {
         ) {
 
             DoodleView()
+        }
+        .fullScreenCover(
+            isPresented: $showTicTacToe
+        ) {
+
+            TicTacToeGameView(
+                petVM: petVM
+            )
         }
     }
 
