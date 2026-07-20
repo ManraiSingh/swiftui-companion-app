@@ -37,6 +37,7 @@
 		B5AD654A2FE6C891007BFF84 /* PizzaMakingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */; };
 		B5AD656A2FE5F5CB007BFF84 /*   DailyQuestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */; };
 		B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5FAE0A10000000000000A22 /* FirebaseAuth */; };
+		6F285DD6E8644AFE8CAF1B89 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 965D49BE67E748EB9AE57C8D /* FirebaseAnalytics */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -135,6 +136,7 @@
 				B54457AA2FDEC2A700A6F47A /* FirebaseCore in Frameworks */,
 				B54457AC2FDEC2B600A6F47A /* FirebaseFirestore in Frameworks */,
 				B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */,
+				6F285DD6E8644AFE8CAF1B89 /* FirebaseAnalytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -248,6 +250,7 @@
 				B54457A92FDEC2A700A6F47A /* FirebaseCore */,
 				B54457AB2FDEC2B600A6F47A /* FirebaseFirestore */,
 				B5FAE0A10000000000000A22 /* FirebaseAuth */,
+				965D49BE67E748EB9AE57C8D /* FirebaseAnalytics */,
 			);
 			productName = Ziggy;
 			productReference = B51F069A2FAE888F009B8146 /* Ziggy.app */;
@@ -738,6 +741,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
+		};
+		965D49BE67E748EB9AE57C8D /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
