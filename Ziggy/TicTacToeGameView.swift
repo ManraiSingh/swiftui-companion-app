@@ -26,6 +26,9 @@ struct TicTacToeGameView: View {
     @State private var currentTurn = "X"
     @State private var winner = ""
 
+    private let xColor = Color(red: 1.0, green: 0.31, blue: 0.64)
+    private let oColor = Color(red: 0.58, green: 0.42, blue: 0.93)
+
     private var username: String {
         UserManager.shared.username
     }
@@ -51,10 +54,14 @@ struct TicTacToeGameView: View {
     }
 
     private var resultText: String {
-        if winner == "draw" { return "It's a draw! 🤝" }
+        if winner == "draw" { return "It's a draw!" }
         if winner.isEmpty { return "" }
-        if winner == assignedSide?.rawValue { return "You won! 🎉" }
-        return "Your partner won! 💔"
+        if winner == assignedSide?.rawValue { return "You won!" }
+        return "Partner won!"
+    }
+
+    private var mySideColor: Color {
+        assignedSide == .x ? xColor : oColor
     }
 
     var body: some View {
@@ -63,9 +70,9 @@ struct TicTacToeGameView: View {
 
             LinearGradient(
                 colors: [
-                    .pink.opacity(0.18),
-                    .cyan.opacity(0.18),
-                    .yellow.opacity(0.14)
+                    Color(red: 1.0, green: 0.90, blue: 0.95),
+                    Color(red: 0.93, green: 0.90, blue: 1.0),
+                    Color(red: 0.90, green: 0.96, blue: 1.0)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -119,6 +126,13 @@ struct TicTacToeGameView: View {
             Text("Tic Tac Toe")
                 .font(.title2)
                 .fontWeight(.black)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [xColor, oColor],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
 
             Spacer()
 
@@ -141,14 +155,20 @@ struct TicTacToeGameView: View {
 
         VStack(spacing: 18) {
 
-            Spacer(minLength: 10)
+            Spacer(minLength: 6)
 
-            Image(systemName: "number")
-                .font(.system(size: 76, weight: .bold))
-                .foregroundStyle(.pink, .cyan.opacity(0.45))
-                .frame(height: 92)
+            HStack(spacing: 16) {
 
-            VStack(spacing: 10) {
+                markBadge(mark: "X", color: xColor, size: 68)
+
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.pink.opacity(0.5))
+
+                markBadge(mark: "O", color: oColor, size: 68)
+            }
+
+            VStack(spacing: 8) {
 
                 Text("Waiting room")
                     .font(.title)
@@ -166,13 +186,15 @@ struct TicTacToeGameView: View {
                 playerRow(
                     name: leftPlayer.isEmpty ? "You" : leftPlayer,
                     side: "X",
-                    isReady: leftReady
+                    isReady: leftReady,
+                    isMe: assignedSide == .x
                 )
 
                 playerRow(
                     name: rightPlayer.isEmpty ? "Waiting for partner" : rightPlayer,
                     side: "O",
-                    isReady: rightReady
+                    isReady: rightReady,
+                    isMe: assignedSide == .o
                 )
             }
 
@@ -182,7 +204,12 @@ struct TicTacToeGameView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(.blue)
+                    .background(
+                        LinearGradient(
+                            colors: [oColor, oColor.opacity(0.75)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
                     .clipShape(Capsule())
             }
 
@@ -197,14 +224,23 @@ struct TicTacToeGameView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(isReady ? .green : .pink)
+                .background(
+                    isReady
+                    ? AnyShapeStyle(Color.green)
+                    : AnyShapeStyle(
+                        LinearGradient(
+                            colors: [xColor, xColor.opacity(0.75)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
+                )
                 .clipShape(Capsule())
             }
             .disabled(assignedSide == nil)
 
             if isReady && !partnerReady {
 
-                Text("You are ready. Waiting for your partner.")
+                Text("You are ready. Waiting for your partner. 💕")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
@@ -217,13 +253,29 @@ struct TicTacToeGameView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
+    private func markBadge(mark: String, color: Color, size: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .fill(color.opacity(0.15))
+                .frame(width: size, height: size)
+            Image(systemName: mark == "X" ? "xmark" : "circle")
+                .font(.system(size: size * 0.42, weight: .black))
+                .foregroundStyle(color)
+        }
+    }
+
     private func playerRow(
         name: String,
         side: String,
-        isReady: Bool
+        isReady: Bool,
+        isMe: Bool
     ) -> some View {
 
-        HStack {
+        let sideColor = side == "X" ? xColor : oColor
+
+        return HStack(spacing: 12) {
+
+            markBadge(mark: side, color: sideColor, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
 
@@ -232,7 +284,7 @@ struct TicTacToeGameView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
 
-                Text("Plays \(side)")
+                Text(isMe ? "You · plays \(side)" : "Plays \(side)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -248,37 +300,83 @@ struct TicTacToeGameView: View {
             .foregroundColor(isReady ? .green : .secondary)
         }
         .padding(12)
-        .background(.white.opacity(0.82))
+        .background(isMe ? sideColor.opacity(0.08) : Color.white.opacity(0.82))
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isMe ? sideColor.opacity(0.35) : Color.clear, lineWidth: 1.4)
+        )
     }
 
     // MARK: - Live Status
 
     private var liveStatusPanel: some View {
 
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
 
             if bothComplete {
 
-                Text(resultText)
-                    .font(.title3)
-                    .fontWeight(.black)
+                resultBanner
 
             } else {
 
-                Text(myTurn ? "Your turn! ✏️" : "Partner's turn…")
-                    .font(.headline)
-                    .fontWeight(.bold)
+                HStack(spacing: 8) {
 
-                Text("You are \(assignedSide?.rawValue ?? "")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Image(systemName: myTurn ? "hand.point.up.left.fill" : "hourglass")
+                        .foregroundStyle(myTurn ? mySideColor : .secondary)
+
+                    Text(myTurn ? "Your turn!" : "Partner's turn…")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
+
+                if let assignedSide {
+                    HStack(spacing: 6) {
+                        Image(systemName: assignedSide == .x ? "xmark" : "circle")
+                            .font(.system(size: 11, weight: .black))
+                        Text("You play \(assignedSide.rawValue)")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(mySideColor))
+                }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(14)
         .background(.white.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+
+    private var resultBanner: some View {
+
+        let isMyWin = winner == assignedSide?.rawValue
+        let isDraw = winner == "draw"
+
+        return HStack(spacing: 8) {
+            Image(systemName: isDraw ? "hands.clap.fill" : (isMyWin ? "trophy.fill" : "heart.fill"))
+            Text(resultText)
+                .fontWeight(.black)
+        }
+        .font(.title3)
+        .foregroundColor(.white)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(
+            Capsule().fill(
+                isDraw
+                ? AnyShapeStyle(Color.orange.opacity(0.9))
+                : AnyShapeStyle(
+                    LinearGradient(
+                        colors: isMyWin ? [xColor, oColor] : [.gray, .gray.opacity(0.7)],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                )
+            )
+        )
     }
 
     // MARK: - Board
@@ -296,7 +394,15 @@ struct TicTacToeGameView: View {
         .padding(16)
         .background(.white.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 28))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28)
+                .stroke(
+                    myTurn ? mySideColor.opacity(0.45) : Color.clear,
+                    lineWidth: 3
+                )
+        )
         .aspectRatio(1, contentMode: .fit)
+        .animation(.easeInOut(duration: 0.25), value: myTurn)
     }
 
     private func cellButton(_ index: Int) -> some View {
@@ -307,20 +413,39 @@ struct TicTacToeGameView: View {
             ZStack {
 
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        isWinningCell(index)
-                        ? Color.green.opacity(0.28)
-                        : Color.white.opacity(0.88)
-                    )
+                    .fill(cellBackground(index))
+                    .shadow(color: .black.opacity(0.05), radius: 3, y: 2)
 
-                Text(board[index])
-                    .font(.system(size: 40, weight: .black, design: .rounded))
-                    .foregroundColor(board[index] == "X" ? .pink : .blue)
+                if board[index] == "X" {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 34, weight: .black))
+                        .foregroundStyle(xColor)
+                        .transition(.scale.combined(with: .opacity))
+                } else if board[index] == "O" {
+                    Image(systemName: "circle")
+                        .font(.system(size: 28, weight: .black))
+                        .foregroundStyle(oColor)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
             .aspectRatio(1, contentMode: .fit)
         }
         .buttonStyle(.plain)
         .disabled(!myTurn || !board[index].isEmpty || gameStatus != "playing")
+        .animation(.spring(response: 0.32, dampingFraction: 0.62), value: board[index])
+    }
+
+    private func cellBackground(_ index: Int) -> Color {
+
+        if isWinningCell(index) {
+            return Color.green.opacity(0.25)
+        }
+
+        if myTurn, board[index].isEmpty, gameStatus == "playing" {
+            return mySideColor.opacity(0.09)
+        }
+
+        return Color.white.opacity(0.9)
     }
 
     private func isWinningCell(_ index: Int) -> Bool {
@@ -358,19 +483,19 @@ struct TicTacToeGameView: View {
                             Button {
                                 startNewRound()
                             } label: {
-                                Text("New Game")
+                                Label("New Game", systemImage: "arrow.triangle.2.circlepath")
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(.blue)
+                                    .background(oColor)
                                     .clipShape(Capsule())
                             }
 
                             Button {
                                 dismiss()
                             } label: {
-                                Text("Back Home")
+                                Label("Back Home", systemImage: "house.fill")
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
@@ -385,12 +510,17 @@ struct TicTacToeGameView: View {
                         Button {
                             claimReward()
                         } label: {
-                            Text("Claim Reward")
+                            Label("Claim Reward", systemImage: "heart.fill")
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(.pink)
+                                .background(
+                                    LinearGradient(
+                                        colors: [xColor, oColor],
+                                        startPoint: .leading, endPoint: .trailing
+                                    )
+                                )
                                 .clipShape(Capsule())
                         }
                     }
