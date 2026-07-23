@@ -7,7 +7,7 @@ struct DoodleView: View {
 
     @State private var canvasView = PKCanvasView()
     @State private var selectedHex = "#FF4FA3"
-    @State private var brushWidth: CGFloat = 18
+    @State private var brushWidth: CGFloat = 22
     @State private var isEraser = false
     @State private var inkType: PKInkingTool.InkType = .pen
     @State private var isSending = false
@@ -34,14 +34,25 @@ struct DoodleView: View {
         ("#FFD166", .yellow),
         ("#F97316", .orange),
         ("#EF4444", .red),
-        ("#111827", .black)
+        ("#111827", .black),
+        ("#FF8FB3", Color(red: 1.0, green: 0.56, blue: 0.70)),
+        ("#C77DFF", Color(red: 0.78, green: 0.49, blue: 1.0)),
+        ("#4CC9F0", Color(red: 0.30, green: 0.79, blue: 0.94)),
+        ("#06D6A0", Color(red: 0.02, green: 0.84, blue: 0.63)),
+        ("#8D5524", Color(red: 0.55, green: 0.33, blue: 0.14)),
+        ("#7C7C7C", .gray),
+        ("#FFFFFF", .white),
+        ("#FF477E", Color(red: 1.0, green: 0.28, blue: 0.49))
     ]
 
     private let inkTypes: [(type: PKInkingTool.InkType, label: String, icon: String)] = [
         (.pen, "Pen", "pencil.tip"),
         (.fountainPen, "Fountain", "paintbrush.pointed.fill"),
         (.marker, "Marker", "highlighter"),
-        (.pencil, "Pencil", "pencil")
+        (.pencil, "Pencil", "pencil"),
+        (.monoline, "Monoline", "scribble"),
+        (.watercolor, "Watercolor", "drop.fill"),
+        (.crayon, "Crayon", "paintpalette.fill")
     ]
 
     private var username: String { UserManager.shared.username }
@@ -163,60 +174,67 @@ struct DoodleView: View {
 
     private var toolbar: some View {
         VStack(spacing: 12) {
-            HStack {
-                ForEach(palette, id: \.hex) { item in
-                    Button {
-                        selectedHex = item.hex
-                        isEraser = false
-                    } label: {
-                        Circle()
-                            .fill(item.color)
-                            .frame(width: 28, height: 28)
-                            .overlay {
-                                if selectedHex == item.hex && !isEraser {
-                                    Circle().stroke(.white, lineWidth: 3)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(palette, id: \.hex) { item in
+                        Button {
+                            selectedHex = item.hex
+                            isEraser = false
+                        } label: {
+                            Circle()
+                                .fill(item.color)
+                                .frame(width: 28, height: 28)
+                                .overlay {
+                                    Circle().stroke(Color.black.opacity(0.08), lineWidth: 1)
+                                    if selectedHex == item.hex && !isEraser {
+                                        Circle().stroke(.white, lineWidth: 3)
+                                    }
                                 }
-                            }
-                            .shadow(radius: selectedHex == item.hex ? 3 : 0)
+                                .shadow(radius: selectedHex == item.hex ? 3 : 0)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.vertical, 2)
             }
 
-            HStack(spacing: 8) {
-                ForEach(inkTypes, id: \.label) { item in
-                    Button {
-                        inkType = item.type
-                        isEraser = false
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: item.icon)
-                                .font(.system(size: 15, weight: .bold))
-                            Text(item.label)
-                                .font(.system(size: 10, weight: .bold))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(inkTypes, id: \.label) { item in
+                        Button {
+                            inkType = item.type
+                            isEraser = false
+                        } label: {
+                            VStack(spacing: 3) {
+                                Image(systemName: item.icon)
+                                    .font(.system(size: 15, weight: .bold))
+                                Text(item.label)
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .foregroundColor(
+                                inkType == item.type && !isEraser ? .white : accent
+                            )
+                            .frame(width: 68)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(
+                                        inkType == item.type && !isEraser
+                                            ? accent
+                                            : Color.white.opacity(0.85)
+                                    )
+                            )
                         }
-                        .foregroundColor(
-                            inkType == item.type && !isEraser ? .white : accent
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(
-                                    inkType == item.type && !isEraser
-                                        ? accent
-                                        : Color.white.opacity(0.85)
-                                )
-                        )
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.vertical, 2)
             }
 
             HStack(spacing: 14) {
                 Image(systemName: "pencil.tip").foregroundStyle(.secondary)
 
-                Slider(value: $brushWidth, in: 4...90)
+                Slider(value: $brushWidth, in: 4...160)
 
                 Circle()
                     .fill(isEraser ? Color.secondary : selectedColor)

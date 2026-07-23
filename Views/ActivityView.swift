@@ -352,7 +352,7 @@ struct ActivityView: View {
                     Capsule().fill(isMe ? accent : Color.pink)
                 )
 
-            Text(event.title)
+            Text(displayTitle(for: event))
                 .font(.headline)
                 .foregroundColor(accent)
                 .multilineTextAlignment(isMe ? .leading : .trailing)
@@ -380,9 +380,21 @@ struct ActivityView: View {
     private func emoji(for title: String) -> String {
         if title.contains("Fed")     { return "🍖" }
         if title.contains("Played")  { return "🎾" }
+        if title.contains("Pizza")   { return "🍕" }
         if title.contains("Hug")     { return "❤️" }
         if title.contains("Instant") { return "📸" }
         return "✨"
+    }
+
+    /// Rebuilds the memory's text using Ziggy's CURRENT name, so renaming
+    /// updates every memory — old and new — instead of freezing the name
+    /// that was current when each event was first logged.
+    private func displayTitle(for event: Event) -> String {
+        let name = petVM.pet.name
+        if event.title.contains("Fed")    { return "Fed \(name) 🍖" }
+        if event.title.contains("Played") { return "Played with \(name) 🎾" }
+        if event.title.contains("Pizza")  { return "Made Pizza for \(name) 🍕" }
+        return event.title
     }
 
     // MARK: - Questions Tab
