@@ -225,6 +225,32 @@ class FirestoreManager {
                 }
         }
     }
+
+    private var relationshipMembersListener: ListenerRegistration?
+
+    /// Watches the relationship's member count so both the code-generator and
+    /// the joiner can be told the moment they're BOTH actually connected —
+    /// covers both sides with one listener, since joining always brings the
+    /// count from 1 to 2.
+    func listenForBothConnected(
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else { return }
+
+        relationshipMembersListener?.remove()
+        relationshipMembersListener = db.collection("relationships")
+            .document(relationshipCode)
+            .addSnapshotListener { snapshot, _ in
+                let members = snapshot?.data()?["members"] as? [String] ?? []
+                completion(members.count >= 2)
+            }
+    }
+
+    func stopListeningForBothConnected() {
+        relationshipMembersListener?.remove()
+        relationshipMembersListener = nil
+    }
+
     func listenForPetUpdates(
         completion: @escaping ([String: Any]) -> Void
     ) {

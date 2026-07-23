@@ -746,6 +746,11 @@ struct ContentView: View {
 
     @State private var showRatingPrompt = false
 
+    @AppStorage("ziggy_connected_popup_shown_for_code")
+    private var connectedPopupShownForCode = ""
+
+    @State private var showConnectedPopup = false
+
     @State private var showFeedView        = false
     @State private var showInstantView     = false
     @State private var showDrawingGameView = false
@@ -820,6 +825,7 @@ struct ContentView: View {
                     UserDefaults(suiteName: "group.com.manrai.ziggy")?
                         .set(Date(), forKey: "last_app_open_time")
                     checkForRatingPrompt()
+                    watchForBothConnected()
                 }
             }
         }
@@ -964,6 +970,11 @@ struct ContentView: View {
             if showRatingPrompt {
                 ratingPromptView
                     .zIndex(11)
+            }
+
+            if showConnectedPopup {
+                connectedPopupView
+                    .zIndex(12)
             }
         }
         .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM) }
@@ -1378,6 +1389,83 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 2)
+            }
+            .padding(24)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            .padding(.horizontal, 28)
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: - "You're Connected!" Popup
+
+    /// Watches for the moment BOTH partners are present in the relationship
+    /// and celebrates it once — covers whoever generated the code (who's
+    /// already on the home screen waiting) and whoever just joined, since
+    /// both land here through the same listener.
+    private func watchForBothConnected() {
+        guard connectedPopupShownForCode != relationshipManager.relationshipCode else { return }
+
+        FirestoreManager.shared.listenForBothConnected { isBothConnected in
+            guard isBothConnected else { return }
+
+            DispatchQueue.main.async {
+                guard connectedPopupShownForCode != relationshipManager.relationshipCode else { return }
+                // Mark shown immediately so a second snapshot can't double-fire.
+                connectedPopupShownForCode = relationshipManager.relationshipCode
+                FirestoreManager.shared.stopListeningForBothConnected()
+
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    showConnectedPopup = true
+                }
+            }
+        }
+    }
+
+    private var connectedPopupView: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+
+                Image("ziggy_loveeyes")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 100)
+
+                Text("You're Connected! 💞")
+                    .font(.title2)
+                    .fontWeight(.black)
+                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+
+                Text("You and your partner can now raise \(petVM.pet.name) together 🐾")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { showConnectedPopup = false }
+                } label: {
+                    Text("Yay! 🎉")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                        .clipShape(Capsule())
+                }
             }
             .padding(24)
             .background(.ultraThinMaterial)
