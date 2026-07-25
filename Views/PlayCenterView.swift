@@ -10,6 +10,7 @@ struct PlayCenterView: View {
     @State private var showTraceGame = false
     @State private var showDoodle = false
     @State private var showTicTacToe = false
+    @State private var showDotsAndBoxes = false
 
     var body: some View {
 
@@ -82,6 +83,15 @@ struct PlayCenterView: View {
                     ) {
                         showTicTacToe = true
                     }
+
+                    gameCard(
+                        emoji: "🔲",
+                        title: "Dots and Boxes",
+                        subtitle: "Draw lines, claim boxes — most boxes wins.",
+                        tint: .orange
+                    ) {
+                        showDotsAndBoxes = true
+                    }
                 }
 
                 Spacer()
@@ -107,6 +117,14 @@ struct PlayCenterView: View {
         ) {
 
             TicTacToeGameView(
+                petVM: petVM
+            )
+        }
+        .fullScreenCover(
+            isPresented: $showDotsAndBoxes
+        ) {
+
+            DotsAndBoxesGameView(
                 petVM: petVM
             )
         }

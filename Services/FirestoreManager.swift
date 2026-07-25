@@ -1318,6 +1318,419 @@ class FirestoreManager {
             ], merge: true)
     }
 
+    // MARK: - Dots and Boxes (mirrors Tic Tac Toe's lobby/ready/move pattern —
+    // "leftPlayer"/"rightPlayer" map to "X"/"O" so the generic game-invite
+    // Cloud Function picks it up with no backend changes.)
+
+    static let dotsAndBoxesRows = 4
+    static let dotsAndBoxesCols = 4
+    static let dotsAndBoxesHLineCount =
+        (dotsAndBoxesRows + 1) * dotsAndBoxesCols
+    static let dotsAndBoxesVLineCount =
+        dotsAndBoxesRows * (dotsAndBoxesCols + 1)
+    static let dotsAndBoxesBoxCount =
+        dotsAndBoxesRows * dotsAndBoxesCols
+
+    func joinDotsAndBoxesGame(
+        username: String,
+        completion: @escaping (String?) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(nil)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("dotsAndBoxes")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let status = data["status"] as? String ?? "lobby"
+
+                var updates: [String: Any] = ["updatedAt": Timestamp()]
+
+                if status == "complete" {
+                    updates["leftReady"] = false
+                    updates["rightReady"] = false
+                    updates["status"] = "lobby"
+                    updates["horizontalLines"] = Array(
+                        repeating: false,
+                        count: FirestoreManager.dotsAndBoxesHLineCount
+                    )
+                    updates["verticalLines"] = Array(
+                        repeating: false,
+                        count: FirestoreManager.dotsAndBoxesVLineCount
+                    )
+                    updates["boxOwners"] = Array(
+                        repeating: "",
+                        count: FirestoreManager.dotsAndBoxesBoxCount
+                    )
+                    updates["currentTurn"] = "X"
+                    updates["winner"] = ""
+                    updates["rewardClaimed"] = false
+                }
+
+                let assignedSide: String
+
+                if leftPlayer == username {
+                    assignedSide = "X"
+                } else if rightPlayer == username {
+                    assignedSide = "O"
+                } else if leftPlayer.isEmpty {
+                    assignedSide = "X"
+                    updates["leftPlayer"] = username
+                    updates["leftReady"] = false
+                } else if rightPlayer.isEmpty {
+                    assignedSide = "O"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                } else {
+                    assignedSide = "O"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                }
+
+                if data["horizontalLines"] == nil && updates["horizontalLines"] == nil {
+                    updates["horizontalLines"] = Array(
+                        repeating: false,
+                        count: FirestoreManager.dotsAndBoxesHLineCount
+                    )
+                }
+                if data["verticalLines"] == nil && updates["verticalLines"] == nil {
+                    updates["verticalLines"] = Array(
+                        repeating: false,
+                        count: FirestoreManager.dotsAndBoxesVLineCount
+                    )
+                }
+                if data["boxOwners"] == nil && updates["boxOwners"] == nil {
+                    updates["boxOwners"] = Array(
+                        repeating: "",
+                        count: FirestoreManager.dotsAndBoxesBoxCount
+                    )
+                }
+                if data["status"] == nil && updates["status"] == nil {
+                    updates["status"] = "lobby"
+                }
+                if data["currentTurn"] == nil && updates["currentTurn"] == nil {
+                    updates["currentTurn"] = "X"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return assignedSide
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { side, error in
+
+            completion(side as? String)
+        }
+    }
+
+    func setDotsAndBoxesReady(
+        side: String,
+        username: String,
+        isReady: Bool
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("dotsAndBoxes")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                var data = snapshot.data() ?? [:]
+                let readyKey = side == "X" ? "leftReady" : "rightReady"
+
+                data[readyKey] = isReady
+
+                let leftReady = data["leftReady"] as? Bool ?? false
+                let rightReady = data["rightReady"] as? Bool ?? false
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+
+                var updates: [String: Any] = [
+                    readyKey: isReady,
+                    (side == "X" ? "leftPlayer" : "rightPlayer"): username,
+                    "updatedAt": Timestamp()
+                ]
+
+                if isReady,
+                   leftReady,
+                   rightReady,
+                   !leftPlayer.isEmpty,
+                   !rightPlayer.isEmpty {
+
+                    updates["status"] = "playing"
+                    updates["horizontalLines"] = Array(
+                        repeating: false,
+                        count: FirestoreManager.dotsAndBoxesHLineCount
+                    )
+                    updates["verticalLines"] = Array(
+                        repeating: false,
+                        count: FirestoreManager.dotsAndBoxesVLineCount
+                    )
+                    updates["boxOwners"] = Array(
+                        repeating: "",
+                        count: FirestoreManager.dotsAndBoxesBoxCount
+                    )
+                    updates["currentTurn"] = "X"
+                    updates["winner"] = ""
+                    updates["startedAt"] = Timestamp()
+                } else if !isReady {
+
+                    updates["status"] = "lobby"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    func listenForDotsAndBoxesGame(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("dotsAndBoxes")
+            .addSnapshotListener { snapshot, error in
+
+                if error != nil {
+                    return
+                }
+
+                completion(snapshot?.data() ?? [:])
+            }
+    }
+
+    /// A completed box's four edges, expressed as (isVertical, lineIndex) pairs,
+    /// for a box at (row, col) in the ROWS x COLS box grid.
+    private static func dotsAndBoxesEdges(row: Int, col: Int) -> [(Bool, Int)] {
+
+        let cols = dotsAndBoxesCols
+
+        let top = (false, row * cols + col)
+        let bottom = (false, (row + 1) * cols + col)
+        let left = (true, row * (cols + 1) + col)
+        let right = (true, row * (cols + 1) + (col + 1))
+
+        return [top, bottom, left, right]
+    }
+
+    func makeDotsAndBoxesMove(
+        isVertical: Bool,
+        index: Int,
+        mark: String
+    ) {
+
+        guard !relationshipCode.isEmpty else { return }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("dotsAndBoxes")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                guard
+                    data["status"] as? String == "playing",
+                    data["currentTurn"] as? String == mark,
+                    var horizontalLines = data["horizontalLines"] as? [Bool],
+                    var verticalLines = data["verticalLines"] as? [Bool],
+                    var boxOwners = data["boxOwners"] as? [String]
+                else {
+                    return nil
+                }
+
+                if isVertical {
+                    guard index >= 0, index < verticalLines.count, !verticalLines[index] else {
+                        return nil
+                    }
+                    verticalLines[index] = true
+                } else {
+                    guard index >= 0, index < horizontalLines.count, !horizontalLines[index] else {
+                        return nil
+                    }
+                    horizontalLines[index] = true
+                }
+
+                func edgeIsDrawn(_ edge: (Bool, Int)) -> Bool {
+                    edge.0 ? verticalLines[edge.1] : horizontalLines[edge.1]
+                }
+
+                var completedAny = false
+
+                for row in 0..<FirestoreManager.dotsAndBoxesRows {
+                    for col in 0..<FirestoreManager.dotsAndBoxesCols {
+
+                        let boxIndex = row * FirestoreManager.dotsAndBoxesCols + col
+
+                        guard boxOwners[boxIndex].isEmpty else { continue }
+
+                        let edges = FirestoreManager.dotsAndBoxesEdges(row: row, col: col)
+
+                        if edges.allSatisfy(edgeIsDrawn) {
+                            boxOwners[boxIndex] = mark
+                            completedAny = true
+                        }
+                    }
+                }
+
+                var updates: [String: Any] = [
+                    "horizontalLines": horizontalLines,
+                    "verticalLines": verticalLines,
+                    "boxOwners": boxOwners,
+                    "updatedAt": Timestamp()
+                ]
+
+                if !completedAny {
+                    updates["currentTurn"] = mark == "X" ? "O" : "X"
+                }
+
+                if !boxOwners.contains("") {
+
+                    let xCount = boxOwners.filter { $0 == "X" }.count
+                    let oCount = boxOwners.filter { $0 == "O" }.count
+
+                    updates["status"] = "complete"
+                    updates["winner"] = xCount == oCount ? "draw" : (xCount > oCount ? "X" : "O")
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    func claimDotsAndBoxesReward(
+        completion: @escaping (Bool) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(false)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("dotsAndBoxes")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let status = data["status"] as? String ?? ""
+                let rewardClaimed = data["rewardClaimed"] as? Bool ?? false
+
+                guard status == "complete", !rewardClaimed else {
+                    return false
+                }
+
+                transaction.setData([
+                    "rewardClaimed": true,
+                    "rewardClaimedAt": Timestamp(),
+                    "updatedAt": Timestamp()
+                ], forDocument: gameRef, merge: true)
+
+                return true
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return false
+            }
+
+        } completion: { didClaim, _ in
+
+            completion(didClaim as? Bool ?? false)
+        }
+    }
+
+    func resetDotsAndBoxesGame() {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("dotsAndBoxes")
+            .setData([
+                "leftReady": false,
+                "rightReady": false,
+                "status": "lobby",
+                "horizontalLines": Array(
+                    repeating: false,
+                    count: FirestoreManager.dotsAndBoxesHLineCount
+                ),
+                "verticalLines": Array(
+                    repeating: false,
+                    count: FirestoreManager.dotsAndBoxesVLineCount
+                ),
+                "boxOwners": Array(
+                    repeating: "",
+                    count: FirestoreManager.dotsAndBoxesBoxCount
+                ),
+                "currentTurn": "X",
+                "winner": "",
+                "rewardClaimed": false,
+                "updatedAt": Timestamp()
+            ], merge: true)
+    }
+
     func sendInstant(
         imageBase64: String,
         caption: String,
