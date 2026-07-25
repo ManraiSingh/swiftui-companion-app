@@ -712,7 +712,7 @@ class FirestoreManager {
                     updates["rightComplete"] = false
                     updates["rewardClaimed"] = false
                     updates["status"] = "lobby"
-                    updates["traceID"] = Int.random(in: 0...8)
+                    updates["traceID"] = Int.random(in: 0...14)
                     updates["leftStrokes"] = []
                     updates["rightStrokes"] = []
                     updates["leftActiveStroke"] = [:]
@@ -747,7 +747,7 @@ class FirestoreManager {
 
                 // Seed a template / status on a very first join.
                 if data["traceID"] == nil && updates["traceID"] == nil {
-                    updates["traceID"] = Int.random(in: 0...8)
+                    updates["traceID"] = Int.random(in: 0...14)
                 }
                 if data["status"] == nil && updates["status"] == nil {
                     updates["status"] = "lobby"
@@ -964,11 +964,29 @@ class FirestoreManager {
                 "rightComplete": false,
                 "rewardClaimed": false,
                 "status": "lobby",
-                "traceID": Int.random(in: 0...8),
+                "traceID": Int.random(in: 0...14),
                 "leftStrokes": [],
                 "rightStrokes": [],
                 "leftActiveStroke": [:],
                 "rightActiveStroke": [:],
+                "updatedAt": Timestamp()
+            ], merge: true)
+    }
+
+    /// Lets either player pick a specific shape for the CURRENT lobby round —
+    /// merges directly onto the shared doc so both see the same choice
+    /// immediately via the existing listener. If nobody calls this, the round
+    /// simply keeps whatever random template joinTraceGame/resetTraceGame
+    /// already assigned.
+    func setTraceTemplateChoice(index: Int) {
+        guard !relationshipCode.isEmpty else { return }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("traceDrawing")
+            .setData([
+                "traceID": index,
                 "updatedAt": Timestamp()
             ], merge: true)
     }

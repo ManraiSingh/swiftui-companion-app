@@ -226,6 +226,84 @@ private struct TraceTemplate {
                 x: radius * cos(t),
                 y: radius * sin(t)
             )
+        },
+
+        // MARK: Harder shapes — more direction changes, tighter curves.
+
+        TraceTemplate(
+            name: "Starburst",
+            symbol: "wand.and.stars"
+        ) { t in
+
+            let radius = 0.55 + 0.35 * cos(8 * t)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Gear",
+            symbol: "gearshape.fill"
+        ) { t in
+
+            let radius = 0.58 + 0.10 * cos(12 * t)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Blossom",
+            symbol: "leaf.fill"
+        ) { t in
+
+            let radius = 0.35 + 0.35 * abs(sin(5 * t))
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Pinwheel",
+            symbol: "tornado"
+        ) { t in
+
+            let radius = 0.5 + 0.3 * cos(6 * t) + 0.15 * sin(3 * t)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Squiggle",
+            symbol: "scribble"
+        ) { t in
+
+            return CGPoint(
+                x: 0.85 * cos(t),
+                y: 0.35 * sin(2 * t) + 0.35 * sin(3 * t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Clover",
+            symbol: "suit.club.fill"
+        ) { t in
+
+            let radius = 0.5 + 0.3 * pow(cos(4 * t), 3)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
         }
     ]
 }
@@ -452,6 +530,8 @@ struct DrawingGameView: View {
                 )
             }
 
+            templatePicker
+
             ShareLink(
                 item: inviteMessage
             ) {
@@ -496,6 +576,71 @@ struct DrawingGameView: View {
         .padding(18)
         .background(.white.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
+    }
+
+    // MARK: - Shape Picker
+
+    /// Lets either player pick a specific shape for this round — visible to
+    /// both instantly. Leave it untouched and the round stays whatever random
+    /// shape was already assigned; tapping 🎲 re-rolls a new random one.
+    private var templatePicker: some View {
+
+        VStack(alignment: .leading, spacing: 8) {
+
+            Text("Pick a shape (optional)")
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+
+                HStack(spacing: 8) {
+
+                    Button {
+                        var newIndex = Int.random(in: 0..<TraceTemplate.all.count)
+                        if TraceTemplate.all.count > 1 {
+                            while newIndex == traceID {
+                                newIndex = Int.random(in: 0..<TraceTemplate.all.count)
+                            }
+                        }
+                        FirestoreManager.shared.setTraceTemplateChoice(index: newIndex)
+                    } label: {
+                        templateChip(symbol: "shuffle", name: "Random", isSelected: false)
+                    }
+                    .buttonStyle(.plain)
+
+                    ForEach(Array(TraceTemplate.all.enumerated()), id: \.offset) { index, item in
+                        Button {
+                            FirestoreManager.shared.setTraceTemplateChoice(index: index)
+                        } label: {
+                            templateChip(
+                                symbol: item.symbol,
+                                name: item.name,
+                                isSelected: index == traceID
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func templateChip(symbol: String, name: String, isSelected: Bool) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .bold))
+            Text(name)
+                .font(.system(size: 10, weight: .bold))
+        }
+        .foregroundColor(isSelected ? .white : .primary)
+        .frame(width: 64)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? Color.pink : Color.white.opacity(0.85))
+        )
     }
 
     private func displayName(for player: String, isMe: Bool) -> String {
