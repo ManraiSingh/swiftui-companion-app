@@ -712,7 +712,7 @@ class FirestoreManager {
                     updates["rightComplete"] = false
                     updates["rewardClaimed"] = false
                     updates["status"] = "lobby"
-                    updates["traceID"] = Int.random(in: 0...14)
+                    updates["traceID"] = Int.random(in: 0...11)
                     updates["leftStrokes"] = []
                     updates["rightStrokes"] = []
                     updates["leftActiveStroke"] = [:]
@@ -747,7 +747,7 @@ class FirestoreManager {
 
                 // Seed a template / status on a very first join.
                 if data["traceID"] == nil && updates["traceID"] == nil {
-                    updates["traceID"] = Int.random(in: 0...14)
+                    updates["traceID"] = Int.random(in: 0...11)
                 }
                 if data["status"] == nil && updates["status"] == nil {
                     updates["status"] = "lobby"
@@ -964,7 +964,7 @@ class FirestoreManager {
                 "rightComplete": false,
                 "rewardClaimed": false,
                 "status": "lobby",
-                "traceID": Int.random(in: 0...14),
+                "traceID": Int.random(in: 0...11),
                 "leftStrokes": [],
                 "rightStrokes": [],
                 "leftActiveStroke": [:],

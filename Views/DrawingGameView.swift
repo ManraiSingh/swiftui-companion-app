@@ -112,29 +112,17 @@ private struct TraceTemplate {
     let symbol: String
     let point: (Double) -> CGPoint
 
+    // Every shape here is deliberately intricate — many direction changes
+    // and a long effective path — so finishing genuinely takes real time
+    // and care, not a quick doodle.
     static let all: [TraceTemplate] = [
 
         TraceTemplate(
-            name: "Heart",
-            symbol: "heart.fill"
+            name: "Mandala",
+            symbol: "atom"
         ) { t in
 
-            let x = 16 * pow(sin(t), 3)
-            let y = -(13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t))
-
-            return CGPoint(
-                x: x / 18,
-                y: y / 18
-            )
-        },
-
-        TraceTemplate(
-            name: "Star",
-            symbol: "star.fill"
-        ) { t in
-
-            let points = 5.0
-            let radius = 0.72 + 0.28 * cos(points * t)
+            let radius = 0.4 + 0.35 * abs(sin(9 * t))
 
             return CGPoint(
                 x: radius * cos(t),
@@ -143,12 +131,84 @@ private struct TraceTemplate {
         },
 
         TraceTemplate(
-            name: "Moon",
-            symbol: "moon.fill"
+            name: "Fine Gear",
+            symbol: "gearshape.2.fill"
         ) { t in
 
-            let x = 0.58 * cos(t) + 0.22 * cos(2 * t)
-            let y = 0.86 * sin(t)
+            let radius = 0.55 + 0.08 * cos(20 * t)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Snowflake",
+            symbol: "snowflake"
+        ) { t in
+
+            let radius = 0.5
+                + 0.2 * cos(6 * t)
+                + 0.15 * cos(12 * t)
+                + 0.1 * cos(18 * t)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Maze Ring",
+            symbol: "puzzlepiece.fill"
+        ) { t in
+
+            let radius = 0.5
+                + 0.15 * sin(10 * t)
+                + 0.1 * sin(17 * t + 1.3)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Rosette",
+            symbol: "camera.aperture"
+        ) { t in
+
+            let radius = 0.3 + 0.5 * abs(cos(7 * t))
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Lace Doily",
+            symbol: "seal.fill"
+        ) { t in
+
+            let radius = 0.5
+                + 0.25 * sin(5 * t)
+                + 0.15 * sin(11 * t)
+
+            return CGPoint(
+                x: radius * cos(t),
+                y: radius * sin(t)
+            )
+        },
+
+        TraceTemplate(
+            name: "Celtic Knot",
+            symbol: "link"
+        ) { t in
+
+            let x = 0.8 * cos(t) + 0.15 * cos(5 * t)
+            let y = 0.8 * sin(t) - 0.15 * sin(5 * t)
 
             return CGPoint(
                 x: x,
@@ -157,11 +217,13 @@ private struct TraceTemplate {
         },
 
         TraceTemplate(
-            name: "Flower",
-            symbol: "camera.macro"
+            name: "Ornate Wing",
+            symbol: "bird.fill"
         ) { t in
 
-            let radius = 0.38 + 0.34 * abs(sin(3 * t))
+            let radius = 0.35
+                + 0.3 * abs(sin(4 * t))
+                + 0.1 * abs(cos(9 * t))
 
             return CGPoint(
                 x: radius * cos(t),
@@ -170,72 +232,11 @@ private struct TraceTemplate {
         },
 
         TraceTemplate(
-            name: "Infinity",
-            symbol: "infinity"
+            name: "Ninja Star",
+            symbol: "asterisk.circle.fill"
         ) { t in
 
-            return CGPoint(
-                x: 0.82 * sin(t),
-                y: 0.48 * sin(2 * t)
-            )
-        },
-
-        TraceTemplate(
-            name: "Circle",
-            symbol: "circle"
-        ) { t in
-
-            return CGPoint(
-                x: cos(t),
-                y: sin(t)
-            )
-        },
-
-        TraceTemplate(
-            name: "Diamond",
-            symbol: "diamond"
-        ) { t in
-
-            let denom = abs(cos(t)) + abs(sin(t))
-
-            return CGPoint(
-                x: cos(t) / max(denom, 0.0001),
-                y: sin(t) / max(denom, 0.0001)
-            )
-        },
-
-        TraceTemplate(
-            name: "Egg",
-            symbol: "oval"
-        ) { t in
-
-            return CGPoint(
-                x: 0.72 * cos(t) * (1 - 0.14 * sin(t)),
-                y: sin(t)
-            )
-        },
-
-        TraceTemplate(
-            name: "Cloud",
-            symbol: "cloud"
-        ) { t in
-
-            let radius = 0.55 + 0.2 * cos(4 * t)
-
-            return CGPoint(
-                x: radius * cos(t),
-                y: radius * sin(t)
-            )
-        },
-
-        // MARK: Harder shapes — more direction changes, tighter curves.
-
-        TraceTemplate(
-            name: "Starburst",
-            symbol: "wand.and.stars"
-        ) { t in
-
-            let radius = 0.55 + 0.35 * cos(8 * t)
+            let radius = 0.45 + 0.4 * pow(abs(cos(7 * t)), 0.5)
 
             return CGPoint(
                 x: radius * cos(t),
@@ -244,11 +245,13 @@ private struct TraceTemplate {
         },
 
         TraceTemplate(
-            name: "Gear",
-            symbol: "gearshape.fill"
+            name: "Filigree Ring",
+            symbol: "circle.dotted"
         ) { t in
 
-            let radius = 0.58 + 0.10 * cos(12 * t)
+            let radius = 0.5
+                + 0.18 * cos(8 * t)
+                + 0.12 * sin(13 * t)
 
             return CGPoint(
                 x: radius * cos(t),
@@ -257,48 +260,30 @@ private struct TraceTemplate {
         },
 
         TraceTemplate(
-            name: "Blossom",
-            symbol: "leaf.fill"
+            name: "Wavy Ribbon",
+            symbol: "waveform.path"
         ) { t in
 
-            let radius = 0.35 + 0.35 * abs(sin(5 * t))
+            let x = 0.85 * cos(t)
+            let y = 0.35 * sin(2 * t)
+                + 0.35 * sin(3 * t)
+                + 0.15 * sin(5 * t)
 
             return CGPoint(
-                x: radius * cos(t),
-                y: radius * sin(t)
+                x: x,
+                y: y
             )
         },
 
         TraceTemplate(
-            name: "Pinwheel",
-            symbol: "tornado"
+            name: "Lace Trim",
+            symbol: "sparkles"
         ) { t in
 
-            let radius = 0.5 + 0.3 * cos(6 * t) + 0.15 * sin(3 * t)
-
-            return CGPoint(
-                x: radius * cos(t),
-                y: radius * sin(t)
-            )
-        },
-
-        TraceTemplate(
-            name: "Squiggle",
-            symbol: "scribble"
-        ) { t in
-
-            return CGPoint(
-                x: 0.85 * cos(t),
-                y: 0.35 * sin(2 * t) + 0.35 * sin(3 * t)
-            )
-        },
-
-        TraceTemplate(
-            name: "Clover",
-            symbol: "suit.club.fill"
-        ) { t in
-
-            let radius = 0.5 + 0.3 * pow(cos(4 * t), 3)
+            let radius = 0.45
+                + 0.15 * cos(10 * t)
+                + 0.1 * cos(20 * t)
+                + 0.05 * cos(30 * t)
 
             return CGPoint(
                 x: radius * cos(t),
