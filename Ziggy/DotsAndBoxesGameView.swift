@@ -32,8 +32,8 @@ struct DotsAndBoxesGameView: View {
     @State private var winner = ""
     @State private var showHowToPlay = false
 
-    private let xColor = Color(red: 1.0, green: 0.66, blue: 0.80)
-    private let oColor = Color(red: 0.58, green: 0.42, blue: 0.93)
+    private let xColor = Color(red: 0.30, green: 0.35, blue: 0.42)
+    private let oColor = Color(red: 0.55, green: 0.50, blue: 0.42)
 
     private let rows = FirestoreManager.dotsAndBoxesRows
     private let cols = FirestoreManager.dotsAndBoxesCols
@@ -71,27 +71,49 @@ struct DotsAndBoxesGameView: View {
         boxOwners.filter { $0 == "O" }.count
     }
 
-    private func initials(for rawName: String, fallback: String) -> String {
+    private var xDisplayName: String {
+        leftPlayer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "P1" : leftPlayer
+    }
 
-        let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+    private var oDisplayName: String {
+        rightPlayer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "P2" : rightPlayer
+    }
 
-        guard !trimmed.isEmpty else { return fallback }
+    /// How many leading letters are needed to tell the two players apart —
+    /// just the first letter, unless both names start the same way, in
+    /// which case we take one more letter (up to 3) until they differ.
+    private var sharedInitialsLength: Int {
 
-        let parts = trimmed.split(separator: " ")
+        let a = Array(xDisplayName.uppercased())
+        let b = Array(oDisplayName.uppercased())
 
-        if parts.count >= 2, let first = parts[0].first, let second = parts[1].first {
-            return String([first, second]).uppercased()
+        var length = 1
+
+        while length < 3 {
+            let idx = length - 1
+            guard idx < a.count, idx < b.count, a[idx] == b[idx] else { break }
+            length += 1
         }
 
-        return String(trimmed.prefix(2)).uppercased()
+        return length
+    }
+
+    private func initials(for name: String) -> String {
+
+        let letters = Array(name.uppercased())
+        let length = min(sharedInitialsLength, letters.count)
+
+        guard length > 0 else { return "?" }
+
+        return String(letters.prefix(length))
     }
 
     private var xInitials: String {
-        initials(for: leftPlayer, fallback: "P1")
+        initials(for: xDisplayName)
     }
 
     private var oInitials: String {
-        initials(for: rightPlayer, fallback: "P2")
+        initials(for: oDisplayName)
     }
 
     private var resultText: String {

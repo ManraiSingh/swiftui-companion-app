@@ -26,8 +26,8 @@ struct TicTacToeGameView: View {
     @State private var currentTurn = "X"
     @State private var winner = ""
 
-    private let xColor = Color(red: 1.0, green: 0.31, blue: 0.64)
-    private let oColor = Color(red: 0.58, green: 0.42, blue: 0.93)
+    private let xColor = Color(red: 0.30, green: 0.35, blue: 0.42)
+    private let oColor = Color(red: 0.55, green: 0.50, blue: 0.42)
 
     private var username: String {
         UserManager.shared.username
