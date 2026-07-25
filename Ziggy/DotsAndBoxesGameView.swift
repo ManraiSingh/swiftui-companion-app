@@ -30,13 +30,14 @@ struct DotsAndBoxesGameView: View {
         Array(repeating: "", count: FirestoreManager.dotsAndBoxesBoxCount)
     @State private var currentTurn = "X"
     @State private var winner = ""
+    @State private var showHowToPlay = false
 
-    private let xColor = Color(red: 1.0, green: 0.31, blue: 0.64)
+    private let xColor = Color(red: 1.0, green: 0.66, blue: 0.80)
     private let oColor = Color(red: 0.58, green: 0.42, blue: 0.93)
 
     private let rows = FirestoreManager.dotsAndBoxesRows
     private let cols = FirestoreManager.dotsAndBoxesCols
-    private let boardSide: CGFloat = 300
+    private let boardSide: CGFloat = 340
 
     private var username: String {
         UserManager.shared.username
@@ -68,6 +69,29 @@ struct DotsAndBoxesGameView: View {
 
     private var oScore: Int {
         boxOwners.filter { $0 == "O" }.count
+    }
+
+    private func initials(for rawName: String, fallback: String) -> String {
+
+        let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmed.isEmpty else { return fallback }
+
+        let parts = trimmed.split(separator: " ")
+
+        if parts.count >= 2, let first = parts[0].first, let second = parts[1].first {
+            return String([first, second]).uppercased()
+        }
+
+        return String(trimmed.prefix(2)).uppercased()
+    }
+
+    private var xInitials: String {
+        initials(for: leftPlayer, fallback: "P1")
+    }
+
+    private var oInitials: String {
+        initials(for: rightPlayer, fallback: "P2")
     }
 
     private var resultText: String {
@@ -114,6 +138,11 @@ struct DotsAndBoxesGameView: View {
                 }
             }
             .padding()
+
+            if showHowToPlay {
+                howToPlayOverlay
+                    .zIndex(10)
+            }
         }
         .onAppear {
             joinGame()
@@ -153,16 +182,108 @@ struct DotsAndBoxesGameView: View {
 
             Spacer()
 
-            Button {
-                startNewRound()
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
-                    .clipShape(Circle())
+            HStack(spacing: 10) {
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { showHowToPlay = true }
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                        .frame(width: 42, height: 42)
+                        .background(.white.opacity(0.82))
+                        .clipShape(Circle())
+                }
+
+                Button {
+                    startNewRound()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                        .frame(width: 42, height: 42)
+                        .background(.white.opacity(0.82))
+                        .clipShape(Circle())
+                }
             }
+        }
+    }
+
+    // MARK: - How to Play
+
+    private var howToPlayOverlay: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.easeOut(duration: 0.2)) { showHowToPlay = false }
+                }
+
+            VStack(spacing: 16) {
+
+                Text("How to Play")
+                    .font(.title2)
+                    .fontWeight(.black)
+
+                VStack(alignment: .leading, spacing: 12) {
+
+                    howToPlayRow(
+                        icon: "1.circle.fill",
+                        text: "Take turns tapping a dash between two dots to draw one line."
+                    )
+
+                    howToPlayRow(
+                        icon: "2.circle.fill",
+                        text: "Complete the 4th side of a box to claim it — and you get an extra turn!"
+                    )
+
+                    howToPlayRow(
+                        icon: "3.circle.fill",
+                        text: "Once every box is claimed, whoever owns the most boxes wins."
+                    )
+                }
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { showHowToPlay = false }
+                } label: {
+                    Text("Got it!")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [xColor, oColor],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(24)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            .padding(.horizontal, 28)
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+        }
+        .transition(.opacity)
+    }
+
+    private func howToPlayRow(icon: String, text: String) -> some View {
+
+        HStack(alignment: .top, spacing: 10) {
+
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(oColor)
+
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -176,13 +297,13 @@ struct DotsAndBoxesGameView: View {
 
             HStack(spacing: 16) {
 
-                markBadge(mark: "X", color: xColor, size: 68)
+                markBadge(text: xInitials, color: xColor, size: 68)
 
                 Image(systemName: "heart.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(.pink.opacity(0.5))
 
-                markBadge(mark: "O", color: oColor, size: 68)
+                markBadge(text: oInitials, color: oColor, size: 68)
             }
 
             VStack(spacing: 8) {
@@ -203,6 +324,7 @@ struct DotsAndBoxesGameView: View {
                 playerRow(
                     name: leftPlayer.isEmpty ? "You" : leftPlayer,
                     side: "X",
+                    badgeText: xInitials,
                     isReady: leftReady,
                     isMe: assignedSide == .x
                 )
@@ -210,6 +332,7 @@ struct DotsAndBoxesGameView: View {
                 playerRow(
                     name: rightPlayer.isEmpty ? "Waiting for partner" : rightPlayer,
                     side: "O",
+                    badgeText: oInitials,
                     isReady: rightReady,
                     isMe: assignedSide == .o
                 )
@@ -270,20 +393,23 @@ struct DotsAndBoxesGameView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
-    private func markBadge(mark: String, color: Color, size: CGFloat) -> some View {
+    private func markBadge(text: String, color: Color, size: CGFloat) -> some View {
         ZStack {
             Circle()
                 .fill(color.opacity(0.15))
                 .frame(width: size, height: size)
-            Image(systemName: mark == "X" ? "xmark" : "circle")
-                .font(.system(size: size * 0.42, weight: .black))
+            Text(text)
+                .font(.system(size: size * 0.34, weight: .black))
                 .foregroundStyle(color)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
         }
     }
 
     private func playerRow(
         name: String,
         side: String,
+        badgeText: String,
         isReady: Bool,
         isMe: Bool
     ) -> some View {
@@ -292,7 +418,7 @@ struct DotsAndBoxesGameView: View {
 
         return HStack(spacing: 12) {
 
-            markBadge(mark: side, color: sideColor, size: 40)
+            markBadge(text: badgeText, color: sideColor, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
 
@@ -301,7 +427,7 @@ struct DotsAndBoxesGameView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
 
-                Text(isMe ? "You · plays \(side)" : "Plays \(side)")
+                Text(isMe ? "You · plays as \(badgeText)" : "Plays as \(badgeText)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -348,17 +474,16 @@ struct DotsAndBoxesGameView: View {
                 }
 
                 if let assignedSide {
-                    HStack(spacing: 6) {
-                        Image(systemName: assignedSide == .x ? "xmark" : "circle")
-                            .font(.system(size: 11, weight: .black))
-                        Text("You play \(assignedSide.rawValue)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(mySideColor))
+
+                    let myInitials = assignedSide == .x ? xInitials : oInitials
+
+                    Text("You play as \(myInitials)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(mySideColor))
                 }
             }
 
@@ -373,17 +498,18 @@ struct DotsAndBoxesGameView: View {
     private var scoreRow: some View {
 
         HStack(spacing: 16) {
-            scoreBadge(mark: "X", color: xColor, score: xScore)
-            scoreBadge(mark: "O", color: oColor, score: oScore)
+            scoreBadge(label: xInitials, color: xColor, score: xScore)
+            scoreBadge(label: oInitials, color: oColor, score: oScore)
         }
     }
 
-    private func scoreBadge(mark: String, color: Color, score: Int) -> some View {
+    private func scoreBadge(label: String, color: Color, score: Int) -> some View {
 
         HStack(spacing: 6) {
-            Image(systemName: mark == "X" ? "xmark" : "circle")
+            Text(label)
                 .font(.system(size: 12, weight: .black))
                 .foregroundStyle(color)
+                .lineLimit(1)
             Text("\(score) box\(score == 1 ? "" : "es")")
                 .font(.subheadline)
                 .fontWeight(.black)
@@ -493,21 +619,19 @@ struct DotsAndBoxesGameView: View {
         let boxIndex = row * cols + col
         let owner = boxIndex < boxOwners.count ? boxOwners[boxIndex] : ""
         let color: Color = owner == "X" ? xColor : (owner == "O" ? oColor : .clear)
+        let label = owner == "X" ? xInitials : (owner == "O" ? oInitials : "")
 
         return ZStack {
 
             RoundedRectangle(cornerRadius: 6)
                 .fill(color.opacity(owner.isEmpty ? 0 : 0.22))
 
-            if owner == "X" {
-                Image(systemName: "xmark")
-                    .font(.system(size: cellSize * 0.32, weight: .black))
-                    .foregroundStyle(xColor.opacity(0.6))
-                    .transition(.scale.combined(with: .opacity))
-            } else if owner == "O" {
-                Image(systemName: "circle")
+            if !owner.isEmpty {
+                Text(label)
                     .font(.system(size: cellSize * 0.28, weight: .black))
-                    .foregroundStyle(oColor.opacity(0.6))
+                    .foregroundStyle(color.opacity(0.85))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
                     .transition(.scale.combined(with: .opacity))
             }
         }

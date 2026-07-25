@@ -1322,8 +1322,8 @@ class FirestoreManager {
     // "leftPlayer"/"rightPlayer" map to "X"/"O" so the generic game-invite
     // Cloud Function picks it up with no backend changes.)
 
-    static let dotsAndBoxesRows = 4
-    static let dotsAndBoxesCols = 4
+    static let dotsAndBoxesRows = 6
+    static let dotsAndBoxesCols = 6
     static let dotsAndBoxesHLineCount =
         (dotsAndBoxesRows + 1) * dotsAndBoxesCols
     static let dotsAndBoxesVLineCount =
