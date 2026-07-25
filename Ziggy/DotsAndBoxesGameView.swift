@@ -32,8 +32,8 @@ struct DotsAndBoxesGameView: View {
     @State private var winner = ""
     @State private var showHowToPlay = false
 
-    private let xColor = Color(red: 0.30, green: 0.35, blue: 0.42)
-    private let oColor = Color(red: 0.55, green: 0.50, blue: 0.42)
+    private let xColor = Color(red: 0.20, green: 0.72, blue: 0.68)
+    private let oColor = Color(red: 1.0, green: 0.62, blue: 0.32)
 
     private let rows = FirestoreManager.dotsAndBoxesRows
     private let cols = FirestoreManager.dotsAndBoxesCols
