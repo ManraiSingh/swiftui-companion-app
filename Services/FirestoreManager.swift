@@ -1731,6 +1731,384 @@ class FirestoreManager {
             ], merge: true)
     }
 
+    // MARK: - Connect Four (mirrors Tic Tac Toe / Dots and Boxes lobby/ready
+    // pattern — "leftPlayer"/"rightPlayer" map to "R"/"Y" so the generic
+    // game-invite Cloud Function picks it up with no backend changes.)
+
+    static let connectFourRows = 6
+    static let connectFourCols = 7
+    static let connectFourCellCount = connectFourRows * connectFourCols
+
+    func joinConnectFourGame(
+        username: String,
+        completion: @escaping (String?) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(nil)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("connectFour")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let status = data["status"] as? String ?? "lobby"
+
+                var updates: [String: Any] = ["updatedAt": Timestamp()]
+
+                if status == "complete" {
+                    updates["leftReady"] = false
+                    updates["rightReady"] = false
+                    updates["status"] = "lobby"
+                    updates["board"] = Array(
+                        repeating: "",
+                        count: FirestoreManager.connectFourCellCount
+                    )
+                    updates["currentTurn"] = "R"
+                    updates["winner"] = ""
+                    updates["rewardClaimed"] = false
+                }
+
+                let assignedSide: String
+
+                if leftPlayer == username {
+                    assignedSide = "R"
+                } else if rightPlayer == username {
+                    assignedSide = "Y"
+                } else if leftPlayer.isEmpty {
+                    assignedSide = "R"
+                    updates["leftPlayer"] = username
+                    updates["leftReady"] = false
+                } else if rightPlayer.isEmpty {
+                    assignedSide = "Y"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                } else {
+                    assignedSide = "Y"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                }
+
+                if data["board"] == nil && updates["board"] == nil {
+                    updates["board"] = Array(
+                        repeating: "",
+                        count: FirestoreManager.connectFourCellCount
+                    )
+                }
+                if data["status"] == nil && updates["status"] == nil {
+                    updates["status"] = "lobby"
+                }
+                if data["currentTurn"] == nil && updates["currentTurn"] == nil {
+                    updates["currentTurn"] = "R"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return assignedSide
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { side, error in
+
+            completion(side as? String)
+        }
+    }
+
+    func setConnectFourReady(
+        side: String,
+        username: String,
+        isReady: Bool
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("connectFour")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                var data = snapshot.data() ?? [:]
+                let readyKey = side == "R" ? "leftReady" : "rightReady"
+
+                data[readyKey] = isReady
+
+                let leftReady = data["leftReady"] as? Bool ?? false
+                let rightReady = data["rightReady"] as? Bool ?? false
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+
+                var updates: [String: Any] = [
+                    readyKey: isReady,
+                    (side == "R" ? "leftPlayer" : "rightPlayer"): username,
+                    "updatedAt": Timestamp()
+                ]
+
+                if isReady,
+                   leftReady,
+                   rightReady,
+                   !leftPlayer.isEmpty,
+                   !rightPlayer.isEmpty {
+
+                    updates["status"] = "playing"
+                    updates["board"] = Array(
+                        repeating: "",
+                        count: FirestoreManager.connectFourCellCount
+                    )
+                    updates["currentTurn"] = "R"
+                    updates["winner"] = ""
+                    updates["startedAt"] = Timestamp()
+                } else if !isReady {
+
+                    updates["status"] = "lobby"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    func listenForConnectFourGame(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("connectFour")
+            .addSnapshotListener { snapshot, error in
+
+                if error != nil {
+                    return
+                }
+
+                completion(snapshot?.data() ?? [:])
+            }
+    }
+
+    func makeConnectFourMove(col: Int, mark: String) {
+
+        guard !relationshipCode.isEmpty else { return }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("connectFour")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                guard
+                    data["status"] as? String == "playing",
+                    data["currentTurn"] as? String == mark,
+                    var board = data["board"] as? [String],
+                    col >= 0, col < FirestoreManager.connectFourCols
+                else {
+                    return nil
+                }
+
+                var landingRow: Int?
+
+                for row in 0..<FirestoreManager.connectFourRows {
+                    let index = row * FirestoreManager.connectFourCols + col
+                    if index < board.count, board[index].isEmpty {
+                        landingRow = row
+                        break
+                    }
+                }
+
+                guard let row = landingRow else {
+                    // Column is full.
+                    return nil
+                }
+
+                board[row * FirestoreManager.connectFourCols + col] = mark
+
+                let winner = FirestoreManager.connectFourWinner(
+                    board: board,
+                    rows: FirestoreManager.connectFourRows,
+                    cols: FirestoreManager.connectFourCols
+                )
+                let isDraw = winner == nil && !board.contains("")
+
+                var updates: [String: Any] = [
+                    "board": board,
+                    "currentTurn": mark == "R" ? "Y" : "R",
+                    "updatedAt": Timestamp()
+                ]
+
+                if let winner {
+                    updates["status"] = "complete"
+                    updates["winner"] = winner
+                } else if isDraw {
+                    updates["status"] = "complete"
+                    updates["winner"] = "draw"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    static func connectFourWinner(
+        board: [String],
+        rows: Int,
+        cols: Int
+    ) -> String? {
+
+        func mark(at row: Int, _ col: Int) -> String? {
+            guard row >= 0, row < rows, col >= 0, col < cols else { return nil }
+            let value = board[row * cols + col]
+            return value.isEmpty ? nil : value
+        }
+
+        let directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+
+        for row in 0..<rows {
+            for col in 0..<cols {
+
+                guard let piece = mark(at: row, col) else { continue }
+
+                for (dRow, dCol) in directions {
+
+                    var count = 1
+                    var r = row + dRow
+                    var c = col + dCol
+
+                    while mark(at: r, c) == piece {
+                        count += 1
+                        r += dRow
+                        c += dCol
+                    }
+
+                    if count >= 4 {
+                        return piece
+                    }
+                }
+            }
+        }
+
+        return nil
+    }
+
+    func claimConnectFourReward(
+        completion: @escaping (Bool) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(false)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("connectFour")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let status = data["status"] as? String ?? ""
+                let rewardClaimed = data["rewardClaimed"] as? Bool ?? false
+
+                guard status == "complete", !rewardClaimed else {
+                    return false
+                }
+
+                transaction.setData([
+                    "rewardClaimed": true,
+                    "rewardClaimedAt": Timestamp(),
+                    "updatedAt": Timestamp()
+                ], forDocument: gameRef, merge: true)
+
+                return true
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return false
+            }
+
+        } completion: { didClaim, _ in
+
+            completion(didClaim as? Bool ?? false)
+        }
+    }
+
+    func resetConnectFourGame() {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("connectFour")
+            .setData([
+                "leftReady": false,
+                "rightReady": false,
+                "status": "lobby",
+                "board": Array(
+                    repeating: "",
+                    count: FirestoreManager.connectFourCellCount
+                ),
+                "currentTurn": "R",
+                "winner": "",
+                "rewardClaimed": false,
+                "updatedAt": Timestamp()
+            ], merge: true)
+    }
+
     func sendInstant(
         imageBase64: String,
         caption: String,

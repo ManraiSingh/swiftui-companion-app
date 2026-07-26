@@ -11,6 +11,7 @@ struct PlayCenterView: View {
     @State private var showDoodle = false
     @State private var showTicTacToe = false
     @State private var showDotsAndBoxes = false
+    @State private var showConnectFour = false
 
     var body: some View {
 
@@ -92,6 +93,15 @@ struct PlayCenterView: View {
                     ) {
                         showDotsAndBoxes = true
                     }
+
+                    gameCard(
+                        emoji: "🔴🟡",
+                        title: "Connect 4",
+                        subtitle: "Drop pieces and line up four in a row to win.",
+                        tint: .red
+                    ) {
+                        showConnectFour = true
+                    }
                 }
 
                 Spacer()
@@ -125,6 +135,14 @@ struct PlayCenterView: View {
         ) {
 
             DotsAndBoxesGameView(
+                petVM: petVM
+            )
+        }
+        .fullScreenCover(
+            isPresented: $showConnectFour
+        ) {
+
+            ConnectFourGameView(
                 petVM: petVM
             )
         }

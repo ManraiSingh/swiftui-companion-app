@@ -475,6 +475,8 @@ function gameName(gameId?: string): string {
     return "Tic Tac Toe";
   case "dotsAndBoxes":
     return "Dots and Boxes";
+  case "connectFour":
+    return "Connect 4";
   default:
     return "with Ziggy";
   }
