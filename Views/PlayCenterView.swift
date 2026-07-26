@@ -77,7 +77,7 @@ struct PlayCenterView: View {
                     }
 
                     gameCard(
-                        emoji: "❌⭕️",
+                        emoji: "X O",
                         title: "Tic Tac Toe",
                         subtitle: "A quick live match — first to line up three wins.",
                         tint: .blue
@@ -190,7 +190,9 @@ struct PlayCenterView: View {
             HStack(spacing: 14) {
 
                 Text(emoji)
-                    .font(.system(size: 38))
+                    .font(.system(size: 38, weight: .black))
+                    .minimumScaleFactor(0.4)
+                    .lineLimit(1)
                     .frame(width: 64, height: 64)
                     .background(tint.opacity(0.16))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
