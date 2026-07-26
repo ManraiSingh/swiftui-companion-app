@@ -754,6 +754,7 @@ struct ContentView: View {
     @State private var showFeedView        = false
     @State private var showInstantView     = false
     @State private var showDrawingGameView = false
+    @State private var showDoodleView      = false
     @State private var showAnswerSheet     = false
 
     @StateObject private var relationshipManager = RelationshipManager.shared
@@ -980,6 +981,7 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM) }
         .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM) }
         .fullScreenCover(isPresented: $showDrawingGameView) { PlayCenterView(petVM: petVM) }
+        .fullScreenCover(isPresented: $showDoodleView)       { DoodleView() }
         .sheet(isPresented: $showAnswerSheet) {
             AnswerSheetView(dailyQ: dailyQ, petName: petVM.pet.name) {
                 showAnswerSheet = false
@@ -1033,37 +1035,43 @@ struct ContentView: View {
     // MARK: - Ziggy Hero
 
     private var ziggyHero: some View {
-        ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 40)
-                .fill(LinearGradient(
-                    colors: moodSurfaceColors,
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ))
-                .overlay(alignment: .topLeading) { sparkleCluster.padding(20) }
-                .overlay(alignment: .topTrailing) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .padding(22)
-                }
+        VStack(spacing: 8) {
 
             VStack(spacing: 2) {
                 speechBubble.padding(.horizontal, 18)
                 Image(currentEmotionImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxHeight: 130)
+                    .frame(maxHeight: 116)
                     .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
             }
             .padding(.top, 16)
-            .padding(.bottom, 40)
 
-            activityTag.padding(.bottom, 14)
+            activityStatusText
+                .padding(.horizontal, 20)
+
+            feedBar
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 40)
+                .fill(LinearGradient(
+                    colors: moodSurfaceColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ))
+        )
+        .overlay(alignment: .topLeading) { sparkleCluster.padding(20) }
+        .overlay(alignment: .topTrailing) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.7))
+                .padding(22)
         }
         // Flexes up to its full size on big iPhones and shrinks on smaller
         // ones so the whole page always fits without scrolling.
-        .frame(maxWidth: .infinity, maxHeight: 270)
+        .frame(maxWidth: .infinity, maxHeight: 330)
     }
 
     private var moodSurfaceColors: [Color] {
@@ -1102,21 +1110,42 @@ struct ContentView: View {
             .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
     }
 
-    private var activityTag: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.orange)
+    // Low-priority status line (who did what) — shown as plain text rather
+    // than competing with the speech bubble for attention.
+    private var activityStatusText: some View {
+        HStack {
             Text(cuteActivityText)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 15).padding(.vertical, 9)
-        .background(.white.opacity(0.97))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(.orange.opacity(0.16), lineWidth: 1))
-        .shadow(color: .black.opacity(0.13), radius: 9, y: 4)
+    }
+
+    private var feedBar: some View {
+        Button {
+            showFeedView = true
+        } label: {
+            HStack(spacing: 10) {
+                Text("🍗")
+                    .font(.system(size: 20))
+                Text("Feed \(petVM.pet.name)")
+                    .font(.subheadline)
+                    .fontWeight(.black)
+                    .foregroundStyle(.pink)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.pink.opacity(0.6))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .background(.white.opacity(0.92))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Daily Question Card
@@ -1196,7 +1225,7 @@ struct ContentView: View {
 
     private var actionDock: some View {
         HStack(spacing: 12) {
-            actionCard(systemImage: "fork.knife",         title: "Feed",    subtitle: "Care",  color: .orange) { showFeedView = true }
+            actionCard(systemImage: "paintbrush.pointed.fill", title: "Doodle", subtitle: "Draw", color: .purple) { showDoodleView = true }
             actionCard(systemImage: "gamecontroller.fill", title: "Play",   subtitle: "Games", color: .green)  { showDrawingGameView = true }
             actionCard(
                 systemImage: "camera.fill",
