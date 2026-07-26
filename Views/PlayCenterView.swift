@@ -95,12 +95,12 @@ struct PlayCenterView: View {
                     }
 
                     gameCard(
-                        emoji: "🔴🟡",
                         title: "Connect 4",
                         subtitle: "Drop pieces and line up four in a row to win.",
-                        tint: .red
+                        tint: .red,
+                        action: { showConnectFour = true }
                     ) {
-                        showConnectFour = true
+                        connectFourIcon
                     }
                 }
 
@@ -185,14 +185,44 @@ struct PlayCenterView: View {
         action: @escaping () -> Void
     ) -> some View {
 
+        gameCard(title: title, subtitle: subtitle, tint: tint, action: action) {
+
+            Text(emoji)
+                .font(.system(size: 38, weight: .black))
+                .minimumScaleFactor(0.4)
+                .lineLimit(1)
+        }
+    }
+
+    private var connectFourIcon: some View {
+
+        HStack(spacing: -10) {
+
+            Circle()
+                .fill(Color(red: 0.90, green: 0.11, blue: 0.14))
+                .frame(width: 26, height: 26)
+                .overlay(Circle().stroke(.white, lineWidth: 2))
+
+            Circle()
+                .fill(Color(red: 1.0, green: 0.45, blue: 0.0))
+                .frame(width: 26, height: 26)
+                .overlay(Circle().stroke(.white, lineWidth: 2))
+        }
+    }
+
+    private func gameCard<Icon: View>(
+        title: String,
+        subtitle: String,
+        tint: Color,
+        action: @escaping () -> Void,
+        @ViewBuilder icon: () -> Icon
+    ) -> some View {
+
         Button(action: action) {
 
             HStack(spacing: 14) {
 
-                Text(emoji)
-                    .font(.system(size: 38, weight: .black))
-                    .minimumScaleFactor(0.4)
-                    .lineLimit(1)
+                icon()
                     .frame(width: 64, height: 64)
                     .background(tint.opacity(0.16))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
