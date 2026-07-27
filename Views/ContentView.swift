@@ -1035,24 +1035,43 @@ struct ContentView: View {
     // MARK: - Ziggy Hero
 
     private var ziggyHero: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
 
-            VStack(spacing: 2) {
-                speechBubble.padding(.horizontal, 18)
-                Image(currentEmotionImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 116)
-                    .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
+            // A fixed-height shelf: the title stays pinned to the top, and
+            // the message bubble is anchored to the bottom of this shelf —
+            // sitting a little lower — so a longer message grows upward
+            // into the shelf instead of pushing down into Ziggy's row.
+            HStack(alignment: .bottom, spacing: 14) {
+
+                moodTitleText
+                    .frame(maxWidth: 118, maxHeight: .infinity, alignment: .topLeading)
+
+                speechBubble
+                    .frame(maxWidth: .infinity, alignment: .bottom)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 16)
+            .frame(height: 76)
+            .padding(.top, 6)
+            .padding(.horizontal, 20)
 
-            activityStatusText
-                .padding(.horizontal, 20)
+            // Feed and Ziggy share one flexible row, side by side — Ziggy
+            // fills the full height this row gets, and Feed sits low, at
+            // the bottom of that same row, near his feet.
+            GeometryReader { geo in
+                HStack(alignment: .bottom, spacing: 14) {
+                    feedBar
+                        .frame(width: geo.size.width / 3)
 
-            feedBar
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                    Image(currentEmotionImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: geo.size.width * 2 / 3, maxHeight: geo.size.height)
+                        .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
         }
         .background(
             RoundedRectangle(cornerRadius: 40)
@@ -1062,7 +1081,6 @@ struct ContentView: View {
                     endPoint: .bottomTrailing
                 ))
         )
-        .overlay(alignment: .topLeading) { sparkleCluster.padding(20) }
         .overlay(alignment: .topTrailing) {
             Image(systemName: "heart.fill")
                 .font(.system(size: 13))
@@ -1071,7 +1089,39 @@ struct ContentView: View {
         }
         // Flexes up to its full size on big iPhones and shrinks on smaller
         // ones so the whole page always fits without scrolling.
-        .frame(maxWidth: .infinity, maxHeight: 330)
+        .frame(maxWidth: .infinity, maxHeight: 320)
+    }
+
+    private var moodWord: String {
+        switch petVM.pet.loveScore {
+        case 90...100: return "in love"
+        case 70..<90:  return "happy"
+        case 50..<70:  return "sleeping"
+        case 30..<50:  return "missing you"
+        case 15..<30:  return "annoyed"
+        default:       return "heartbroken"
+        }
+    }
+
+    // Plain left-side text — mood title plus the low-priority activity
+    // line — instead of a pill competing with the speech bubble.
+    private var moodTitleText: some View {
+        VStack(alignment: .leading, spacing: 8) {
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(petVM.pet.name) is")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(moodWord)
+                    .font(.system(size: 26, weight: .black))
+                    .foregroundStyle(Color(red: 0.45, green: 0.32, blue: 0.78))
+            }
+
+            Text(cuteActivityText)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var moodSurfaceColors: [Color] {
@@ -1082,22 +1132,13 @@ struct ContentView: View {
         }
     }
 
-    private var sparkleCluster: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: "sparkle")
-            Image(systemName: "heart.fill").font(.caption)
-            Image(systemName: "sparkles")
-        }
-        .foregroundStyle(.white.opacity(0.8))
-    }
-
     private var speechBubble: some View {
         Text(speechBubbleText)
-            .font(.headline).fontWeight(.bold)
+            .font(.footnote).fontWeight(.bold)
             .multilineTextAlignment(.center)
             .foregroundStyle(.primary)
-            .lineLimit(3).minimumScaleFactor(0.84)
-            .padding(.horizontal, 18).padding(.vertical, 13)
+            .lineLimit(5).fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12).padding(.vertical, 7)
             .background(.white.opacity(0.92))
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(alignment: .bottom) {
@@ -1110,40 +1151,25 @@ struct ContentView: View {
             .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
     }
 
-    // Low-priority status line (who did what) — shown as plain text rather
-    // than competing with the speech bubble for attention.
-    private var activityStatusText: some View {
-        HStack {
-            Text(cuteActivityText)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: 0)
-        }
-    }
-
     private var feedBar: some View {
         Button {
             showFeedView = true
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: 5) {
                 Text("🍗")
-                    .font(.system(size: 20))
-                Text("Feed \(petVM.pet.name)")
+                    .font(.system(size: 15))
+                Text("Feed")
                     .font(.subheadline)
                     .fontWeight(.black)
                     .foregroundStyle(.pink)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.pink.opacity(0.6))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
             .background(.white.opacity(0.92))
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
     }
@@ -2058,16 +2084,16 @@ func actionCard(
     action: @escaping () -> Void
 ) -> some View {
     Button(action: action) {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 23, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(color)
-                    .frame(width: 54, height: 54)
+                    .frame(width: 46, height: 46)
                     .background(Circle().fill(color.opacity(0.16)))
                     .overlay(Circle().stroke(color.opacity(0.25), lineWidth: 1.5))
                 if showDot {
-                    Circle().fill(.red).frame(width: 13, height: 13)
+                    Circle().fill(.red).frame(width: 12, height: 12)
                         .overlay(Circle().stroke(.white, lineWidth: 2))
                         .offset(x: 3, y: -3)
                 }
@@ -2077,8 +2103,8 @@ func actionCard(
                 Text(subtitle).font(.caption2).fontWeight(.bold).foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 15)
-        .frame(maxWidth: .infinity, minHeight: 112)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 96)
         .background(RoundedRectangle(cornerRadius: 22).fill(.white.opacity(0.78)))
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(color.opacity(0.20), lineWidth: 1.5))
         .shadow(color: color.opacity(0.12), radius: 10, y: 6)
