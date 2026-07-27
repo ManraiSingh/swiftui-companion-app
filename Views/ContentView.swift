@@ -1044,7 +1044,7 @@ struct ContentView: View {
             HStack(alignment: .bottom, spacing: 14) {
 
                 moodTitleText
-                    .frame(maxWidth: 118, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: 130, maxHeight: .infinity, alignment: .leading)
 
                 speechBubble
                     .frame(maxWidth: .infinity, alignment: .bottom)
@@ -1065,7 +1065,7 @@ struct ContentView: View {
                     Image(currentEmotionImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(maxWidth: geo.size.width * 2 / 3, maxHeight: geo.size.height)
+                        .frame(maxWidth: geo.size.width * 2 / 3, maxHeight: geo.size.height, alignment: .bottom)
                         .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
                 }
             }
@@ -1092,14 +1092,20 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: 320)
     }
 
+    // Follows whatever image Ziggy is actually showing right now — an
+    // ephemeral emotion, a pending Instant, or the loveScore mood — rather
+    // than only reflecting the loveScore tier.
     private var moodWord: String {
-        switch petVM.pet.loveScore {
-        case 90...100: return "in love"
-        case 70..<90:  return "happy"
-        case 50..<70:  return "sleeping"
-        case 30..<50:  return "missing you"
-        case 15..<30:  return "annoyed"
-        default:       return "heartbroken"
+        switch currentEmotionImage {
+        case "ziggy_loveeyes":       return "in love"
+        case "ziggy_happie":         return "happy"
+        case "ziggy_sleep":          return "sleeping"
+        case "ziggu_cry":            return "sad"
+        case "ziggy_tears":          return "missing you"
+        case "ziggy_angrywithmark":  return "annoyed"
+        case "ziggy_fireangry":      return "heartbroken"
+        case "31":                   return "curious"
+        default:                     return "happy"
         }
     }
 
@@ -1115,6 +1121,8 @@ struct ContentView: View {
                 Text(moodWord)
                     .font(.system(size: 26, weight: .black))
                     .foregroundStyle(Color(red: 0.45, green: 0.32, blue: 0.78))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
             }
 
             Text(cuteActivityText)
