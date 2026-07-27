@@ -1044,13 +1044,13 @@ struct ContentView: View {
             HStack(alignment: .bottom, spacing: 14) {
 
                 moodTitleText
-                    .frame(maxWidth: 130, maxHeight: .infinity, alignment: .leading)
+                    .frame(maxWidth: 130, maxHeight: .infinity, alignment: .bottomLeading)
 
                 speechBubble
                     .frame(maxWidth: .infinity, alignment: .bottom)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 76)
+            .frame(height: 90)
             .padding(.top, 6)
             .padding(.horizontal, 20)
 
