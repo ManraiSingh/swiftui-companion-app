@@ -1041,7 +1041,7 @@ struct ContentView: View {
     // (with room to spare) so wider phones match everyone else instead of
     // overflowing into a scroll.
     private var mascotSize: CGFloat {
-        min(UIScreen.main.bounds.width * 0.41, 150)
+        min(UIScreen.main.bounds.width * 0.43, 158)
     }
 
     private var ziggyHero: some View {
@@ -1062,13 +1062,13 @@ struct ContentView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(height: 92)
-            .padding(.top, 4)
+            .padding(.top, 2)
             .padding(.horizontal, 16)
 
             // Feed and Ziggy share one row, side by side — Ziggy is a
             // guaranteed, screen-relative size (see `mascotSize` above)
             // instead of whatever's quietly left over.
-            HStack(alignment: .bottom, spacing: 22) {
+            HStack(alignment: .bottom, spacing: 34) {
                 feedBar
                     .frame(width: 104)
                     .padding(.bottom, 14)
@@ -1082,7 +1082,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 6)
+            .padding(.bottom, 4)
         }
         .background(
             RoundedRectangle(cornerRadius: 40)
@@ -1100,7 +1100,7 @@ struct ContentView: View {
         }
         // A hard cap so the card is the same size on every iPhone and
         // never pushes the rest of the page into needing to scroll.
-        .frame(maxWidth: .infinity, maxHeight: 260)
+        .frame(maxWidth: .infinity, maxHeight: 264)
     }
 
     // Follows whatever image Ziggy is actually showing right now — an
