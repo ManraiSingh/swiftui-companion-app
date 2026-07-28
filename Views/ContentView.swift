@@ -1034,13 +1034,24 @@ struct ContentView: View {
 
     // MARK: - Ziggy Hero
 
-    private var ziggyHero: some View {
-        VStack(spacing: 4) {
+    // A size taken straight from the actual screen width, not from however
+    // much leftover space the surrounding layout happens to hand over —
+    // that leftover-space approach kept quietly resolving small no matter
+    // how the numbers were adjusted. Capped well under the card's budget
+    // (with room to spare) so wider phones match everyone else instead of
+    // overflowing into a scroll.
+    private var mascotSize: CGFloat {
+        min(UIScreen.main.bounds.width * 0.41, 150)
+    }
 
-            // A fixed-height shelf: the title stays pinned to the top, and
-            // the message bubble is anchored to the bottom of this shelf —
-            // sitting a little lower — so a longer message grows upward
-            // into the shelf instead of pushing down into Ziggy's row.
+    private var ziggyHero: some View {
+        VStack(spacing: 3) {
+
+            // A fixed-height shelf: the title stays pinned to the top,
+            // and the message bubble is anchored to the bottom of this
+            // shelf — sitting a little lower — so a longer message
+            // grows upward into the shelf instead of pushing down into
+            // Ziggy's row.
             HStack(alignment: .bottom, spacing: 14) {
 
                 moodTitleText
@@ -1050,28 +1061,28 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .bottom)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 90)
-            .padding(.top, 6)
-            .padding(.horizontal, 20)
+            .frame(height: 92)
+            .padding(.top, 4)
+            .padding(.horizontal, 16)
 
-            // Feed and Ziggy share one flexible row, side by side — Ziggy
-            // fills the full height this row gets, and Feed sits low, at
-            // the bottom of that same row, near his feet.
-            GeometryReader { geo in
-                HStack(alignment: .bottom, spacing: 14) {
-                    feedBar
-                        .frame(width: geo.size.width / 3)
+            // Feed and Ziggy share one row, side by side — Ziggy is a
+            // guaranteed, screen-relative size (see `mascotSize` above)
+            // instead of whatever's quietly left over.
+            HStack(alignment: .bottom, spacing: 22) {
+                feedBar
+                    .frame(width: 104)
+                    .padding(.bottom, 14)
 
-                    Image(currentEmotionImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: geo.size.width * 2 / 3, maxHeight: geo.size.height, alignment: .bottom)
-                        .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
-                }
+                Image(currentEmotionImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: mascotSize, height: mascotSize, alignment: .bottom)
+                    .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
+
+                Spacer(minLength: 0)
             }
-            .frame(maxHeight: .infinity)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
         }
         .background(
             RoundedRectangle(cornerRadius: 40)
@@ -1087,9 +1098,9 @@ struct ContentView: View {
                 .foregroundStyle(.white.opacity(0.7))
                 .padding(22)
         }
-        // Flexes up to its full size on big iPhones and shrinks on smaller
-        // ones so the whole page always fits without scrolling.
-        .frame(maxWidth: .infinity, maxHeight: 320)
+        // A hard cap so the card is the same size on every iPhone and
+        // never pushes the rest of the page into needing to scroll.
+        .frame(maxWidth: .infinity, maxHeight: 260)
     }
 
     // Follows whatever image Ziggy is actually showing right now — an
@@ -2092,16 +2103,16 @@ func actionCard(
     action: @escaping () -> Void
 ) -> some View {
     Button(action: action) {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(color)
-                    .frame(width: 46, height: 46)
+                    .frame(width: 38, height: 38)
                     .background(Circle().fill(color.opacity(0.16)))
                     .overlay(Circle().stroke(color.opacity(0.25), lineWidth: 1.5))
                 if showDot {
-                    Circle().fill(.red).frame(width: 12, height: 12)
+                    Circle().fill(.red).frame(width: 11, height: 11)
                         .overlay(Circle().stroke(.white, lineWidth: 2))
                         .offset(x: 3, y: -3)
                 }
@@ -2111,8 +2122,8 @@ func actionCard(
                 Text(subtitle).font(.caption2).fontWeight(.bold).foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, minHeight: 96)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: 80)
         .background(RoundedRectangle(cornerRadius: 22).fill(.white.opacity(0.78)))
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(color.opacity(0.20), lineWidth: 1.5))
         .shadow(color: color.opacity(0.12), radius: 10, y: 6)
