@@ -1,6 +1,23 @@
 import SwiftUI
 import PencilKit
 
+// Position is normalized (0...1 in each axis) relative to the square
+// canvas, so it scales correctly however large the exported image ends up.
+private struct DoodleTextItem: Identifiable {
+    let id = UUID()
+    var text: String
+    var position: CGPoint
+    var color: Color
+    var fontSize: CGFloat = 32
+}
+
+private struct DoodleEmojiItem: Identifiable {
+    let id = UUID()
+    var emoji: String
+    var position: CGPoint
+    var fontSize: CGFloat = 48
+}
+
 struct DoodleView: View {
 
     @Environment(\.dismiss) private var dismiss
@@ -13,8 +30,24 @@ struct DoodleView: View {
     @State private var isSending = false
     @State private var showSentToast = false
 
+    @State private var textItems: [DoodleTextItem] = []
+    @State private var emojiItems: [DoodleEmojiItem] = []
+    @State private var showTextInput = false
+    @State private var pendingText = ""
+    @State private var showEmojiPicker = false
+
     @State private var partnerDoodle: UIImage?
     @State private var partnerDoodleSender = ""
+
+    private let emojiChoices = [
+        "😍", "😂", "🥰", "😘", "🤩", "😎",
+        "🥳", "😴", "🤔", "😢", "😡", "🥺",
+        "👍", "👎", "👏", "🙌", "🤗", "💕",
+        "❤️", "💖", "💗", "💛", "💜", "🧡",
+        "🔥", "✨", "🌟", "🎉", "🎈", "🍕",
+        "🍔", "🍩", "☕️", "🌈", "🐶", "🐱",
+        "🦄", "🌸", "🌻", "⭐️"
+    ]
 
     private let cream = LinearGradient(
         colors: [
@@ -92,6 +125,24 @@ struct DoodleView: View {
         .onDisappear {
             FirestoreManager.shared.stopDoodleListener()
         }
+        .alert("Add Text", isPresented: $showTextInput) {
+            TextField("Type something…", text: $pendingText)
+            Button("Add") {
+                let trimmed = pendingText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                textItems.append(
+                    DoodleTextItem(
+                        text: trimmed,
+                        position: CGPoint(x: 0.5, y: 0.5),
+                        color: selectedColor
+                    )
+                )
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showEmojiPicker) {
+            emojiPickerSheet
+        }
     }
 
     // MARK: - Header
@@ -158,16 +209,128 @@ struct DoodleView: View {
         // Square canvas — matches the Home Screen widget's shape (especially
         // the small widget, which is roughly square), so the exported doodle
         // needs no cropping to cover it.
-        DoodleCanvas(canvasView: canvasView)
-            .background(.white)
-            .aspectRatio(1, contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .overlay(
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(.white, lineWidth: 3)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
+        GeometryReader { geo in
+            ZStack {
+                DoodleCanvas(canvasView: canvasView)
+                    .background(.white)
+
+                ForEach(textItems) { item in
+                    textItemView(item)
+                        .position(
+                            x: item.position.x * geo.size.width,
+                            y: item.position.y * geo.size.height
+                        )
+                        .gesture(textDragGesture(for: item, in: geo.size))
+                }
+
+                ForEach(emojiItems) { item in
+                    emojiItemView(item)
+                        .position(
+                            x: item.position.x * geo.size.width,
+                            y: item.position.y * geo.size.height
+                        )
+                        .gesture(emojiDragGesture(for: item, in: geo.size))
+                }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(.white, lineWidth: 3)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
+    }
+
+    // MARK: - Text & emoji stickers
+
+    private func textItemView(_ item: DoodleTextItem) -> some View {
+        Text(item.text)
+            .font(.system(size: item.fontSize, weight: .bold))
+            .foregroundColor(item.color)
+            .fixedSize()
+            .overlay(alignment: .topTrailing) {
+                stickerDeleteBadge {
+                    textItems.removeAll { $0.id == item.id }
+                }
+            }
+    }
+
+    private func emojiItemView(_ item: DoodleEmojiItem) -> some View {
+        Text(item.emoji)
+            .font(.system(size: item.fontSize))
+            .fixedSize()
+            .overlay(alignment: .topTrailing) {
+                stickerDeleteBadge {
+                    emojiItems.removeAll { $0.id == item.id }
+                }
+            }
+    }
+
+    private func stickerDeleteBadge(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 18))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, .red)
+                .background(Circle().fill(.white))
+        }
+        .offset(x: 12, y: -12)
+    }
+
+    private func textDragGesture(for item: DoodleTextItem, in size: CGSize) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard let idx = textItems.firstIndex(where: { $0.id == item.id }) else { return }
+                textItems[idx].position = CGPoint(
+                    x: min(max(value.location.x / size.width, 0.05), 0.95),
+                    y: min(max(value.location.y / size.height, 0.05), 0.95)
+                )
+            }
+    }
+
+    private func emojiDragGesture(for item: DoodleEmojiItem, in size: CGSize) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard let idx = emojiItems.firstIndex(where: { $0.id == item.id }) else { return }
+                emojiItems[idx].position = CGPoint(
+                    x: min(max(value.location.x / size.width, 0.05), 0.95),
+                    y: min(max(value.location.y / size.height, 0.05), 0.95)
+                )
+            }
+    }
+
+    private var emojiPickerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible()), count: 6),
+                    spacing: 16
+                ) {
+                    ForEach(emojiChoices, id: \.self) { emoji in
+                        Button {
+                            emojiItems.append(
+                                DoodleEmojiItem(emoji: emoji, position: CGPoint(x: 0.5, y: 0.5))
+                            )
+                            showEmojiPicker = false
+                        } label: {
+                            Text(emoji).font(.system(size: 32))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Pick an emoji")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { showEmojiPicker = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     // MARK: - Toolbar
@@ -200,6 +363,21 @@ struct DoodleView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
+                    Button {
+                        pendingText = ""
+                        showTextInput = true
+                    } label: {
+                        toolChipLabel(icon: "character.cursor.ibeam", label: "Text")
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        showEmojiPicker = true
+                    } label: {
+                        toolChipLabel(icon: "face.smiling", label: "Emoji")
+                    }
+                    .buttonStyle(.plain)
+
                     ForEach(inkTypes, id: \.label) { item in
                         Button {
                             inkType = item.type
@@ -252,6 +430,8 @@ struct DoodleView: View {
                 }
                 toolButton(system: "trash", active: false, tint: .red) {
                     canvasView.drawing = PKDrawing()
+                    textItems.removeAll()
+                    emojiItems.removeAll()
                 }
             }
         }
@@ -273,6 +453,22 @@ struct DoodleView: View {
                 .background(active ? accent : Color.white.opacity(0.85))
                 .clipShape(Circle())
         }
+    }
+
+    private func toolChipLabel(icon: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+            Text(label)
+                .font(.system(size: 10, weight: .bold))
+        }
+        .foregroundColor(accent)
+        .frame(width: 68)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.85))
+        )
     }
 
     // MARK: - Send
@@ -348,7 +544,9 @@ struct DoodleView: View {
     }
 
     private func send() {
-        guard !canvasView.drawing.strokes.isEmpty else { return }
+        guard !canvasView.drawing.strokes.isEmpty || !textItems.isEmpty || !emojiItems.isEmpty else {
+            return
+        }
         isSending = true
 
         let exported = exportDrawing()
@@ -367,6 +565,8 @@ struct DoodleView: View {
                 isSending = false
                 guard error == nil else { return }
                 canvasView.drawing = PKDrawing()
+                textItems.removeAll()
+                emojiItems.removeAll()
                 withAnimation { showSentToast = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                     withAnimation { showSentToast = false }
@@ -390,6 +590,40 @@ struct DoodleView: View {
             UIColor.white.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
             drawingImage.draw(in: CGRect(origin: .zero, size: size))
+
+            // Stickers are stored as normalized (0...1) positions, so they
+            // scale correctly onto the export size regardless of how big
+            // the on-screen canvas actually was.
+            for item in textItems {
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.boldSystemFont(ofSize: item.fontSize),
+                    .foregroundColor: UIColor(item.color)
+                ]
+                let string = item.text as NSString
+                let stringSize = string.size(withAttributes: attrs)
+                string.draw(
+                    at: CGPoint(
+                        x: item.position.x * size.width - stringSize.width / 2,
+                        y: item.position.y * size.height - stringSize.height / 2
+                    ),
+                    withAttributes: attrs
+                )
+            }
+
+            for item in emojiItems {
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: item.fontSize)
+                ]
+                let string = item.emoji as NSString
+                let stringSize = string.size(withAttributes: attrs)
+                string.draw(
+                    at: CGPoint(
+                        x: item.position.x * size.width - stringSize.width / 2,
+                        y: item.position.y * size.height - stringSize.height / 2
+                    ),
+                    withAttributes: attrs
+                )
+            }
         }
     }
 
