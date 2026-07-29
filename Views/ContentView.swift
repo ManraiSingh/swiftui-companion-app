@@ -1061,8 +1061,8 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .bottom)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 92)
-            .padding(.top, 2)
+            .frame(height: 94)
+            .padding(.top, 1)
             .padding(.horizontal, 16)
 
             // Feed and Ziggy share one row, side by side — Ziggy is a
@@ -1082,7 +1082,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 4)
+            .padding(.bottom, 2)
         }
         .background(
             RoundedRectangle(cornerRadius: 40)
