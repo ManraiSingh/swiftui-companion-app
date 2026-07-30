@@ -47,11 +47,24 @@ class FirestoreManager {
         }
     }
 
+    // Every send/listen call gated through this, but the membership write
+    // is idempotent (arrayUnion of our own uid) — once it succeeds for the
+    // current code there's nothing more to do, so we skip the network
+    // round trip on every later call instead of doing it before every
+    // single message. That round trip, repeated on every tap, was the
+    // main source of the "laggy" feeling.
+    private var membershipEnsuredForCode: String?
+
     private func ensureRelationshipMembership(
         _ completion: @escaping (Bool) -> Void
     ) {
         guard !relationshipCode.isEmpty else {
             completion(false)
+            return
+        }
+
+        if membershipEnsuredForCode == relationshipCode {
+            completion(true)
             return
         }
 
@@ -67,6 +80,9 @@ class FirestoreManager {
                 .setData([
                     "members": FieldValue.arrayUnion([uid])
                 ], merge: true) { error in
+                    if error == nil {
+                        self.membershipEnsuredForCode = self.relationshipCode
+                    }
                     completion(error == nil)
                 }
         }
@@ -850,6 +866,8 @@ class FirestoreManager {
         }
     }
 
+    private var traceGameListener: ListenerRegistration?
+
     func listenForTraceGame(
         completion: @escaping ([String: Any]) -> Void
     ) {
@@ -858,7 +876,8 @@ class FirestoreManager {
             return
         }
 
-        db.collection("relationships")
+        traceGameListener?.remove()
+        traceGameListener = db.collection("relationships")
             .document(relationshipCode)
             .collection("games")
             .document("traceDrawing")
@@ -870,6 +889,11 @@ class FirestoreManager {
 
                 completion(snapshot?.data() ?? [:])
             }
+    }
+
+    func stopTraceGameListener() {
+        traceGameListener?.remove()
+        traceGameListener = nil
     }
 
     func markTraceGameComplete(
@@ -1150,6 +1174,8 @@ class FirestoreManager {
         } completion: { _, _ in }
     }
 
+    private var ticTacToeListener: ListenerRegistration?
+
     func listenForTicTacToeGame(
         completion: @escaping ([String: Any]) -> Void
     ) {
@@ -1158,7 +1184,8 @@ class FirestoreManager {
             return
         }
 
-        db.collection("relationships")
+        ticTacToeListener?.remove()
+        ticTacToeListener = db.collection("relationships")
             .document(relationshipCode)
             .collection("games")
             .document("ticTacToe")
@@ -1170,6 +1197,11 @@ class FirestoreManager {
 
                 completion(snapshot?.data() ?? [:])
             }
+    }
+
+    func stopTicTacToeListener() {
+        ticTacToeListener?.remove()
+        ticTacToeListener = nil
     }
 
     func makeTicTacToeMove(index: Int, mark: String) {
@@ -1517,6 +1549,8 @@ class FirestoreManager {
         } completion: { _, _ in }
     }
 
+    private var dotsAndBoxesListener: ListenerRegistration?
+
     func listenForDotsAndBoxesGame(
         completion: @escaping ([String: Any]) -> Void
     ) {
@@ -1525,7 +1559,8 @@ class FirestoreManager {
             return
         }
 
-        db.collection("relationships")
+        dotsAndBoxesListener?.remove()
+        dotsAndBoxesListener = db.collection("relationships")
             .document(relationshipCode)
             .collection("games")
             .document("dotsAndBoxes")
@@ -1537,6 +1572,11 @@ class FirestoreManager {
 
                 completion(snapshot?.data() ?? [:])
             }
+    }
+
+    func stopDotsAndBoxesListener() {
+        dotsAndBoxesListener?.remove()
+        dotsAndBoxesListener = nil
     }
 
     /// A completed box's four edges, expressed as (isVertical, lineIndex) pairs,
@@ -1897,6 +1937,8 @@ class FirestoreManager {
         } completion: { _, _ in }
     }
 
+    private var connectFourListener: ListenerRegistration?
+
     func listenForConnectFourGame(
         completion: @escaping ([String: Any]) -> Void
     ) {
@@ -1905,7 +1947,8 @@ class FirestoreManager {
             return
         }
 
-        db.collection("relationships")
+        connectFourListener?.remove()
+        connectFourListener = db.collection("relationships")
             .document(relationshipCode)
             .collection("games")
             .document("connectFour")
@@ -1917,6 +1960,11 @@ class FirestoreManager {
 
                 completion(snapshot?.data() ?? [:])
             }
+    }
+
+    func stopConnectFourListener() {
+        connectFourListener?.remove()
+        connectFourListener = nil
     }
 
     func makeConnectFourMove(col: Int, mark: String) {

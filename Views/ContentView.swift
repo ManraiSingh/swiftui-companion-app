@@ -733,6 +733,26 @@
 import SwiftUI
 import StoreKit
 
+// Sums the reported heights of every view marked `.reportHeight()` — lets
+// ziggyHero be sized as "exactly what's left over" from real measurements
+// instead of a guessed formula, so it's correct on any device.
+private struct CardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value += nextValue()
+    }
+}
+
+private extension View {
+    func reportHeight() -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: CardHeightKey.self, value: proxy.size.height)
+            }
+        )
+    }
+}
+
 struct ContentView: View {
     @AppStorage("ziggy_username")
     private var username = ""
@@ -763,7 +783,9 @@ struct ContentView: View {
     @State private var customQuickMessage = ""
     private let usageKey = "ziggy_quick_usage"
 
-    @FocusState private var noteFocused: Bool
+    @State private var showComposeBar = false
+    @State private var otherCardsHeight: CGFloat = 0
+    @FocusState private var composeFocused: Bool
 
     private let allQuickMessages: [QuickMessage] = [
         QuickMessage(id: "miss",    emoji: "🥺", label: "Miss You",   payload: "is missing you 🥺",        emotion: "miss"),
@@ -952,16 +974,59 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 13) {
-                compactHeader
-                ziggyHero
-                dailyQuestionCard
-                actionDock
-                messagePanel
+            // Reads the real available area on THIS device, and the real
+            // measured height of every other card, so ziggyHero can be
+            // given exactly the leftover space — not a guess, not a
+            // percentage — which is correct on any iPhone by construction.
+            GeometryReader { geo in
+
+                // 5 gaps between the 6 VStack children (header, hero, daily,
+                // dock, panel, spacer) plus the outer top/bottom padding.
+                let fixedChrome: CGFloat = 13 * 5 + 16
+                let heroHeight = min(
+                    max(geo.size.height - otherCardsHeight - fixedChrome, 220),
+                    340
+                )
+
+                VStack(spacing: 13) {
+                    compactHeader
+                        .reportHeight()
+                    ziggyHero(width: geo.size.width, heroHeight: heroHeight)
+                    dailyQuestionCard
+                        .reportHeight()
+                    actionDock(containerWidth: geo.size.width)
+                        .reportHeight()
+                    messagePanel
+                        .reportHeight()
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                // Pinned to the top instead of the default center — without
+                // this, any device where the cards don't exactly fill the
+                // screen (shorter-content or taller-screen phones) centers
+                // the whole block vertically, opening up a big empty gap
+                // above the header. The trailing Spacer soaks up whatever
+                // tiny bit is left after the exact-fit math above, instead
+                // of a guess-driven gap.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .onPreferenceChange(CardHeightKey.self) { otherCardsHeight = $0 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // While composing, tapping anywhere outside the floating bar
+            // just resigns focus — `onChange(of: composeFocused)` on the
+            // bar then closes it if there's nothing typed, instead of
+            // leaving an empty bar sitting there looking like a second
+            // input field.
+            if showComposeBar {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        composeFocused = false
+                    }
+            }
 
             if showEmotionPopup {
                 emotionPopup
@@ -985,6 +1050,16 @@ struct ContentView: View {
         .sheet(isPresented: $showAnswerSheet) {
             AnswerSheetView(dailyQ: dailyQ, petName: petVM.pet.name) {
                 showAnswerSheet = false
+            }
+        }
+        // A floating bar, not a sheet — it rides the keyboard's own safe
+        // area up automatically, so the input is always visible right
+        // above it with no modal to dismiss and no timing race with the
+        // emotion popup that comes after.
+        .safeAreaInset(edge: .bottom) {
+            if showComposeBar {
+                floatingComposeBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
     }
@@ -1034,18 +1109,30 @@ struct ContentView: View {
 
     // MARK: - Ziggy Hero
 
-    // A size taken straight from the actual screen width, not from however
-    // much leftover space the surrounding layout happens to hand over —
-    // that leftover-space approach kept quietly resolving small no matter
-    // how the numbers were adjusted. Capped well under the card's budget
-    // (with room to spare) so wider phones match everyone else instead of
-    // overflowing into a scroll.
-    private var mascotSize: CGFloat {
-        min(UIScreen.main.bounds.width * 0.43, 158)
-    }
+    // `heroHeight` is computed by the caller from the ACTUAL measured
+    // height of every other card on the page (see `otherCardsHeight` in
+    // homeView), not a percentage guess — a percentage of screen height
+    // looked right on one phone and left a gap on the next, because the
+    // other cards' heights don't scale with screen size the same way.
+    // This way Ziggy's card is always exactly "whatever's left over,"
+    // which is correct on any device by construction.
+    private func ziggyHero(width: CGFloat, heroHeight: CGFloat) -> some View {
 
-    private var ziggyHero: some View {
-        VStack(spacing: 3) {
+        // The shelf scales WITH heroHeight instead of staying a fixed 94pt —
+        // on a device where the real leftover space is generous, a fixed
+        // shelf stayed a tiny strip at the top of a much taller card,
+        // making the bottom-anchored title look stuck up high with a big
+        // empty-feeling gap below it before Feed/Ziggy. Scaling it keeps
+        // the title sitting proportionally low on every device.
+        let shelfHeight: CGFloat = min(max(heroHeight * 0.34, 80), 130)
+        let topPad: CGFloat = 1
+        let vstackSpacing: CGFloat = 3
+        let bottomPad: CGFloat = 2
+        let fixedOverhead = shelfHeight + topPad + vstackSpacing + bottomPad
+
+        let mascotSize = min(width * 0.43, heroHeight - fixedOverhead)
+
+        return VStack(spacing: vstackSpacing) {
 
             // A fixed-height shelf: the title stays pinned to the top,
             // and the message bubble is anchored to the bottom of this
@@ -1061,13 +1148,12 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .bottom)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 94)
-            .padding(.top, 1)
+            .frame(height: shelfHeight)
+            .padding(.top, topPad)
             .padding(.horizontal, 16)
 
-            // Feed and Ziggy share one row, side by side — Ziggy is a
-            // guaranteed, screen-relative size (see `mascotSize` above)
-            // instead of whatever's quietly left over.
+            // Feed and Ziggy share one row, side by side — Ziggy fills
+            // whatever this device's `heroCap` leaves after the shelf.
             HStack(alignment: .bottom, spacing: 34) {
                 feedBar
                     .frame(width: 104)
@@ -1082,7 +1168,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 2)
+            .padding(.bottom, bottomPad)
         }
         .background(
             RoundedRectangle(cornerRadius: 40)
@@ -1098,9 +1184,7 @@ struct ContentView: View {
                 .foregroundStyle(.white.opacity(0.7))
                 .padding(22)
         }
-        // A hard cap so the card is the same size on every iPhone and
-        // never pushes the rest of the page into needing to scroll.
-        .frame(maxWidth: .infinity, maxHeight: 264)
+        .frame(maxWidth: .infinity, maxHeight: heroHeight)
     }
 
     // Follows whatever image Ziggy is actually showing right now — an
@@ -1268,16 +1352,30 @@ struct ContentView: View {
 
     // MARK: - Action Dock
 
-    private var actionDock: some View {
-        HStack(spacing: 12) {
-            actionCard(systemImage: "paintbrush.pointed.fill", title: "Doodle", subtitle: "Draw", color: .purple) { showDoodleView = true }
-            actionCard(systemImage: "gamecontroller.fill", title: "Play",   subtitle: "Games", color: .green)  { showDrawingGameView = true }
+    // Icon/card size scales with the device's actual width so a wider phone
+    // gets proportionally bigger icons instead of the same fixed size
+    // looking small and cramped inside a wider card.
+    private func actionDock(containerWidth: CGFloat) -> some View {
+        let iconSize = min(max(containerWidth * 0.115, 38), 48)
+        let cardHeight = min(max(containerWidth * 0.235, 80), 100)
+
+        return HStack(spacing: 12) {
+            actionCard(
+                systemImage: "paintbrush.pointed.fill", title: "Doodle", subtitle: "Draw",
+                color: .purple, iconSize: iconSize, cardMinHeight: cardHeight
+            ) { showDoodleView = true }
+            actionCard(
+                systemImage: "gamecontroller.fill", title: "Play", subtitle: "Games",
+                color: .green, iconSize: iconSize, cardMinHeight: cardHeight
+            ) { showDrawingGameView = true }
             actionCard(
                 systemImage: "camera.fill",
                 title: "Instant",
                 subtitle: petVM.hasPendingInstant ? "New" : "Snap",
                 color: .pink,
-                showDot: petVM.hasPendingInstant
+                showDot: petVM.hasPendingInstant,
+                iconSize: iconSize,
+                cardMinHeight: cardHeight
             ) {
                 petVM.markInstantSeen()
                 showInstantView = true
@@ -1550,31 +1648,29 @@ struct ContentView: View {
         .transition(.opacity)
     }
 
+    // Tapping this opens `floatingComposeBar` right above the keyboard,
+    // instead of typing here directly — this row sits mid-page, and typing
+    // straight into it left no way to see the text once the keyboard
+    // covered it.
     private var customMessageComposer: some View {
-        HStack(spacing: 10) {
-            TextField("Write your own tiny note", text: $customQuickMessage)
-                .focused($noteFocused)
-                .textInputAutocapitalization(.sentences)
-                .submitLabel(.send)
-                .onSubmit {
-                    guard !customQuickMessage
-                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    else { return }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showEmotionPopup = true
-                    }
-                }
-                .font(.subheadline)
-                .padding(.horizontal, 14).padding(.vertical, 13)
-                .background(.white.opacity(0.9))
-                .clipShape(Capsule())
+        Button {
+            // Focus is set from the bar's own onAppear, not a guessed delay
+            // here — a fixed delay could fire before the bar has actually
+            // mounted, silently failing to raise the keyboard.
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showComposeBar = true
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Text(customQuickMessage.isEmpty ? "Write your own tiny note" : customQuickMessage)
+                    .font(.subheadline)
+                    .foregroundColor(customQuickMessage.isEmpty ? .secondary : .primary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 13)
+                    .background(.white.opacity(0.9))
+                    .clipShape(Capsule())
 
-            Button {
-                noteFocused = false
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showEmotionPopup = true
-                }
-            } label: {
                 Image(systemName: "paperplane.fill")
                     .font(.headline).foregroundColor(.white)
                     .frame(width: 46, height: 46)
@@ -1584,7 +1680,84 @@ struct ContentView: View {
                     )
                     .clipShape(Circle())
             }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // Pinned above the keyboard via `.safeAreaInset` on homeView — a real
+    // floating bar, not a sheet, so there's no modal to dismiss and no
+    // delay before the emotion popup that used to cause a second tap.
+    private var floatingComposeBar: some View {
+        HStack(spacing: 10) {
+            TextField("Write your own tiny note", text: $customQuickMessage)
+                .focused($composeFocused)
+                .textInputAutocapitalization(.sentences)
+                .submitLabel(.send)
+                .onSubmit { sendTappedFromComposer() }
+                .font(.subheadline)
+                .padding(.horizontal, 14).padding(.vertical, 13)
+                .background(.white)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.pink.opacity(0.25), lineWidth: 1))
+
+            Button {
+                sendTappedFromComposer()
+            } label: {
+                Image(systemName: "paperplane.fill")
+                    .font(.headline).foregroundColor(.white)
+                    .frame(width: 46, height: 46)
+                    .background(
+                        customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? AnyShapeStyle(Color.gray)
+                        : AnyShapeStyle(
+                            LinearGradient(
+                                colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                    )
+                    .clipShape(Circle())
+            }
             .disabled(customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        // Losing focus (tapped outside) with nothing typed closes the bar —
+        // otherwise it just sits there empty, looking like a stray second
+        // input field once the keyboard goes down.
+        .onChange(of: composeFocused) { _, isFocused in
+            guard !isFocused,
+                  customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showComposeBar = false
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                composeFocused = true
+            }
+        }
+    }
+
+    private func sendTappedFromComposer() {
+        // Resigning focus here (rather than only in the empty-guard below)
+        // means the keyboard's own Send key, when the field is empty, goes
+        // through the exact same "unfocus with nothing typed closes the
+        // bar" path as tapping outside — one rule, not two.
+        composeFocused = false
+
+        let trimmed = customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // Both changes in the same animation block — no artificial delay
+        // between them, which is what caused the "click again" bug (the
+        // bar was still mid-dismiss when the popup tried to appear).
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showComposeBar = false
+            showEmotionPopup = true
         }
     }
 
@@ -2100,15 +2273,17 @@ func actionCard(
     subtitle: String,
     color: Color,
     showDot: Bool = false,
+    iconSize: CGFloat = 38,
+    cardMinHeight: CGFloat = 80,
     action: @escaping () -> Void
 ) -> some View {
     Button(action: action) {
         VStack(spacing: 6) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: iconSize * 0.44, weight: .semibold))
                     .foregroundStyle(color)
-                    .frame(width: 38, height: 38)
+                    .frame(width: iconSize, height: iconSize)
                     .background(Circle().fill(color.opacity(0.16)))
                     .overlay(Circle().stroke(color.opacity(0.25), lineWidth: 1.5))
                 if showDot {
@@ -2123,7 +2298,7 @@ func actionCard(
             }
         }
         .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, minHeight: 80)
+        .frame(maxWidth: .infinity, minHeight: cardMinHeight)
         .background(RoundedRectangle(cornerRadius: 22).fill(.white.opacity(0.78)))
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(color.opacity(0.20), lineWidth: 1.5))
         .shadow(color: color.opacity(0.12), radius: 10, y: 6)

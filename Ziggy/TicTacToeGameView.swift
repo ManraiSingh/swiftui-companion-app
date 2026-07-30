@@ -102,6 +102,9 @@ struct TicTacToeGameView: View {
             joinGame()
             listenForGame()
         }
+        .onDisappear {
+            FirestoreManager.shared.stopTicTacToeListener()
+        }
     }
 
     // MARK: - Header

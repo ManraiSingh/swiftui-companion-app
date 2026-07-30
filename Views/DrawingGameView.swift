@@ -423,6 +423,9 @@ struct DrawingGameView: View {
             joinGame()
             listenForGame()
         }
+        .onDisappear {
+            FirestoreManager.shared.stopTraceGameListener()
+        }
     }
 
     private var header: some View {

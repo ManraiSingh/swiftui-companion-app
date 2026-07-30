@@ -170,6 +170,9 @@ struct DotsAndBoxesGameView: View {
             joinGame()
             listenForGame()
         }
+        .onDisappear {
+            FirestoreManager.shared.stopDotsAndBoxesListener()
+        }
     }
 
     // MARK: - Header

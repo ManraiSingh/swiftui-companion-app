@@ -127,6 +127,9 @@ struct ConnectFourGameView: View {
             joinGame()
             listenForGame()
         }
+        .onDisappear {
+            FirestoreManager.shared.stopConnectFourListener()
+        }
     }
 
     // MARK: - Header
