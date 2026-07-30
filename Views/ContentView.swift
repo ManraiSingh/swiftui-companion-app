@@ -1042,6 +1042,16 @@ struct ContentView: View {
                 connectedPopupView
                     .zIndex(12)
             }
+
+            if petVM.hasPendingDoodlePopup {
+                doodleReceivedPopup
+                    .zIndex(13)
+            }
+
+            if petVM.hasPendingInstantPopup {
+                instantReceivedPopup
+                    .zIndex(14)
+            }
         }
         .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM) }
         .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM) }
@@ -1637,6 +1647,153 @@ struct ContentView: View {
                             )
                         )
                         .clipShape(Capsule())
+                }
+            }
+            .padding(24)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            .padding(.horizontal, 28)
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+        }
+        .transition(.opacity)
+    }
+
+    // Shown once, on the Home screen, the moment a new doodle arrives —
+    // separate from the widget update and from the preview already shown
+    // inside Doodle itself.
+    private var doodleReceivedPopup: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { petVM.markDoodlePopupSeen() }
+
+            VStack(spacing: 14) {
+
+                Image("ziggy_loveeyes")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 100)
+
+                Text("New Doodle! 🎨")
+                    .font(.title2)
+                    .fontWeight(.black)
+                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+
+                Text("\(petVM.doodlePopupSender) drew you something")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+
+                HStack(spacing: 12) {
+
+                    Button {
+                        petVM.markDoodlePopupSeen()
+                    } label: {
+                        Text("Later")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(Color.white.opacity(0.85))
+                            .clipShape(Capsule())
+                    }
+
+                    Button {
+                        petVM.markDoodlePopupSeen()
+                        showDoodleView = true
+                    } label: {
+                        Text("View 🎨")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(
+                                LinearGradient(
+                                    colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            .padding(24)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 30))
+            .padding(.horizontal, 28)
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+        }
+        .transition(.opacity)
+    }
+
+    // Shown once, on the Home screen, the moment a new Instant arrives —
+    // the mascot expression / action-card badge (driven by
+    // `hasPendingInstant`) still persist separately until Instant is opened.
+    private var instantReceivedPopup: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { petVM.markInstantPopupSeen() }
+
+            VStack(spacing: 14) {
+
+                Image("ziggy_loveeyes")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 100)
+
+                Text("New Instant! 📸")
+                    .font(.title2)
+                    .fontWeight(.black)
+                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+
+                Text("\(petVM.instantPopupSender) sent you a photo")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+
+                HStack(spacing: 12) {
+
+                    Button {
+                        petVM.markInstantPopupSeen()
+                    } label: {
+                        Text("Later")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(Color.white.opacity(0.85))
+                            .clipShape(Capsule())
+                    }
+
+                    Button {
+                        petVM.markInstantPopupSeen()
+                        petVM.markInstantSeen()
+                        showInstantView = true
+                    } label: {
+                        Text("View 📸")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(
+                                LinearGradient(
+                                    colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .clipShape(Capsule())
+                    }
                 }
             }
             .padding(24)

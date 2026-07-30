@@ -378,11 +378,24 @@ class PetViewModel: ObservableObject {
     @Published var instantSender = ""
     @Published var isLoadingEvents = true
 
+    // One-shot "your partner just sent something" popups for the Home
+    // screen — separate from `hasPendingInstant` above (which drives the
+    // mascot expression / action-card badge and stays true until the
+    // Instant is actually opened) so dismissing a popup doesn't affect that
+    // longer-lived state, and so each popup only ever fires once per item.
+    @Published var hasPendingDoodlePopup = false
+    @Published var doodlePopupSender = ""
+    @Published var hasPendingInstantPopup = false
+    @Published var instantPopupSender = ""
+
     // Ephemeral message state
     @Published var ephemeralMessage: EphemeralMessage? = nil
 
     private var latestInstantTime: Date = .distantPast
     private let lastSeenInstantKey = "ziggy_last_seen_instant"
+    private let lastSeenInstantPopupKey = "ziggy_last_seen_instant_popup"
+    private var latestDoodleTime: Date = .distantPast
+    private let lastSeenDoodlePopupKey = "ziggy_last_seen_doodle_popup"
     private var ephemeralTimer: Timer?
     private var currentEmotionDocID: String = ""
     private var lastSeenEmotionDocID: String = ""
@@ -414,9 +427,12 @@ class PetViewModel: ObservableObject {
     }
 
     /// Keeps the Home Screen widget in sync with the partner's latest doodle
-    /// while the app is running (the Cloud Function push covers app-closed).
+    /// while the app is running (the Cloud Function push covers app-closed),
+    /// and surfaces a one-time "they sent a doodle" popup on the Home screen.
     private func listenForDoodleWidget() {
-        FirestoreManager.shared.observeDoodleForWidget { data in
+        FirestoreManager.shared.observeDoodleForWidget { [weak self] data in
+            guard let self = self else { return }
+
             // Compare device IDs, not display names — two partners can (and
             // did) pick the same name, which would make every doodle look
             // like "my own" and get silently skipped.
@@ -427,11 +443,35 @@ class PetViewModel: ObservableObject {
                 senderDeviceID != FirestoreManager.shared.currentDeviceID
             else { return }
 
+            let pinned = data?["pinned"] as? Bool ?? false
+
             WidgetDataManager.shared.cachePartnerDoodle(
                 base64: base64,
-                sender: sender
+                sender: sender,
+                pinned: pinned
             )
+
+            guard let ts = data?["sentAt"] as? Timestamp else { return }
+
+            DispatchQueue.main.async {
+                let date = ts.dateValue()
+                self.latestDoodleTime = date
+
+                let lastSeen = UserDefaults.standard.object(
+                    forKey: self.lastSeenDoodlePopupKey
+                ) as? Date ?? .distantPast
+
+                if date > lastSeen {
+                    self.doodlePopupSender = sender
+                    self.hasPendingDoodlePopup = true
+                }
+            }
         }
+    }
+
+    func markDoodlePopupSeen() {
+        UserDefaults.standard.set(latestDoodleTime, forKey: lastSeenDoodlePopupKey)
+        hasPendingDoodlePopup = false
     }
 
     func feed() {
@@ -761,8 +801,25 @@ class PetViewModel: ObservableObject {
                     } else {
                         self.hasPendingInstant = false
                     }
+
+                    // Separate one-shot popup tracking — independent of the
+                    // mascot/badge state above, so dismissing the popup
+                    // doesn't clear the "you have an unopened Instant" cue.
+                    let lastSeenPopup = UserDefaults.standard.object(
+                        forKey: self.lastSeenInstantPopupKey
+                    ) as? Date ?? .distantPast
+
+                    if date > lastSeenPopup {
+                        self.instantPopupSender = sender
+                        self.hasPendingInstantPopup = true
+                    }
                 }
             }
+    }
+
+    func markInstantPopupSeen() {
+        UserDefaults.standard.set(latestInstantTime, forKey: lastSeenInstantPopupKey)
+        hasPendingInstantPopup = false
     }
 
     /// Maps a sent emotion key to a Ziggy image the widget can render.

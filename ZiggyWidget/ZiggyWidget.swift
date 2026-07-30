@@ -77,10 +77,14 @@ struct Provider: AppIntentTimelineProvider {
             expiresAt > Date()
         else { return nil }
 
-        // Let a newer one-tap message / instant take priority over the doodle
-        // — but only if that message is still active. Otherwise a stale,
-        // already-expired message would permanently block every doodle.
-        if let msgTime = d?.object(forKey: "ziggy_widget_msg_time") as? Date,
+        let isPinned = d?.bool(forKey: "ziggy_widget_doodle_pinned") ?? false
+
+        // Let a newer one-tap message / instant take priority over the
+        // doodle — but only if that message is still active, and only if
+        // the doodle isn't pinned. A pinned doodle stays no matter what
+        // else happens, until a new doodle replaces it.
+        if !isPinned,
+           let msgTime = d?.object(forKey: "ziggy_widget_msg_time") as? Date,
            let msgExpiresAt = d?.object(
                 forKey: "ziggy_widget_msg_expires_at"
            ) as? Date,

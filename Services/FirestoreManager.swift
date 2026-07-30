@@ -2265,6 +2265,7 @@ class FirestoreManager {
     func sendDoodle(
         imageBase64: String,
         sender: String,
+        pinned: Bool = false,
         completion: @escaping (Error?) -> Void = { _ in }
     ) {
         guard !relationshipCode.isEmpty else {
@@ -2298,7 +2299,8 @@ class FirestoreManager {
                 "imageBase64": imageBase64,
                 "sender": sender,
                 "senderDeviceID": self.deviceID,
-                "sentAt": now
+                "sentAt": now,
+                "pinned": pinned
             ], forDocument: base.document("doodle"))
 
             // Tiny meta doc — the Cloud Function watches this to notify the partner.

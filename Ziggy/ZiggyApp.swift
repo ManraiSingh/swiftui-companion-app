@@ -75,9 +75,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             let sender = userInfo["sender"] as? String ?? "Your partner"
             FirestoreManager.shared.fetchLatestDoodle { data in
                 if let base64 = data?["imageBase64"] as? String {
+                    let pinned = data?["pinned"] as? Bool ?? false
                     WidgetDataManager.shared.cachePartnerDoodle(
                         base64: base64,
-                        sender: sender
+                        sender: sender,
+                        pinned: pinned
                     )
                 }
                 completionHandler(.newData)

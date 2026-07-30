@@ -29,6 +29,8 @@ struct DoodleView: View {
     @State private var inkType: PKInkingTool.InkType = .pen
     @State private var isSending = false
     @State private var showSentToast = false
+    @State private var showPinPrompt = false
+    @State private var showPartnerDoodlePopup = false
 
     @State private var textItems: [DoodleTextItem] = []
     @State private var emojiItems: [DoodleEmojiItem] = []
@@ -112,6 +114,14 @@ struct DoodleView: View {
 
             if showSentToast {
                 toast
+            }
+
+            if showPinPrompt {
+                pinPromptOverlay
+            }
+
+            if showPartnerDoodlePopup, let partnerDoodle {
+                partnerDoodlePopupOverlay(partnerDoodle)
             }
         }
         .onAppear {
@@ -201,6 +211,56 @@ struct DoodleView: View {
         .padding(12)
         .background(.white.opacity(0.7))
         .clipShape(RoundedRectangle(cornerRadius: 18))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            showPartnerDoodlePopup = true
+        }
+    }
+
+    private func partnerDoodlePopupOverlay(_ image: UIImage) -> some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { showPartnerDoodlePopup = false }
+
+            VStack(spacing: 16) {
+                Text("From \(partnerDoodleSender.isEmpty ? "your partner" : partnerDoodleSender)")
+                    .font(.headline).fontWeight(.black)
+                    .foregroundColor(accent)
+
+                Image(uiImage: image)
+                    .resizable().scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .background(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(.pink.opacity(0.2), lineWidth: 1)
+                    )
+
+                Button {
+                    showPartnerDoodlePopup = false
+                } label: {
+                    Text("Close")
+                        .font(.subheadline).fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(
+                            LinearGradient(
+                                colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(22)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 26))
+            .padding(.horizontal, 32)
+        }
+        .transition(.opacity)
     }
 
     // MARK: - Canvas
@@ -505,6 +565,57 @@ struct DoodleView: View {
             .clipShape(Capsule())
     }
 
+    // Asked right after tapping Send — short on purpose, not a sentence.
+    private var pinPromptOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { confirmSend(pinned: false) }
+
+            VStack(spacing: 16) {
+                Text("Pin to widget?")
+                    .font(.headline).fontWeight(.black)
+                    .foregroundColor(accent)
+
+                HStack(spacing: 12) {
+                    Button {
+                        confirmSend(pinned: false)
+                    } label: {
+                        Text("Let it update")
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(accent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(Color.white.opacity(0.9))
+                            .clipShape(Capsule())
+                    }
+
+                    Button {
+                        confirmSend(pinned: true)
+                    } label: {
+                        Text("Pin it 📌")
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(
+                                LinearGradient(
+                                    colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            .padding(22)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 26))
+            .padding(.horizontal, 32)
+        }
+        .transition(.opacity)
+    }
+
     // MARK: - Logic
 
     private func configureTool() {
@@ -534,7 +645,8 @@ struct DoodleView: View {
 
             // Push the doodle onto our widget too. This covers the app-open
             // case; the Cloud Function push covers the app-closed case.
-            WidgetDataManager.shared.cachePartnerDoodle(base64: base64, sender: sender)
+            let pinned = data?["pinned"] as? Bool ?? false
+            WidgetDataManager.shared.cachePartnerDoodle(base64: base64, sender: sender, pinned: pinned)
 
             DispatchQueue.main.async {
                 partnerDoodle = image
@@ -547,6 +659,11 @@ struct DoodleView: View {
         guard !canvasView.drawing.strokes.isEmpty || !textItems.isEmpty || !emojiItems.isEmpty else {
             return
         }
+        showPinPrompt = true
+    }
+
+    private func confirmSend(pinned: Bool) {
+        showPinPrompt = false
         isSending = true
 
         let exported = exportDrawing()
@@ -559,7 +676,8 @@ struct DoodleView: View {
 
         FirestoreManager.shared.sendDoodle(
             imageBase64: base64,
-            sender: username
+            sender: username,
+            pinned: pinned
         ) { error in
             DispatchQueue.main.async {
                 isSending = false

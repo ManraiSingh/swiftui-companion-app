@@ -62,7 +62,10 @@ class WidgetDataManager {
 
     /// Decodes a base64 doodle, downsizes it for the widget's memory budget,
     /// writes it to the shared container, and refreshes the widget.
-    func cachePartnerDoodle(base64: String, sender: String) {
+    /// `pinned` means: keep showing this doodle no matter what else happens
+    /// (feed, play, a note, an emotion) until a new doodle arrives or the
+    /// sender un-pins it on their next send.
+    func cachePartnerDoodle(base64: String, sender: String, pinned: Bool = false) {
         guard let raw = Data(base64Encoded: base64) else { return }
         guard let image = UIImage(data: raw) else { return }
         guard let url = WidgetDataManager.partnerDoodleURL() else { return }
@@ -76,11 +79,16 @@ class WidgetDataManager {
             return
         }
 
+        // A pinned doodle sticks around indefinitely (30 days, effectively
+        // "until replaced"); an unpinned one keeps the original 12h window.
+        let expiryInterval: TimeInterval = pinned ? (30 * 24 * 3600) : (12 * 3600)
+
         sharedDefaults?.set(png, forKey: "ziggy_widget_doodle_png")
         sharedDefaults?.set(sender, forKey: "ziggy_widget_doodle_sender")
         sharedDefaults?.set(Date(), forKey: "ziggy_widget_doodle_time")
+        sharedDefaults?.set(pinned, forKey: "ziggy_widget_doodle_pinned")
         sharedDefaults?.set(
-            Date().addingTimeInterval(12 * 3600),
+            Date().addingTimeInterval(expiryInterval),
             forKey: "ziggy_widget_doodle_expires_at"
         )
         WidgetCenter.shared.reloadAllTimelines()
@@ -101,6 +109,7 @@ class WidgetDataManager {
         sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_time")
         sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_expires_at")
         sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_png")
+        sharedDefaults?.removeObject(forKey: "ziggy_widget_doodle_pinned")
         WidgetCenter.shared.reloadAllTimelines()
     }
 

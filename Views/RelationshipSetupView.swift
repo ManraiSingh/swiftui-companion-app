@@ -140,6 +140,24 @@ struct RelationshipSetupView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
+
+                                Button {
+                                    completeInvite()
+                                } label: {
+                                    Text("Continue without sharing")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(accent)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 12)
+                                        .background(.white.opacity(0.6))
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(.pink.opacity(0.35), lineWidth: 1)
+                                        )
+                                }
+                                .padding(.top, 2)
                             }
                         } else {
 
