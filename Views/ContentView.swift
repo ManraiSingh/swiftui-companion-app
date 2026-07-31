@@ -760,6 +760,7 @@ struct ContentView: View {
     @StateObject private var dailyQ = DailyQuestionManager.shared
 
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.scenePhase) private var scenePhase
 
     @AppStorage("ziggy_has_asked_for_review")
     private var hasAskedForReview = false
@@ -770,6 +771,10 @@ struct ContentView: View {
     private var connectedPopupShownForCode = ""
 
     @State private var showConnectedPopup = false
+
+    @AppStorage("ziggy_widget_walkthrough_shown")
+    private var hasShownWidgetWalkthrough = false
+    @State private var showWidgetOnboarding = false
 
     @State private var showFeedView        = false
     @State private var showInstantView     = false
@@ -785,6 +790,7 @@ struct ContentView: View {
 
     @State private var showComposeBar = false
     @State private var otherCardsHeight: CGFloat = 0
+    @State private var composeKeyboardHeight: CGFloat = 0
     @FocusState private var composeFocused: Bool
 
     private let allQuickMessages: [QuickMessage] = [
@@ -859,6 +865,15 @@ struct ContentView: View {
             if !pendingInviteCode.isEmpty,
                !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 hasSeenWelcome = true
+            }
+        }
+        // Re-arms (or cancels) tonight's feed reminder every time the app
+        // is reopened, not just on a cold launch — otherwise a reminder
+        // scheduled this morning would outlive being fed later that day
+        // unless the app happened to relaunch from scratch.
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                petVM.refreshFeedReminder()
             }
         }
     }
@@ -1013,6 +1028,12 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .onPreferenceChange(CardHeightKey.self) { otherCardsHeight = $0 }
             }
+            // Without this, focusing the compose field's TextField made the
+            // keyboard shrink the safe area GeometryReader measures above —
+            // every card would visibly resize/reflow while typing. The
+            // floating bar below handles riding above the keyboard itself,
+            // so the home screen underneath never needs to react to it.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // While composing, tapping anywhere outside the floating bar
             // just resigns focus — `onChange(of: composeFocused)` on the
@@ -1052,24 +1073,45 @@ struct ContentView: View {
                 instantReceivedPopup
                     .zIndex(14)
             }
+
+            // A floating bar, not a sheet or a safeAreaInset — either of
+            // those would still shrink the home screen's own measured
+            // layout underneath. This just tracks the keyboard's real
+            // height itself and pads up to sit right above it, so the
+            // rest of the UI never has to resize to make room for it.
+            if showComposeBar {
+                VStack {
+                    Spacer()
+                    floatingComposeBar
+                        .padding(.bottom, max(composeKeyboardHeight, 8))
+                }
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(15)
+            }
         }
         .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM) }
         .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM) }
         .fullScreenCover(isPresented: $showDrawingGameView) { PlayCenterView(petVM: petVM) }
         .fullScreenCover(isPresented: $showDoodleView)       { DoodleView() }
+        .fullScreenCover(isPresented: $showWidgetOnboarding) {
+            WidgetOnboardingView { showWidgetOnboarding = false }
+        }
         .sheet(isPresented: $showAnswerSheet) {
             AnswerSheetView(dailyQ: dailyQ, petName: petVM.pet.name) {
                 showAnswerSheet = false
             }
         }
-        // A floating bar, not a sheet — it rides the keyboard's own safe
-        // area up automatically, so the input is always visible right
-        // above it with no modal to dismiss and no timing race with the
-        // emotion popup that comes after.
-        .safeAreaInset(edge: .bottom) {
-            if showComposeBar {
-                floatingComposeBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+            if let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    composeKeyboardHeight = frame.height
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.25)) {
+                composeKeyboardHeight = 0
             }
         }
     }
@@ -1151,14 +1193,17 @@ struct ContentView: View {
             // Ziggy's row.
             HStack(alignment: .bottom, spacing: 14) {
 
-                moodTitleText
-                    .frame(maxWidth: 130, maxHeight: .infinity, alignment: .bottomLeading)
+                // The title itself now floats independently at the card's
+                // middle-left (see the .overlay below) instead of living in
+                // this row — this spacer just holds the speech bubble's
+                // horizontal position exactly where it already was.
+                Color.clear.frame(width: 130)
 
                 speechBubble
                     .frame(maxWidth: .infinity, alignment: .bottom)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: shelfHeight)
+            .frame(height: shelfHeight, alignment: .bottom)
             .padding(.top, topPad)
             .padding(.horizontal, 16)
 
@@ -1172,7 +1217,8 @@ struct ContentView: View {
                 Image(currentEmotionImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: mascotSize, height: mascotSize, alignment: .bottom)
+                    .frame(width: mascotSize, alignment: .bottom)
+                    .frame(maxHeight: mascotSize, alignment: .bottom)
                     .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
 
                 Spacer(minLength: 0)
@@ -1194,7 +1240,23 @@ struct ContentView: View {
                 .foregroundStyle(.white.opacity(0.7))
                 .padding(22)
         }
-        .frame(maxWidth: .infinity, maxHeight: heroHeight)
+        // Sits at the card's true middle-left, independent of the shelf's
+        // own (much smaller) height — so "Waiting for someone…" lands
+        // roughly level with Feed/Ziggy instead of stuck up near the top.
+        .overlay(alignment: .leading) {
+            moodTitleText
+                .frame(maxWidth: 130, alignment: .leading)
+                .padding(.leading, 16)
+                .offset(y: -28)
+        }
+        // heroHeight is the leftover space after every OTHER card is
+        // measured — on devices where that leftover is more generous than
+        // the card's own natural content, centering (the frame default)
+        // left the whole shelf — and "Ziggy is happy" with it — floating
+        // too high, with a dead gap between it and the next card below.
+        // Bottom-anchoring pins the actual content to the bottom of that
+        // reserved space, so it fills the space that was going empty.
+        .frame(maxWidth: .infinity, maxHeight: heroHeight, alignment: .bottom)
     }
 
     // Follows whatever image Ziggy is actually showing right now — an
@@ -1633,6 +1695,12 @@ struct ContentView: View {
 
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) { showConnectedPopup = false }
+                    if !hasShownWidgetWalkthrough {
+                        hasShownWidgetWalkthrough = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            showWidgetOnboarding = true
+                        }
+                    }
                 } label: {
                     Text("Yay! 🎉")
                         .font(.headline)
@@ -1841,9 +1909,10 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
-    // Pinned above the keyboard via `.safeAreaInset` on homeView — a real
-    // floating bar, not a sheet, so there's no modal to dismiss and no
-    // delay before the emotion popup that used to cause a second tap.
+    // Pinned above the keyboard by `homeView`'s own keyboard-height
+    // tracking — a real floating bar, not a sheet, so there's no modal to
+    // dismiss and no delay before the emotion popup that used to cause a
+    // second tap.
     private var floatingComposeBar: some View {
         HStack(spacing: 10) {
             TextField("Write your own tiny note", text: $customQuickMessage)

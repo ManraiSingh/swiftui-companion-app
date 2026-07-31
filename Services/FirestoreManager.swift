@@ -1015,6 +1015,47 @@ class FirestoreManager {
             ], merge: true)
     }
 
+    // MARK: - Scoreboard (aggregate win counts across the competitive games)
+
+    private var scoresListener: ListenerRegistration?
+
+    private var scoresRef: DocumentReference {
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("data")
+            .document("scores")
+    }
+
+    // One doc: { "ticTacToe": {username: wins}, "connectFour": {...},
+    // "dotsAndBoxes": {...} }. Written from inside each game's own move
+    // transaction (see the three `make...Move` functions below) the instant
+    // a winner is decided, so it can never be double-counted by a later
+    // "claim reward" tap and never drifts from the actual game history.
+    func listenForScores(
+        completion: @escaping ([String: Any]?) -> Void
+    ) {
+        guard !relationshipCode.isEmpty else { return }
+        scoresListener?.remove()
+        scoresListener = scoresRef.addSnapshotListener { snapshot, _ in
+            completion(snapshot?.data())
+        }
+    }
+
+    func stopScoresListener() {
+        scoresListener?.remove()
+        scoresListener = nil
+    }
+
+    func resetAllScores(completion: @escaping (Error?) -> Void = { _ in }) {
+        guard !relationshipCode.isEmpty else {
+            completion(NSError(domain: "Ziggy", code: -1))
+            return
+        }
+        scoresRef.setData([:]) { error in
+            completion(error)
+        }
+    }
+
     // MARK: - Tic Tac Toe (mirrors Trace Together's lobby/ready pattern —
     // "leftPlayer"/"rightPlayer" map to "X"/"O" so the existing generic
     // game-invite Cloud Function picks it up with no backend changes.)
@@ -1244,6 +1285,17 @@ class FirestoreManager {
                 if let winner {
                     updates["status"] = "complete"
                     updates["winner"] = winner
+
+                    let leftPlayer = data["leftPlayer"] as? String ?? ""
+                    let rightPlayer = data["rightPlayer"] as? String ?? ""
+                    let winnerUsername = winner == "X" ? leftPlayer : rightPlayer
+                    if !winnerUsername.isEmpty {
+                        transaction.setData(
+                            ["ticTacToe": [winnerUsername: FieldValue.increment(Int64(1))]],
+                            forDocument: self.scoresRef,
+                            merge: true
+                        )
+                    }
                 } else if isDraw {
                     updates["status"] = "complete"
                     updates["winner"] = "draw"
@@ -1674,7 +1726,24 @@ class FirestoreManager {
                     let oCount = boxOwners.filter { $0 == "O" }.count
 
                     updates["status"] = "complete"
-                    updates["winner"] = xCount == oCount ? "draw" : (xCount > oCount ? "X" : "O")
+
+                    if xCount == oCount {
+                        updates["winner"] = "draw"
+                    } else {
+                        let winner = xCount > oCount ? "X" : "O"
+                        updates["winner"] = winner
+
+                        let leftPlayer = data["leftPlayer"] as? String ?? ""
+                        let rightPlayer = data["rightPlayer"] as? String ?? ""
+                        let winnerUsername = winner == "X" ? leftPlayer : rightPlayer
+                        if !winnerUsername.isEmpty {
+                            transaction.setData(
+                                ["dotsAndBoxes": [winnerUsername: FieldValue.increment(Int64(1))]],
+                                forDocument: self.scoresRef,
+                                merge: true
+                            )
+                        }
+                    }
                 }
 
                 transaction.setData(updates, forDocument: gameRef, merge: true)
@@ -2025,6 +2094,17 @@ class FirestoreManager {
                 if let winner {
                     updates["status"] = "complete"
                     updates["winner"] = winner
+
+                    let leftPlayer = data["leftPlayer"] as? String ?? ""
+                    let rightPlayer = data["rightPlayer"] as? String ?? ""
+                    let winnerUsername = winner == "R" ? leftPlayer : rightPlayer
+                    if !winnerUsername.isEmpty {
+                        transaction.setData(
+                            ["connectFour": [winnerUsername: FieldValue.increment(Int64(1))]],
+                            forDocument: self.scoresRef,
+                            merge: true
+                        )
+                    }
                 } else if isDraw {
                     updates["status"] = "complete"
                     updates["winner"] = "draw"

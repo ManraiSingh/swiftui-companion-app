@@ -35,6 +35,7 @@
 		B5AD65242FE2A8D0007BFF84 /* DrawingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65232FE2A8D0007BFF84 /* DrawingGameView.swift */; };
 		B5AD65462FE327CA007BFF84 /* InstantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65452FE327CA007BFF84 /* InstantView.swift */; };
 		B5AD65482FE6C890007BFF84 /* PlayCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */; };
+		94EBD62AF333450EA9E1756B /* WidgetOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3642E0048BB48889BE34378 /* WidgetOnboardingView.swift */; };
 		B5AD654A2FE6C891007BFF84 /* PizzaMakingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */; };
 		B5AD656A2FE5F5CB007BFF84 /*   DailyQuestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */; };
 		B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5FAE0A10000000000000A22 /* FirebaseAuth */; };
@@ -88,6 +89,7 @@
 		B5AD65232FE2A8D0007BFF84 /* DrawingGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingGameView.swift; sourceTree = "<group>"; };
 		B5AD65452FE327CA007BFF84 /* InstantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantView.swift; sourceTree = "<group>"; };
 		B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayCenterView.swift; sourceTree = "<group>"; };
+		E3642E0048BB48889BE34378 /* WidgetOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetOnboardingView.swift; sourceTree = "<group>"; };
 		B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PizzaMakingGameView.swift; sourceTree = "<group>"; };
 		B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "  DailyQuestionManager.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -198,6 +200,7 @@
 				B5AD65452FE327CA007BFF84 /* InstantView.swift */,
 				B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */,
 				B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */,
+				E3642E0048BB48889BE34378 /* WidgetOnboardingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -361,6 +364,7 @@
 				B5AD65482FE6C890007BFF84 /* PlayCenterView.swift in Sources */,
 				B5AD654A2FE6C891007BFF84 /* PizzaMakingGameView.swift in Sources */,
 				B5AD651E2FE0A3C5007BFF84 /* RelationshipManager.swift in Sources */,
+				94EBD62AF333450EA9E1756B /* WidgetOnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

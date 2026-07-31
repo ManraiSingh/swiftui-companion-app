@@ -8,10 +8,19 @@ struct PlayCenterView: View {
     @ObservedObject var petVM: PetViewModel
 
     @State private var showTraceGame = false
-    @State private var showDoodle = false
     @State private var showTicTacToe = false
     @State private var showDotsAndBoxes = false
     @State private var showConnectFour = false
+
+    @State private var scores: [String: Any] = [:]
+    @State private var showScoreboardPopup = false
+    @State private var showResetConfirm = false
+
+    private let competitiveGames: [(id: String, title: String, emoji: String)] = [
+        ("ticTacToe", "Tic Tac Toe", "X O"),
+        ("connectFour", "Connect 4", "🔴🟡"),
+        ("dotsAndBoxes", "Dots and Boxes", "🔲")
+    ]
 
     var body: some View {
 
@@ -56,6 +65,8 @@ struct PlayCenterView: View {
                 .background(.white.opacity(0.76))
                 .clipShape(RoundedRectangle(cornerRadius: 24))
 
+                scoreboardSummaryCard
+
                 VStack(spacing: 14) {
 
                     gameCard(
@@ -65,15 +76,6 @@ struct PlayCenterView: View {
                         tint: .purple
                     ) {
                         showTraceGame = true
-                    }
-
-                    gameCard(
-                        emoji: "🎨",
-                        title: "Doodle",
-                        subtitle: "Draw something cute — it appears on their Home Screen widget.",
-                        tint: .pink
-                    ) {
-                        showDoodle = true
                     }
 
                     gameCard(
@@ -107,6 +109,29 @@ struct PlayCenterView: View {
                 Spacer()
             }
             .padding()
+
+            if showScoreboardPopup {
+                scoreboardPopup
+                    .zIndex(1)
+            }
+        }
+        .onAppear {
+            FirestoreManager.shared.listenForScores { data in
+                DispatchQueue.main.async {
+                    scores = data ?? [:]
+                }
+            }
+        }
+        .onDisappear {
+            FirestoreManager.shared.stopScoresListener()
+        }
+        .alert("Reset scores?", isPresented: $showResetConfirm) {
+            Button("Reset", role: .destructive) {
+                FirestoreManager.shared.resetAllScores()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This clears every game's win count for both of you. It can't be undone.")
         }
         .fullScreenCover(
             isPresented: $showTraceGame
@@ -115,12 +140,6 @@ struct PlayCenterView: View {
             DrawingGameView(
                 petVM: petVM
             )
-        }
-        .fullScreenCover(
-            isPresented: $showDoodle
-        ) {
-
-            DoodleView()
         }
         .fullScreenCover(
             isPresented: $showTicTacToe
@@ -260,6 +279,175 @@ struct PlayCenterView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Scoreboard
+
+    private var myUsername: String { UserManager.shared.username }
+
+    private func wins(_ gameID: String, _ username: String) -> Int {
+        (scores[gameID] as? [String: Any])?[username] as? Int ?? 0
+    }
+
+    private func partnerWins(_ gameID: String) -> Int {
+        guard let map = scores[gameID] as? [String: Any] else { return 0 }
+        return map.reduce(0) { total, entry in
+            entry.key == myUsername ? total : total + ((entry.value as? Int) ?? 0)
+        }
+    }
+
+    // The other name that shows up in any game's score map, if one exists
+    // yet — falls back to a generic label before anyone's won a round.
+    private var partnerDisplayName: String {
+        for game in competitiveGames {
+            if let map = scores[game.id] as? [String: Any],
+               let name = map.keys.first(where: { $0 != myUsername }) {
+                return name
+            }
+        }
+        return "Partner"
+    }
+
+    private var myTotalWins: Int {
+        competitiveGames.reduce(0) { $0 + wins($1.id, myUsername) }
+    }
+
+    private var partnerTotalWins: Int {
+        competitiveGames.reduce(0) { $0 + partnerWins($1.id) }
+    }
+
+    private var scoreboardSummaryCard: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                showScoreboardPopup = true
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Text("🏆")
+                    .font(.system(size: 30))
+                    .frame(width: 52, height: 52)
+                    .background(Color.yellow.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Scoreboard")
+                        .font(.subheadline).fontWeight(.black)
+                        .foregroundStyle(.primary)
+                    Text("You \(myTotalWins) — \(partnerTotalWins) \(partnerDisplayName)")
+                        .font(.caption).fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+            }
+            .padding(14)
+            .background(.white.opacity(0.86))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.yellow.opacity(0.3), lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func scoreRow(_ game: (id: String, title: String, emoji: String)) -> some View {
+        let mine = wins(game.id, myUsername)
+        let theirs = partnerWins(game.id)
+
+        return HStack(spacing: 12) {
+            Text(game.emoji)
+                .font(.system(size: 20))
+                .frame(width: 40, height: 40)
+                .background(Color.black.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Text(game.title)
+                .font(.subheadline).fontWeight(.bold)
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            Text("\(mine)")
+                .font(.headline).fontWeight(.black)
+                .foregroundStyle(mine > theirs ? .pink : .secondary)
+
+            Text("–")
+                .foregroundStyle(.secondary)
+
+            Text("\(theirs)")
+                .font(.headline).fontWeight(.black)
+                .foregroundStyle(theirs > mine ? .pink : .secondary)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var scoreboardPopup: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation { showScoreboardPopup = false }
+                }
+
+            VStack(spacing: 18) {
+                Text("Scoreboard 🏆")
+                    .font(.title3).fontWeight(.black)
+
+                VStack(spacing: 4) {
+                    ForEach(competitiveGames, id: \.id) { game in
+                        scoreRow(game)
+                        if game.id != competitiveGames.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+                .padding(14)
+                .background(.white.opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+
+                HStack(spacing: 12) {
+                    Button {
+                        showResetConfirm = true
+                    } label: {
+                        Text("Reset Scores")
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(.white.opacity(0.9))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(Color.red.opacity(0.25), lineWidth: 1))
+                    }
+
+                    Button {
+                        withAnimation { showScoreboardPopup = false }
+                    } label: {
+                        Text("Close")
+                            .font(.subheadline).fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(
+                                LinearGradient(
+                                    colors: [.orange, .yellow],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            .padding(22)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 26))
+            .padding(.horizontal, 28)
+        }
+        .transition(.opacity)
     }
 }
 

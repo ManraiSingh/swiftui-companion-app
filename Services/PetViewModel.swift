@@ -405,6 +405,7 @@ class PetViewModel: ObservableObject {
         self.pet = PersistenceManager.shared.loadPet()
 
         updateOverTime()
+        refreshFeedReminder()
 
         startListening()
         listenForEmotions()
@@ -484,6 +485,10 @@ class PetViewModel: ObservableObject {
         pet.lastActionTime = Date()
         pet.lastUpdated = Date()
         addEvent(title: "Fed \(pet.name) 🍖", person: UserManager.shared.username)
+
+        // Cancel today's evening reminder immediately — no need to wait for
+        // the next app open to notice food was just given.
+        NotificationManager.shared.scheduleDailyFeedReminder(petName: pet.name, alreadyFedToday: true)
 
         // Send as activity type so partner sees neutral Ziggy message
         FirestoreManager.shared.sendEmotion(
@@ -864,7 +869,10 @@ class PetViewModel: ObservableObject {
 
         pet.hunger    = max(0, pet.hunger    - daysPassed * 8)
         pet.energy    = max(0, pet.energy    - daysPassed * 5)
-        pet.loveScore = max(0, pet.loveScore - daysPassed * 4)
+        // Was *4 — a full neglected day barely moved the needle (70 -> 66).
+        // *15 makes a day of silence actually show up, e.g. dropping a
+        // whole mood tier instead of nothing visibly happening.
+        pet.loveScore = max(0, pet.loveScore - daysPassed * 15)
 
         if pet.hunger < 20 {
             NotificationManager.shared.sendHungryNotification(petName: pet.name)
@@ -879,6 +887,21 @@ class PetViewModel: ObservableObject {
         // Advance by whole days so a partial-day remainder carries over.
         pet.lastUpdated = pet.lastUpdated.addingTimeInterval(Double(daysPassed) * 86_400)
         save()
+    }
+
+    /// (Re)arms — or cancels — tonight's "nobody's fed me yet" reminder.
+    /// Runs on launch and whenever the app comes back to the foreground, so
+    /// it always reflects the shared pet state, not just whatever this one
+    /// device did. Both partners run this same check independently, so
+    /// either one feeding cancels it for both.
+    func refreshFeedReminder() {
+        let fedToday = Calendar.current.isDateInToday(pet.lastActionTime)
+            && pet.lastAction.contains("Fed")
+
+        NotificationManager.shared.scheduleDailyFeedReminder(
+            petName: pet.name,
+            alreadyFedToday: fedToday
+        )
     }
 
     func addEvent(title: String, person: String) {
@@ -956,10 +979,17 @@ class PetViewModel: ObservableObject {
     /// What Ziggy says after an ephemeral message fades
     func ziggyEmotionAfterDismiss() -> String {
 
+        // Already fed today — don't turn around and ask for food again.
+        if Calendar.current.isDateInToday(pet.lastActionTime), pet.lastAction.contains("Fed") {
+            return "So full and happy 🥰"
+        }
+
         switch pet.loveScore {
         case 90...100: return "Can't stop smiling 🥰"
         case 70..<90:  return "That made me happy ✨"
-        case 50..<70:  return "Feed me? 🍖"
+        // This is the same range shown as "sleeping" (ziggy_sleep) —
+        // asking to be fed while asleep didn't make sense.
+        case 50..<70:  return "Sweet dreams 😴"
         case 30..<50:  return "Give me more attention 🥺"
         case 15..<30:  return "I need some love 😤"
         default:       return "Please don't forget me 💔"
