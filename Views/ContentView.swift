@@ -788,6 +788,24 @@ struct ContentView: View {
     @State private var customQuickMessage = ""
     private let usageKey = "ziggy_quick_usage"
 
+    // User-created one-tap pills, saved on this device.
+    @State private var customQuickMessages: [QuickMessage] = []
+    private let customQuickKey = "ziggy_custom_quick_messages"
+
+    @State private var showNewQuickPopup = false
+    @State private var newQuickText = ""
+    @State private var newQuickEmoji = "💌"
+    @FocusState private var newQuickFocused: Bool
+
+    // Short enough that the finished pill still fits the row comfortably.
+    private let quickMessageCharLimit = 24
+
+    private let newQuickEmojiChoices = [
+        "💌", "❤️", "🥰", "😘", "🫶", "✨",
+        "🥺", "😢", "😂", "🔥", "🌙", "☀️",
+        "🍕", "☕️", "🎶", "🐶"
+    ]
+
     @State private var showComposeBar = false
     @State private var otherCardsHeight: CGFloat = 0
     @State private var composeKeyboardHeight: CGFloat = 0
@@ -812,7 +830,10 @@ struct ContentView: View {
     private var pendingInviteCode = ""
 
     private var sortedQuickMessages: [QuickMessage] {
-        allQuickMessages
+        // Custom pills go into the same pool as the built-ins, so the
+        // existing "most-used floats to the front" ordering applies to
+        // both. Listing them first only breaks ties.
+        (customQuickMessages + allQuickMessages)
             .enumerated()
             .sorted { a, b in
                 let ua = messageUsage[a.element.id] ?? 0
@@ -850,6 +871,7 @@ struct ContentView: View {
                 }
                 .onAppear {
                     loadUsage()
+                    loadCustomQuickMessages()
                     dailyQ.startListening()
                     UserDefaults(suiteName: "group.com.manrai.ziggy")?
                         .set(Date(), forKey: "last_app_open_time")
@@ -1072,6 +1094,11 @@ struct ContentView: View {
             if petVM.hasPendingInstantPopup {
                 instantReceivedPopup
                     .zIndex(14)
+            }
+
+            if showNewQuickPopup {
+                newQuickPopup
+                    .zIndex(16)
             }
 
             // A floating bar, not a sheet or a safeAreaInset — either of
@@ -1495,8 +1522,22 @@ struct ContentView: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
+
+                    addQuickPill
+
                     ForEach(sortedQuickMessages) { msg in
-                        quickPill(msg) { sendQuick(msg) }
+                        if msg.isCustom {
+                            quickPill(msg) { sendQuick(msg) }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        deleteCustomQuickMessage(msg)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                        } else {
+                            quickPill(msg) { sendQuick(msg) }
+                        }
                     }
                 }
                 .padding(.vertical, 2)
@@ -1507,6 +1548,194 @@ struct ContentView: View {
         .background(.white.opacity(0.74))
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.05), radius: 10, y: 6)
+    }
+
+    private var addQuickPill: some View {
+        Button {
+            newQuickText = ""
+            newQuickEmoji = "💌"
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                showNewQuickPopup = true
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "plus")
+                    .font(.caption)
+                    .fontWeight(.black)
+                Text("New")
+                    .font(.caption)
+                    .fontWeight(.black)
+            }
+            .foregroundStyle(.pink)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(Capsule().fill(Color.pink.opacity(0.12)))
+            .overlay(
+                Capsule().strokeBorder(
+                    Color.pink.opacity(0.45),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // Compose a reusable one-tap pill. Rides above the keyboard using the
+    // same measured keyboard height the floating note bar uses, so the
+    // field it focuses is never hidden behind it.
+    private var newQuickPopup: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { dismissNewQuickPopup() }
+
+            VStack {
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 14) {
+
+                    Text("New one-tap message")
+                        .font(.headline)
+                        .fontWeight(.black)
+
+                    Text("Save it once, then send it with a single tap.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(newQuickEmojiChoices, id: \.self) { emoji in
+                                Button {
+                                    newQuickEmoji = emoji
+                                } label: {
+                                    Text(emoji)
+                                        .font(.title3)
+                                        .frame(width: 42, height: 42)
+                                        .background(
+                                            Circle().fill(
+                                                newQuickEmoji == emoji
+                                                ? Color.pink.opacity(0.22)
+                                                : Color.black.opacity(0.05)
+                                            )
+                                        )
+                                        .overlay(
+                                            Circle().stroke(
+                                                newQuickEmoji == emoji
+                                                ? Color.pink.opacity(0.7)
+                                                : Color.clear,
+                                                lineWidth: 2
+                                            )
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 2)
+                    }
+
+                    HStack(spacing: 10) {
+                        Text(newQuickEmoji)
+                            .font(.headline)
+
+                        TextField("Miss you already…", text: $newQuickText)
+                            .focused($newQuickFocused)
+                            .textInputAutocapitalization(.sentences)
+                            .submitLabel(.done)
+                            .onSubmit { saveNewQuickMessage() }
+                            .font(.subheadline)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.pink.opacity(0.25), lineWidth: 1)
+                    )
+                    // Hard-stops typing at the limit rather than letting it
+                    // overrun and truncating on save, so what you see in the
+                    // field is exactly what the pill will say.
+                    .onChange(of: newQuickText) { _, value in
+                        if value.count > quickMessageCharLimit {
+                            newQuickText = String(value.prefix(quickMessageCharLimit))
+                        }
+                    }
+
+                    HStack {
+                        Spacer()
+                        Text("\(newQuickText.count)/\(quickMessageCharLimit)")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(
+                                newQuickText.count >= quickMessageCharLimit
+                                ? .pink
+                                : .secondary
+                            )
+                    }
+
+                    HStack(spacing: 12) {
+
+                        Button {
+                            dismissNewQuickPopup()
+                        } label: {
+                            Text("Cancel")
+                                .font(.subheadline).fontWeight(.bold)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 13)
+                                .background(Color.white.opacity(0.9))
+                                .clipShape(Capsule())
+                        }
+
+                        Button {
+                            saveNewQuickMessage()
+                        } label: {
+                            Text("Save")
+                                .font(.subheadline).fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 13)
+                                .background(
+                                    newQuickTextIsEmpty
+                                    ? AnyShapeStyle(Color.gray.opacity(0.5))
+                                    : AnyShapeStyle(
+                                        LinearGradient(
+                                            colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                            startPoint: .leading, endPoint: .trailing
+                                        )
+                                    )
+                                )
+                                .clipShape(Capsule())
+                        }
+                        .disabled(newQuickTextIsEmpty)
+                    }
+                }
+                .padding(20)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 26))
+                .padding(.horizontal, 24)
+
+                Spacer(minLength: 0)
+            }
+            // Shrinks the area the card centres itself in by exactly the
+            // keyboard's height, lifting the whole card clear of it.
+            .padding(.bottom, composeKeyboardHeight)
+        }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .transition(.opacity)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                newQuickFocused = true
+            }
+        }
+    }
+
+    private var newQuickTextIsEmpty: Bool {
+        newQuickText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // Cute popup to pick Ziggy's emotion when sending a custom note
@@ -2054,6 +2283,59 @@ struct ContentView: View {
         }
     }
 
+    private func saveNewQuickMessage() {
+
+        let trimmed = newQuickText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let message = QuickMessage(
+            id: "custom_\(UUID().uuidString)",
+            emoji: newQuickEmoji,
+            label: trimmed,
+            // The "custom:" prefix is what the partner's app and the widget
+            // already use to render a free-written note, so these send and
+            // display exactly like the one-off custom notes do.
+            payload: "custom:\(trimmed)",
+            emotion: "love",
+            isCustom: true
+        )
+
+        customQuickMessages.insert(message, at: 0)
+        saveCustomQuickMessages()
+
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        dismissNewQuickPopup()
+    }
+
+    private func dismissNewQuickPopup() {
+        newQuickFocused = false
+        withAnimation(.easeOut(duration: 0.2)) {
+            showNewQuickPopup = false
+        }
+    }
+
+    private func deleteCustomQuickMessage(_ msg: QuickMessage) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            customQuickMessages.removeAll { $0.id == msg.id }
+        }
+        messageUsage[msg.id] = nil
+        saveCustomQuickMessages()
+        saveUsage()
+    }
+
+    private func loadCustomQuickMessages() {
+        if let data = UserDefaults.standard.data(forKey: customQuickKey),
+           let list = try? JSONDecoder().decode([QuickMessage].self, from: data) {
+            customQuickMessages = list
+        }
+    }
+
+    private func saveCustomQuickMessages() {
+        if let data = try? JSONEncoder().encode(customQuickMessages) {
+            UserDefaults.standard.set(data, forKey: customQuickKey)
+        }
+    }
+
     private func loadUsage() {
         if let data = UserDefaults.standard.data(forKey: usageKey),
            let dict = try? JSONDecoder().decode([String: Int].self, from: data) {
@@ -2477,12 +2759,15 @@ struct ConfettiHeartsView: View {
 
 // MARK: - Supporting Types
 
-struct QuickMessage: Identifiable {
+struct QuickMessage: Identifiable, Codable {
     let id: String
     let emoji: String
     let label: String
     let payload: String
     var emotion: String = "love"
+    // User-written pills are stored in UserDefaults and can be deleted;
+    // the built-in ones can't.
+    var isCustom: Bool = false
 }
 
 // MARK: - Ziggy emotions you can send
