@@ -1277,24 +1277,32 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("\(petVM.pet.name) is")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(isDarkHeroBackground ? .white : .black)
                 Text(moodWord)
                     .font(.system(size: 32, weight: .black))
-                    .foregroundStyle(Color(red: 0.82, green: 0.12, blue: 0.14))
+                    .foregroundStyle(
+                        isDarkHeroBackground
+                        ? Color(red: 1.0, green: 0.42, blue: 0.42)
+                        : Color(red: 0.82, green: 0.12, blue: 0.14)
+                    )
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
             }
 
             Text(cuteActivityText)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.black)
+                .foregroundStyle(isDarkHeroBackground ? .white : .black)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        // Black for the name/activity lines, a rich red for the mood word
-        // itself — a white halo keeps both legible against
-        // the darker parts of the night scene, which plain black/brown
-        // would otherwise vanish into.
-        .shadow(color: .white.opacity(0.75), radius: 4, y: 0)
+        // Over the sunlit afternoon room: black text and a deep red mood
+        // word, lifted by a white halo. Over the dark night/rainy rooms
+        // that palette vanishes, so it flips to white text and a lighter
+        // coral red, with a dark shadow instead.
+        .shadow(
+            color: isDarkHeroBackground ? .black.opacity(0.55) : .white.opacity(0.75),
+            radius: isDarkHeroBackground ? 5 : 4,
+            y: isDarkHeroBackground ? 1 : 0
+        )
     }
 
     // Same cozy room, day and night — sleeping gets the night version,
@@ -1305,13 +1313,27 @@ struct ContentView: View {
     @ViewBuilder
     private var heroBackground: some View {
         GeometryReader { geo in
-            Image(currentEmotionImage == "ziggy_sleep" ? "nightbackground" : "Afternoon")
+            Image(heroBackgroundName)
                 .resizable()
                 .scaledToFill()
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
         }
         .clipShape(RoundedRectangle(cornerRadius: 40))
+    }
+
+    private var heroBackgroundName: String {
+        switch currentEmotionImage {
+        case "ziggy_sleep": return "nightbackground"
+        case "ziggu_cry":   return "cry"
+        default:            return "Afternoon"
+        }
+    }
+
+    /// The rainy and night rooms are both dark enough that the black text
+    /// used over the sunlit afternoon room disappears into them.
+    private var isDarkHeroBackground: Bool {
+        heroBackgroundName != "Afternoon"
     }
 
     private var speechBubble: some View {

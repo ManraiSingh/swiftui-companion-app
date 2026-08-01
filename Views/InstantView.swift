@@ -170,9 +170,12 @@ struct InstantView: View {
 
     private var partnerInstantView: some View {
 
-        VStack(spacing: 18) {
+        VStack(spacing: 12) {
 
-            Spacer()
+            // A single flexible gap above and below the photo+label block
+            // keeps them together and centred, instead of a Spacer between
+            // them shoving the label down to the bottom of the screen.
+            Spacer(minLength: 0)
 
             if let img = partnerImage {
 
@@ -183,6 +186,7 @@ struct InstantView: View {
                     interactive: false
                 )
                 .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
+                .padding(.horizontal, 16)
             }
 
             if let sender {
@@ -191,7 +195,7 @@ struct InstantView: View {
                     .foregroundColor(.secondary)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             primaryButton(
                 title: "Reply",
@@ -203,17 +207,18 @@ struct InstantView: View {
                 }
             }
             .padding(.horizontal)
-            .padding(.bottom, 24)
         }
+        .padding(.top, 4)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Waiting View
 
     private var waitingView: some View {
 
-        VStack(spacing: 18) {
+        VStack(spacing: 12) {
 
-            Spacer()
+            Spacer(minLength: 0)
 
             if let img = partnerImage {
 
@@ -221,14 +226,14 @@ struct InstantView: View {
                     image: img,
                     caption: instantCaption ?? "",
                     captionPos: instantCaptionPos,
-                    interactive: false,
-                    maxWidth: 240
+                    interactive: false
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 26)
                         .fill(Color.black.opacity(0.04))
                 )
                 .shadow(color: .black.opacity(0.1), radius: 16, y: 6)
+                .padding(.horizontal, 16)
             }
 
             HStack(spacing: 6) {
@@ -239,7 +244,7 @@ struct InstantView: View {
             }
             .font(.subheadline)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             secondaryButton(
                 title: "Send another",
@@ -251,8 +256,9 @@ struct InstantView: View {
                 }
             }
             .padding(.horizontal)
-            .padding(.bottom, 24)
         }
+        .padding(.top, 4)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Send View
@@ -261,7 +267,7 @@ struct InstantView: View {
 
         ScrollView {
 
-            VStack(spacing: 18) {
+            VStack(spacing: 14) {
 
                 if let image = selectedImage {
 
@@ -272,13 +278,17 @@ struct InstantView: View {
                         interactive: true
                     )
                     .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
-                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
 
                 } else {
 
+                    // An aspect ratio rather than a fixed 340pt height, so
+                    // the drop zone scales with the device's width instead
+                    // of leaving a gap on big phones / crowding small ones.
                     RoundedRectangle(cornerRadius: 26)
                         .fill(.white.opacity(0.7))
-                        .frame(height: 340)
+                        .aspectRatio(4.0 / 5.0, contentMode: .fit)
                         .overlay {
 
                             Image(systemName: "camera.viewfinder")
@@ -286,8 +296,7 @@ struct InstantView: View {
                                 .foregroundColor(accent.opacity(0.35))
                         }
                         .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
-                        .padding(.horizontal)
-                        .padding(.top, 10)
+                        .padding(.horizontal, 16)
                 }
 
                 HStack(spacing: 12) {
@@ -345,10 +354,9 @@ struct InstantView: View {
                 }
                 .disabled(selectedImage == nil || isSending)
                 .padding(.horizontal)
-                .padding(.top, 4)
-
-                Spacer(minLength: 30)
             }
+            .padding(.top, 6)
+            .padding(.bottom, 20)
         }
     }
 
@@ -399,15 +407,16 @@ struct InstantView: View {
         caption: String,
         captionPos: CGPoint,
         interactive: Bool,
-        maxWidth: CGFloat = 320
+        maxWidth: CGFloat = .infinity
     ) -> some View {
 
-        let aspect = image.size.width / max(image.size.height, 1)
-
+        // scaledToFit alone preserves the photo's aspect ratio, so the
+        // caller can hand this whatever space is going spare and the
+        // photo grows to fill it instead of sitting at a fixed size with
+        // dead margins around it.
         Image(uiImage: image)
             .resizable()
             .scaledToFit()
-            .aspectRatio(aspect, contentMode: .fit)
             .frame(maxWidth: maxWidth)
             .clipShape(RoundedRectangle(cornerRadius: 26))
             .overlay {

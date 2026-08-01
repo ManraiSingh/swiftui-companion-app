@@ -2747,7 +2747,13 @@ class FirestoreManager {
     func listenForInstantView(
         completion: @escaping ([String: Any]?) -> Void
     ) {
-        guard !relationshipCode.isEmpty else { return }
+        // Report "nothing here" rather than returning silently — the caller
+        // sits on a loading spinner until this fires, so bailing without it
+        // left Instant stuck on a blank spinner forever.
+        guard !relationshipCode.isEmpty else {
+            completion(nil)
+            return
+        }
         instantViewListener?.remove()
         instantViewListener = db.collection("relationships")
             .document(relationshipCode)
