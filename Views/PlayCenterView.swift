@@ -11,6 +11,7 @@ struct PlayCenterView: View {
     @State private var showTicTacToe = false
     @State private var showDotsAndBoxes = false
     @State private var showConnectFour = false
+    @State private var showMemoryMatch = false
 
     @State private var scores: [String: Any] = [:]
     @State private var showScoreboardPopup = false
@@ -19,7 +20,8 @@ struct PlayCenterView: View {
     private let competitiveGames: [(id: String, title: String, emoji: String)] = [
         ("ticTacToe", "Tic Tac Toe", "X O"),
         ("connectFour", "Connect 4", "🔴🟡"),
-        ("dotsAndBoxes", "Dots and Boxes", "🔲")
+        ("dotsAndBoxes", "Dots and Boxes", "🔲"),
+        ("memoryMatch", "Memory Match", "🧠")
     ]
 
     var body: some View {
@@ -104,6 +106,15 @@ struct PlayCenterView: View {
                     ) {
                         connectFourIcon
                     }
+
+                    gameCard(
+                        emoji: "🧠",
+                        title: "Memory Match",
+                        subtitle: "Flip cards, find Ziggy's matching pairs — most pairs wins.",
+                        tint: .purple
+                    ) {
+                        showMemoryMatch = true
+                    }
                 }
 
                 Spacer()
@@ -165,6 +176,14 @@ struct PlayCenterView: View {
                 petVM: petVM
             )
         }
+        .fullScreenCover(
+            isPresented: $showMemoryMatch
+        ) {
+
+            MemoryMatchGameView(
+                petVM: petVM
+            )
+        }
     }
 
     private var header: some View {
@@ -194,6 +213,7 @@ struct PlayCenterView: View {
                 .fill(.clear)
                 .frame(width: 42, height: 42)
         }
+        .padding(.top, 24)
     }
 
     private func gameCard(

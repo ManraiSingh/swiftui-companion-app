@@ -1226,14 +1226,7 @@ struct ContentView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, bottomPad)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 40)
-                .fill(LinearGradient(
-                    colors: moodSurfaceColors,
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ))
-        )
+        .background(heroBackground)
         .overlay(alignment: .topTrailing) {
             Image(systemName: "heart.fill")
                 .font(.system(size: 13))
@@ -1284,27 +1277,41 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("\(petVM.pet.name) is")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.black)
                 Text(moodWord)
-                    .font(.system(size: 26, weight: .black))
-                    .foregroundStyle(Color(red: 0.45, green: 0.32, blue: 0.78))
+                    .font(.system(size: 32, weight: .black))
+                    .foregroundStyle(Color(red: 0.82, green: 0.12, blue: 0.14))
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
             }
 
             Text(cuteActivityText)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.black)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // Black for the name/activity lines, a rich red for the mood word
+        // itself — a white halo keeps both legible against
+        // the darker parts of the night scene, which plain black/brown
+        // would otherwise vanish into.
+        .shadow(color: .white.opacity(0.75), radius: 4, y: 0)
     }
 
-    private var moodSurfaceColors: [Color] {
-        switch petVM.pet.loveScore {
-        case 80...100: return [Color(red: 1.0, green: 0.86, blue: 0.72), Color(red: 0.82, green: 0.95, blue: 0.87)]
-        case 50..<80:  return [Color(red: 0.83, green: 0.93, blue: 1.0), Color(red: 0.93, green: 0.90, blue: 1.0)]
-        default:       return [Color(red: 1.0, green: 0.83, blue: 0.78), Color(red: 0.87, green: 0.90, blue: 0.95)]
+    // Same cozy room, day and night — sleeping gets the night version,
+    // every other mood gets the sunny afternoon one, both replacing the
+    // plain gradient. scaledToFill + clipped inside a GeometryReader crops
+    // to whatever size the card renders at, so it looks right on every
+    // iPhone without needing a per-device fixed crop.
+    @ViewBuilder
+    private var heroBackground: some View {
+        GeometryReader { geo in
+            Image(currentEmotionImage == "ziggy_sleep" ? "nightbackground" : "Afternoon")
+                .resizable()
+                .scaledToFill()
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
         }
+        .clipShape(RoundedRectangle(cornerRadius: 40))
     }
 
     private var speechBubble: some View {

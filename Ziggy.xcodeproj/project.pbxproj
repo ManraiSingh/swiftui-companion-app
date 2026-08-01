@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		6F285DD6E8644AFE8CAF1B89 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 965D49BE67E748EB9AE57C8D /* FirebaseAnalytics */; };
+		94EBD62AF333450EA9E1756B /* WidgetOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3642E0048BB48889BE34378 /* WidgetOnboardingView.swift */; };
 		B51F06A02FAE888F009B8146 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B51F069F2FAE888F009B8146 /* ContentView.swift */; };
 		B51F06B32FAE8FF5009B8146 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51F06B22FAE8FF5009B8146 /* WidgetKit.framework */; };
 		B51F06B52FAE8FF5009B8146 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51F06B42FAE8FF5009B8146 /* SwiftUI.framework */; };
@@ -35,7 +36,6 @@
 		B5AD65242FE2A8D0007BFF84 /* DrawingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65232FE2A8D0007BFF84 /* DrawingGameView.swift */; };
 		B5AD65462FE327CA007BFF84 /* InstantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65452FE327CA007BFF84 /* InstantView.swift */; };
 		B5AD65482FE6C890007BFF84 /* PlayCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */; };
-		94EBD62AF333450EA9E1756B /* WidgetOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3642E0048BB48889BE34378 /* WidgetOnboardingView.swift */; };
 		B5AD654A2FE6C891007BFF84 /* PizzaMakingGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */; };
 		B5AD656A2FE5F5CB007BFF84 /*   DailyQuestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */; };
 		B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5FAE0A10000000000000A22 /* FirebaseAuth */; };
@@ -89,9 +89,9 @@
 		B5AD65232FE2A8D0007BFF84 /* DrawingGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingGameView.swift; sourceTree = "<group>"; };
 		B5AD65452FE327CA007BFF84 /* InstantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantView.swift; sourceTree = "<group>"; };
 		B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayCenterView.swift; sourceTree = "<group>"; };
-		E3642E0048BB48889BE34378 /* WidgetOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetOnboardingView.swift; sourceTree = "<group>"; };
 		B5AD65492FE6C891007BFF84 /* PizzaMakingGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PizzaMakingGameView.swift; sourceTree = "<group>"; };
 		B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "  DailyQuestionManager.swift"; sourceTree = "<group>"; };
+		E3642E0048BB48889BE34378 /* WidgetOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetOnboardingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -513,7 +513,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ziggy/Ziggy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 77U7WYYQ99;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -535,7 +535,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -559,7 +559,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Ziggy/Ziggy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 77U7WYYQ99;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -581,7 +581,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -606,7 +606,7 @@
 				CODE_SIGN_ENTITLEMENTS = ZiggyWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 77U7WYYQ99;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -622,7 +622,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy.ZiggyWidget;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.Manrai.Ziggy.ZiggyWidget123;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -650,7 +650,7 @@
 				CODE_SIGN_ENTITLEMENTS = ZiggyWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 77U7WYYQ99;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -666,7 +666,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.Manrai.Ziggy.ZiggyWidget;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.Manrai.Ziggy.ZiggyWidget123;
 				PRODUCT_NAME = "$(TARGET_NAME)";

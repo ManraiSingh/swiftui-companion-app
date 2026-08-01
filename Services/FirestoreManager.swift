@@ -2237,6 +2237,445 @@ class FirestoreManager {
             ], merge: true)
     }
 
+    // MARK: - Memory Match (mirrors Connect Four's lobby/ready pattern —
+    // "leftPlayer"/"rightPlayer" own "left"/"right" turns instead of a
+    // board mark, since there's no piece to place, just cards to flip.)
+
+    static let memoryMatchEmotions = [
+        "ziggy_happie",
+        "ziggy_loveeyes",
+        "ziggy_sleep",
+        "ziggy_tears",
+        "ziggy_angrywithmark",
+        "ziggy_angrywithhands",
+        "ziggy_fireangry",
+        "ziggu_cry"
+    ]
+    static let memoryMatchCardCount = memoryMatchEmotions.count * 2
+
+    func joinMemoryMatchGame(
+        username: String,
+        completion: @escaping (String?) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(nil)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("memoryMatch")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let status = data["status"] as? String ?? "lobby"
+
+                var updates: [String: Any] = ["updatedAt": Timestamp()]
+
+                if status == "complete" {
+                    updates["leftReady"] = false
+                    updates["rightReady"] = false
+                    updates["status"] = "lobby"
+                    updates["matchedIndices"] = []
+                    updates["revealedIndices"] = []
+                    updates["leftScore"] = 0
+                    updates["rightScore"] = 0
+                    updates["currentTurn"] = "left"
+                    updates["winner"] = ""
+                    updates["rewardClaimed"] = false
+                }
+
+                let assignedSide: String
+
+                if leftPlayer == username {
+                    assignedSide = "left"
+                } else if rightPlayer == username {
+                    assignedSide = "right"
+                } else if leftPlayer.isEmpty {
+                    assignedSide = "left"
+                    updates["leftPlayer"] = username
+                    updates["leftReady"] = false
+                } else if rightPlayer.isEmpty {
+                    assignedSide = "right"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                } else {
+                    assignedSide = "right"
+                    updates["rightPlayer"] = username
+                    updates["rightReady"] = false
+                }
+
+                if data["cards"] == nil && updates["cards"] == nil {
+                    updates["cards"] = (
+                        FirestoreManager.memoryMatchEmotions + FirestoreManager.memoryMatchEmotions
+                    ).shuffled()
+                }
+                if data["status"] == nil && updates["status"] == nil {
+                    updates["status"] = "lobby"
+                }
+                if data["currentTurn"] == nil && updates["currentTurn"] == nil {
+                    updates["currentTurn"] = "left"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return assignedSide
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { side, error in
+
+            completion(side as? String)
+        }
+    }
+
+    func setMemoryMatchReady(
+        side: String,
+        username: String,
+        isReady: Bool
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("memoryMatch")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                var data = snapshot.data() ?? [:]
+                let readyKey = side == "left" ? "leftReady" : "rightReady"
+
+                data[readyKey] = isReady
+
+                let leftReady = data["leftReady"] as? Bool ?? false
+                let rightReady = data["rightReady"] as? Bool ?? false
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+
+                var updates: [String: Any] = [
+                    readyKey: isReady,
+                    (side == "left" ? "leftPlayer" : "rightPlayer"): username,
+                    "updatedAt": Timestamp()
+                ]
+
+                if isReady,
+                   leftReady,
+                   rightReady,
+                   !leftPlayer.isEmpty,
+                   !rightPlayer.isEmpty {
+
+                    updates["status"] = "playing"
+                    updates["cards"] = (
+                        FirestoreManager.memoryMatchEmotions + FirestoreManager.memoryMatchEmotions
+                    ).shuffled()
+                    updates["matchedIndices"] = []
+                    updates["revealedIndices"] = []
+                    updates["leftScore"] = 0
+                    updates["rightScore"] = 0
+                    updates["currentTurn"] = "left"
+                    updates["winner"] = ""
+                    updates["startedAt"] = Timestamp()
+                } else if !isReady {
+
+                    updates["status"] = "lobby"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    private var memoryMatchListener: ListenerRegistration?
+
+    func listenForMemoryMatchGame(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        memoryMatchListener?.remove()
+        memoryMatchListener = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("memoryMatch")
+            .addSnapshotListener { snapshot, error in
+
+                if error != nil {
+                    return
+                }
+
+                completion(snapshot?.data() ?? [:])
+            }
+    }
+
+    func stopMemoryMatchListener() {
+        memoryMatchListener?.remove()
+        memoryMatchListener = nil
+    }
+
+    /// Flips one card per call. The first flip of a turn just reveals it and
+    /// waits; the second either locks in a match (score + same player goes
+    /// again) or leaves both cards showing as a mismatch — the turn passes
+    /// immediately, and the view calls `clearMemoryMismatch()` after a beat
+    /// so both partners get a moment to actually see what was flipped.
+    func flipMemoryCard(index: Int, side: String) {
+
+        guard !relationshipCode.isEmpty else { return }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("memoryMatch")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                guard
+                    data["status"] as? String == "playing",
+                    data["currentTurn"] as? String == side,
+                    let cards = data["cards"] as? [String],
+                    index >= 0, index < cards.count
+                else {
+                    return nil
+                }
+
+                let matchedIndices = data["matchedIndices"] as? [Int] ?? []
+                var revealedIndices = data["revealedIndices"] as? [Int] ?? []
+
+                guard
+                    !matchedIndices.contains(index),
+                    !revealedIndices.contains(index),
+                    revealedIndices.count < 2
+                else {
+                    return nil
+                }
+
+                revealedIndices.append(index)
+
+                var updates: [String: Any] = [
+                    "revealedIndices": revealedIndices,
+                    "updatedAt": Timestamp()
+                ]
+
+                // First flip of the turn — just reveal it and wait for the second.
+                guard revealedIndices.count == 2 else {
+                    transaction.setData(updates, forDocument: gameRef, merge: true)
+                    return nil
+                }
+
+                let first = revealedIndices[0]
+                let second = revealedIndices[1]
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+
+                if cards[first] == cards[second] {
+
+                    let newMatched = matchedIndices + [first, second]
+                    updates["matchedIndices"] = newMatched
+                    updates["revealedIndices"] = []
+
+                    let scoreKey = side == "left" ? "leftScore" : "rightScore"
+                    let currentScore = data[scoreKey] as? Int ?? 0
+                    updates[scoreKey] = currentScore + 1
+                    // Matching keeps the same player's turn going.
+
+                    if newMatched.count >= cards.count {
+
+                        let leftScore = (side == "left" ? currentScore + 1 : data["leftScore"] as? Int ?? 0)
+                        let rightScore = (side == "right" ? currentScore + 1 : data["rightScore"] as? Int ?? 0)
+
+                        updates["status"] = "complete"
+
+                        if leftScore == rightScore {
+                            updates["winner"] = "draw"
+                        } else {
+                            let winnerUsername = leftScore > rightScore ? leftPlayer : rightPlayer
+                            updates["winner"] = winnerUsername
+                            if !winnerUsername.isEmpty {
+                                transaction.setData(
+                                    ["memoryMatch": [winnerUsername: FieldValue.increment(Int64(1))]],
+                                    forDocument: self.scoresRef,
+                                    merge: true
+                                )
+                            }
+                        }
+                    }
+
+                } else {
+                    // Mismatch — both cards stay visible; the turn passes now,
+                    // clearMemoryMismatch() will hide them again shortly.
+                    updates["currentTurn"] = side == "left" ? "right" : "left"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    /// Hides a mismatched pair again. Guarded so it's a no-op if the pair
+    /// was already cleared (or turned out to be a match) by the time this
+    /// fires — both partners' clients call this independently after a delay.
+    func clearMemoryMismatch() {
+
+        guard !relationshipCode.isEmpty else { return }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("memoryMatch")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let revealedIndices = data["revealedIndices"] as? [Int] ?? []
+                guard
+                    revealedIndices.count == 2,
+                    let cards = data["cards"] as? [String],
+                    revealedIndices[0] < cards.count,
+                    revealedIndices[1] < cards.count,
+                    cards[revealedIndices[0]] != cards[revealedIndices[1]]
+                else {
+                    return nil
+                }
+
+                transaction.setData([
+                    "revealedIndices": [],
+                    "updatedAt": Timestamp()
+                ], forDocument: gameRef, merge: true)
+
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    func claimMemoryMatchReward(
+        completion: @escaping (Bool) -> Void
+    ) {
+
+        guard !relationshipCode.isEmpty else {
+            completion(false)
+            return
+        }
+
+        let gameRef = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("memoryMatch")
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let status = data["status"] as? String ?? ""
+                let rewardClaimed = data["rewardClaimed"] as? Bool ?? false
+
+                guard status == "complete", !rewardClaimed else {
+                    return false
+                }
+
+                transaction.setData([
+                    "rewardClaimed": true,
+                    "rewardClaimedAt": Timestamp(),
+                    "updatedAt": Timestamp()
+                ], forDocument: gameRef, merge: true)
+
+                return true
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return false
+            }
+
+        } completion: { didClaim, _ in
+
+            completion(didClaim as? Bool ?? false)
+        }
+    }
+
+    func resetMemoryMatchGame() {
+
+        guard !relationshipCode.isEmpty else {
+            return
+        }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("memoryMatch")
+            .setData([
+                "leftReady": false,
+                "rightReady": false,
+                "status": "lobby",
+                "cards": (
+                    FirestoreManager.memoryMatchEmotions + FirestoreManager.memoryMatchEmotions
+                ).shuffled(),
+                "matchedIndices": [],
+                "revealedIndices": [],
+                "leftScore": 0,
+                "rightScore": 0,
+                "currentTurn": "left",
+                "winner": "",
+                "rewardClaimed": false,
+                "updatedAt": Timestamp()
+            ], merge: true)
+    }
+
     func sendInstant(
         imageBase64: String,
         caption: String,
