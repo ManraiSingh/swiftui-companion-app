@@ -34,9 +34,17 @@ struct DoodleView: View {
 
     @State private var textItems: [DoodleTextItem] = []
     @State private var emojiItems: [DoodleEmojiItem] = []
-    @State private var showTextInput = false
-    @State private var pendingText = ""
     @State private var showEmojiPicker = false
+
+    // Which sticker the colour palette acts on, and which text item is
+    // currently being typed into directly on the canvas.
+    @State private var selectedItemID: UUID?
+    @State private var editingTextID: UUID?
+    @FocusState private var canvasTextFocused: Bool
+
+    // Font size a sticker had when the current pinch started, so scaling
+    // is applied to that rather than compounding every frame.
+    @State private var pinchBaseSize: CGFloat?
 
     @State private var partnerDoodle: UIImage?
     @State private var partnerDoodleSender = ""
@@ -134,21 +142,6 @@ struct DoodleView: View {
         .onChange(of: inkType) { configureTool() }
         .onDisappear {
             FirestoreManager.shared.stopDoodleListener()
-        }
-        .alert("Add Text", isPresented: $showTextInput) {
-            TextField("Type something…", text: $pendingText)
-            Button("Add") {
-                let trimmed = pendingText.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                textItems.append(
-                    DoodleTextItem(
-                        text: trimmed,
-                        position: CGPoint(x: 0.5, y: 0.5),
-                        color: selectedColor
-                    )
-                )
-            }
-            Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showEmojiPicker) {
             emojiPickerSheet
@@ -274,13 +267,16 @@ struct DoodleView: View {
                 DoodleCanvas(canvasView: canvasView)
                     .background(.white)
 
-                ForEach(textItems) { item in
-                    textItemView(item)
+                // Bound so the text of the item being edited can be typed
+                // straight into on the canvas, rather than through a popup.
+                ForEach($textItems) { $item in
+                    textItemView(item, text: $item.text)
                         .position(
                             x: item.position.x * geo.size.width,
                             y: item.position.y * geo.size.height
                         )
                         .gesture(textDragGesture(for: item, in: geo.size))
+                        .simultaneousGesture(textMagnifyGesture(for: item))
                 }
 
                 ForEach(emojiItems) { item in
@@ -290,6 +286,7 @@ struct DoodleView: View {
                             y: item.position.y * geo.size.height
                         )
                         .gesture(emojiDragGesture(for: item, in: geo.size))
+                        .simultaneousGesture(emojiMagnifyGesture(for: item))
                 }
             }
         }
@@ -305,27 +302,67 @@ struct DoodleView: View {
 
     // MARK: - Text & emoji stickers
 
-    private func textItemView(_ item: DoodleTextItem) -> some View {
-        Text(item.text)
-            .font(.system(size: item.fontSize, weight: .bold))
-            .foregroundColor(item.color)
-            .fixedSize()
-            .overlay(alignment: .topTrailing) {
-                stickerDeleteBadge {
-                    textItems.removeAll { $0.id == item.id }
+    @ViewBuilder
+    private func textItemView(
+        _ item: DoodleTextItem,
+        text: Binding<String>
+    ) -> some View {
+
+        if editingTextID == item.id {
+
+            // No box or border — the placeholder and caret are enough to
+            // show where you're typing, so what you see on the canvas is
+            // just the text itself.
+            TextField("Type…", text: text)
+                .font(.system(size: item.fontSize, weight: .bold))
+                .foregroundColor(item.color)
+                .multilineTextAlignment(.center)
+                .focused($canvasTextFocused)
+                .submitLabel(.done)
+                .onSubmit { finishEditingText() }
+                // Capped so a long entry doesn't stretch the field out past
+                // the canvas edges while you're typing.
+                .frame(minWidth: 140, maxWidth: 230)
+
+        } else {
+
+            Text(item.text)
+                .font(.system(size: item.fontSize, weight: .bold))
+                .foregroundColor(item.color)
+                .fixedSize()
+                .shadow(color: selectionGlow(item.id), radius: 7)
+                .overlay(alignment: .topTrailing) {
+                    stickerDeleteBadge {
+                        deleteItem(id: item.id)
+                    }
                 }
-            }
+                // Double-tap re-opens it for typing; a single tap picks it
+                // out so the toolbar's colours recolour it, and tapping it
+                // again lets go so the colours drive the pen once more.
+                .onTapGesture(count: 2) { beginEditingText(item.id) }
+                .onTapGesture { toggleSelection(item.id) }
+        }
     }
 
     private func emojiItemView(_ item: DoodleEmojiItem) -> some View {
         Text(item.emoji)
             .font(.system(size: item.fontSize))
             .fixedSize()
+            .shadow(color: selectionGlow(item.id), radius: 7)
             .overlay(alignment: .topTrailing) {
                 stickerDeleteBadge {
-                    emojiItems.removeAll { $0.id == item.id }
+                    deleteItem(id: item.id)
                 }
             }
+            .onTapGesture { toggleSelection(item.id) }
+    }
+
+    private func selectionGlow(_ id: UUID) -> Color {
+        selectedItemID == id ? accent.opacity(0.55) : .clear
+    }
+
+    private func toggleSelection(_ id: UUID) {
+        selectedItemID = (selectedItemID == id) ? nil : id
     }
 
     private func stickerDeleteBadge(action: @escaping () -> Void) -> some View {
@@ -337,6 +374,60 @@ struct DoodleView: View {
                 .background(Circle().fill(.white))
         }
         .offset(x: 12, y: -12)
+    }
+
+    // MARK: - Sticker selection / editing helpers
+
+    private func recolorSelectedText(to hex: String) {
+        guard
+            let id = selectedItemID,
+            let i = textItems.firstIndex(where: { $0.id == id })
+        else { return }
+
+        textItems[i].color = Color(UIColor(hex: hex))
+    }
+
+    private func deleteItem(id: UUID) {
+        textItems.removeAll { $0.id == id }
+        emojiItems.removeAll { $0.id == id }
+        if selectedItemID == id { selectedItemID = nil }
+        if editingTextID == id { editingTextID = nil }
+    }
+
+    private func addTextItem() {
+        // Starts near the top of the canvas so it stays visible above the
+        // keyboard while you type into it.
+        let item = DoodleTextItem(
+            text: "",
+            position: CGPoint(x: 0.5, y: 0.28),
+            color: selectedColor
+        )
+        textItems.append(item)
+        selectedItemID = item.id
+        beginEditingText(item.id)
+    }
+
+    private func beginEditingText(_ id: UUID) {
+        selectedItemID = id
+        editingTextID = id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            canvasTextFocused = true
+        }
+    }
+
+    /// Commits whatever was typed. An item left blank is removed rather than
+    /// lingering as an invisible sticker that still counts as canvas content.
+    private func finishEditingText() {
+        canvasTextFocused = false
+
+        if let id = editingTextID,
+           let i = textItems.firstIndex(where: { $0.id == id }),
+           textItems[i].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            textItems.remove(at: i)
+            if selectedItemID == id { selectedItemID = nil }
+        }
+
+        editingTextID = nil
     }
 
     private func textDragGesture(for item: DoodleTextItem, in size: CGSize) -> some Gesture {
@@ -361,6 +452,40 @@ struct DoodleView: View {
             }
     }
 
+    // Two-finger pinch straight on the sticker, the way you'd resize a
+    // photo. The size it had when the pinch started is held in
+    // `pinchBaseSize` so the scale is applied to that once, rather than
+    // multiplying on top of itself every frame.
+    private func textMagnifyGesture(for item: DoodleTextItem) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                guard let idx = textItems.firstIndex(where: { $0.id == item.id }) else { return }
+
+                let base = pinchBaseSize ?? textItems[idx].fontSize
+                if pinchBaseSize == nil { pinchBaseSize = base }
+
+                textItems[idx].fontSize = min(max(base * value.magnification, 12), 140)
+            }
+            .onEnded { _ in
+                pinchBaseSize = nil
+            }
+    }
+
+    private func emojiMagnifyGesture(for item: DoodleEmojiItem) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                guard let idx = emojiItems.firstIndex(where: { $0.id == item.id }) else { return }
+
+                let base = pinchBaseSize ?? emojiItems[idx].fontSize
+                if pinchBaseSize == nil { pinchBaseSize = base }
+
+                emojiItems[idx].fontSize = min(max(base * value.magnification, 16), 180)
+            }
+            .onEnded { _ in
+                pinchBaseSize = nil
+            }
+    }
+
     private var emojiPickerSheet: some View {
         NavigationStack {
             ScrollView {
@@ -370,9 +495,14 @@ struct DoodleView: View {
                 ) {
                     ForEach(emojiChoices, id: \.self) { emoji in
                         Button {
-                            emojiItems.append(
-                                DoodleEmojiItem(emoji: emoji, position: CGPoint(x: 0.5, y: 0.5))
+                            let item = DoodleEmojiItem(
+                                emoji: emoji,
+                                position: CGPoint(x: 0.5, y: 0.5)
                             )
+                            emojiItems.append(item)
+                            // Selected on drop so the size controls are
+                            // right there without hunting for a tap target.
+                            selectedItemID = item.id
                             showEmojiPicker = false
                         } label: {
                             Text(emoji).font(.system(size: 32))
@@ -403,6 +533,10 @@ struct DoodleView: View {
                         Button {
                             selectedHex = item.hex
                             isEraser = false
+                            // Also recolours the tapped-on text, if there is
+                            // one. The pen always follows too, so you can
+                            // never get stuck unable to change ink colour.
+                            recolorSelectedText(to: item.hex)
                         } label: {
                             Circle()
                                 .fill(item.color)
@@ -424,8 +558,7 @@ struct DoodleView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     Button {
-                        pendingText = ""
-                        showTextInput = true
+                        addTextItem()
                     } label: {
                         toolChipLabel(icon: "character.cursor.ibeam", label: "Text")
                     }
@@ -492,6 +625,9 @@ struct DoodleView: View {
                     canvasView.drawing = PKDrawing()
                     textItems.removeAll()
                     emojiItems.removeAll()
+                    selectedItemID = nil
+                    editingTextID = nil
+                    canvasTextFocused = false
                 }
             }
         }
@@ -656,6 +792,12 @@ struct DoodleView: View {
     }
 
     private func send() {
+        // Commit any in-progress typing first, so a blank text item can't
+        // make an otherwise-empty canvas look like it has content — and so
+        // the last typed word is definitely included.
+        finishEditingText()
+        selectedItemID = nil
+
         guard !canvasView.drawing.strokes.isEmpty || !textItems.isEmpty || !emojiItems.isEmpty else {
             return
         }
@@ -685,6 +827,8 @@ struct DoodleView: View {
                 canvasView.drawing = PKDrawing()
                 textItems.removeAll()
                 emojiItems.removeAll()
+                selectedItemID = nil
+                editingTextID = nil
                 withAnimation { showSentToast = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                     withAnimation { showSentToast = false }
@@ -770,6 +914,11 @@ struct DoodleCanvas: UIViewRepresentable {
         canvasView.drawingPolicy = .anyInput
         canvasView.backgroundColor = .white
         canvasView.isOpaque = true
+        // The canvas is a fixed square that never scrolls or zooms, but as a
+        // scroll view it still owns a pinch recogniser that would otherwise
+        // compete with pinching a sticker to resize it. Drawing is handled
+        // by PencilKit's own recognisers, so this doesn't affect it.
+        canvasView.isScrollEnabled = false
         return canvasView
     }
 
