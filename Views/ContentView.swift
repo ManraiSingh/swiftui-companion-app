@@ -793,6 +793,8 @@ struct ContentView: View {
     private let customQuickKey = "ziggy_custom_quick_messages"
 
     @State private var showNewQuickPopup = false
+    // Second step of creating a pill: which face Ziggy wears when it's sent.
+    @State private var showNewQuickEmotionPopup = false
     @State private var newQuickText = ""
     @State private var newQuickEmoji = "💌"
     @FocusState private var newQuickFocused: Bool
@@ -830,10 +832,10 @@ struct ContentView: View {
     private var pendingInviteCode = ""
 
     private var sortedQuickMessages: [QuickMessage] {
-        // Custom pills go into the same pool as the built-ins, so the
-        // existing "most-used floats to the front" ordering applies to
-        // both. Listing them first only breaks ties.
-        (customQuickMessages + allQuickMessages)
+        // Your own pills always sit ahead of the built-ins, newest first.
+        // Only the built-ins reshuffle by how often they're used, so a
+        // custom message never gets pushed down the row.
+        let builtIns = allQuickMessages
             .enumerated()
             .sorted { a, b in
                 let ua = messageUsage[a.element.id] ?? 0
@@ -842,6 +844,8 @@ struct ContentView: View {
                 return a.offset < b.offset
             }
             .map { $0.element }
+
+        return customQuickMessages + builtIns
     }
 
     // MARK: - Body
@@ -1099,6 +1103,11 @@ struct ContentView: View {
             if showNewQuickPopup {
                 newQuickPopup
                     .zIndex(16)
+            }
+
+            if showNewQuickEmotionPopup {
+                newQuickEmotionPopup
+                    .zIndex(17)
             }
 
             // A floating bar, not a sheet or a safeAreaInset — either of
@@ -1644,8 +1653,8 @@ struct ContentView: View {
                         TextField("Miss you already…", text: $newQuickText)
                             .focused($newQuickFocused)
                             .textInputAutocapitalization(.sentences)
-                            .submitLabel(.done)
-                            .onSubmit { saveNewQuickMessage() }
+                            .submitLabel(.next)
+                            .onSubmit { goToNewQuickEmotionStep() }
                             .font(.subheadline)
                     }
                     .padding(.horizontal, 14)
@@ -1692,9 +1701,9 @@ struct ContentView: View {
                         }
 
                         Button {
-                            saveNewQuickMessage()
+                            goToNewQuickEmotionStep()
                         } label: {
-                            Text("Save")
+                            Text("Next")
                                 .font(.subheadline).fontWeight(.bold)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -1736,6 +1745,87 @@ struct ContentView: View {
 
     private var newQuickTextIsEmpty: Bool {
         newQuickText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // Step two: the face Ziggy wears on your partner's screen whenever this
+    // pill is tapped. Same grid as the one-off custom note uses, so both
+    // custom flows feel identical.
+    private var newQuickEmotionPopup: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { cancelNewQuickEmotionStep() }
+
+            VStack(spacing: 16) {
+
+                Text("How should \(petVM.pet.name) feel? 💭")
+                    .font(.headline)
+                    .fontWeight(.black)
+
+                HStack(spacing: 8) {
+                    Text(newQuickEmoji)
+                    Text("\u{201C}\(newQuickText.trimmingCharacters(in: .whitespacesAndNewlines))\u{201D}")
+                        .italic()
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                    spacing: 14
+                ) {
+                    ForEach(ziggyEmotions) { emo in
+                        Button {
+                            saveNewQuickMessage(emotion: emo.id)
+                        } label: {
+                            VStack(spacing: 6) {
+                                Image(emo.image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 54, height: 54)
+                                Text(emo.label)
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.primary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .fill(Color.pink.opacity(0.08))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .stroke(Color.pink.opacity(0.18), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Button {
+                    cancelNewQuickEmotionStep()
+                } label: {
+                    Text("Back")
+                        .font(.subheadline).fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(Color.white.opacity(0.9))
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(22)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 26))
+            .padding(.horizontal, 24)
+        }
+        .transition(.opacity)
     }
 
     // Cute popup to pick Ziggy's emotion when sending a custom note
@@ -2283,7 +2373,28 @@ struct ContentView: View {
         }
     }
 
-    private func saveNewQuickMessage() {
+    private func goToNewQuickEmotionStep() {
+
+        guard !newQuickTextIsEmpty else { return }
+
+        // Drop the keyboard first so the emotion grid isn't sitting behind
+        // it when it appears.
+        newQuickFocused = false
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            showNewQuickPopup = false
+            showNewQuickEmotionPopup = true
+        }
+    }
+
+    private func cancelNewQuickEmotionStep() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            showNewQuickEmotionPopup = false
+            showNewQuickPopup = true
+        }
+    }
+
+    private func saveNewQuickMessage(emotion: String) {
 
         let trimmed = newQuickText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -2296,7 +2407,7 @@ struct ContentView: View {
             // already use to render a free-written note, so these send and
             // display exactly like the one-off custom notes do.
             payload: "custom:\(trimmed)",
-            emotion: "love",
+            emotion: emotion,
             isCustom: true
         )
 
@@ -2311,6 +2422,7 @@ struct ContentView: View {
         newQuickFocused = false
         withAnimation(.easeOut(duration: 0.2)) {
             showNewQuickPopup = false
+            showNewQuickEmotionPopup = false
         }
     }
 
