@@ -349,16 +349,28 @@ struct PlayCenterView: View {
                     .background(Color.yellow.opacity(0.18))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text("Scoreboard")
                         .font(.subheadline).fontWeight(.black)
                         .foregroundStyle(.primary)
-                    Text("You \(myTotalWins) — \(partnerTotalWins) \(partnerDisplayName)")
-                        .font(.caption).fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 6) {
+                        summaryScoreChip(
+                            label: "You",
+                            score: myTotalWins,
+                            isLeading: myTotalWins > partnerTotalWins,
+                            tint: myTint
+                        )
+                        summaryScoreChip(
+                            label: partnerDisplayName,
+                            score: partnerTotalWins,
+                            isLeading: partnerTotalWins > myTotalWins,
+                            tint: partnerTint
+                        )
+                    }
                 }
 
-                Spacer()
+                Spacer(minLength: 4)
 
                 Image(systemName: "chevron.right")
                     .font(.headline)
@@ -375,70 +387,184 @@ struct PlayCenterView: View {
         .buttonStyle(.plain)
     }
 
+    private func summaryScoreChip(
+        label: String,
+        score: Int,
+        isLeading: Bool,
+        tint: Color
+    ) -> some View {
+        HStack(spacing: 4) {
+            if isLeading {
+                Text("👑").font(.system(size: 9))
+            }
+            Text(label)
+                .font(.system(size: 10, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text("\(score)")
+                .font(.system(size: 11, weight: .black, design: .rounded))
+        }
+        .foregroundStyle(isLeading ? .white : Color.primary.opacity(0.6))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(
+            Capsule().fill(isLeading ? tint : Color.black.opacity(0.06))
+        )
+    }
+
+    private let myTint = Color(red: 0.95, green: 0.35, blue: 0.55)
+    private let partnerTint = Color(red: 0.55, green: 0.42, blue: 0.90)
+
+    /// The two of you side by side, with a crown on whoever's ahead.
+    private var headToHeadPanel: some View {
+        HStack(spacing: 8) {
+
+            playerColumn(
+                name: "You",
+                score: myTotalWins,
+                isLeading: myTotalWins > partnerTotalWins,
+                image: myTotalWins >= partnerTotalWins ? "ziggy_loveeyes" : "ziggy_tears",
+                tint: myTint
+            )
+
+            Text("VS")
+                .font(.system(size: 13, weight: .black, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            playerColumn(
+                name: partnerDisplayName,
+                score: partnerTotalWins,
+                isLeading: partnerTotalWins > myTotalWins,
+                image: partnerTotalWins >= myTotalWins ? "ziggy_loveeyes" : "ziggy_tears",
+                tint: partnerTint
+            )
+        }
+    }
+
+    private func playerColumn(
+        name: String,
+        score: Int,
+        isLeading: Bool,
+        image: String,
+        tint: Color
+    ) -> some View {
+        VStack(spacing: 4) {
+
+            ZStack(alignment: .topTrailing) {
+                Image(image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 52, height: 52)
+
+                if isLeading {
+                    Text("👑")
+                        .font(.system(size: 17))
+                        .offset(x: 8, y: -6)
+                }
+            }
+
+            Text(name)
+                .font(.caption2).fontWeight(.bold)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text("\(score)")
+                .font(.system(size: 26, weight: .black, design: .rounded))
+                .foregroundStyle(tint)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(tint.opacity(isLeading ? 0.16 : 0.07))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(tint.opacity(isLeading ? 0.5 : 0.16), lineWidth: 1.5)
+        )
+    }
+
     private func scoreRow(_ game: (id: String, title: String, emoji: String)) -> some View {
         let mine = wins(game.id, myUsername)
         let theirs = partnerWins(game.id)
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: 10) {
+
             Text(game.emoji)
-                .font(.system(size: 20))
-                .frame(width: 40, height: 40)
-                .background(Color.black.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .font(.system(size: 13))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(.white.opacity(0.8)))
 
             Text(game.title)
-                .font(.subheadline).fontWeight(.bold)
+                .font(.caption).fontWeight(.bold)
                 .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
-            Spacer()
+            Spacer(minLength: 6)
 
-            Text("\(mine)")
-                .font(.headline).fontWeight(.black)
-                .foregroundStyle(mine > theirs ? .pink : .secondary)
+            scorePill(mine, isLeading: mine > theirs, tint: myTint)
 
             Text("–")
+                .font(.caption2).fontWeight(.bold)
                 .foregroundStyle(.secondary)
 
-            Text("\(theirs)")
-                .font(.headline).fontWeight(.black)
-                .foregroundStyle(theirs > mine ? .pink : .secondary)
+            scorePill(theirs, isLeading: theirs > mine, tint: partnerTint)
         }
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(.white.opacity(0.55))
+        )
+    }
+
+    private func scorePill(_ value: Int, isLeading: Bool, tint: Color) -> some View {
+        Text("\(value)")
+            .font(.system(size: 14, weight: .black, design: .rounded))
+            .foregroundStyle(isLeading ? .white : Color.primary.opacity(0.55))
+            .frame(width: 30, height: 25)
+            .background(
+                Capsule().fill(isLeading ? tint : Color.black.opacity(0.06))
+            )
     }
 
     private var scoreboardPopup: some View {
         ZStack {
-            Color.black.opacity(0.35)
+            Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .onTapGesture {
                     withAnimation { showScoreboardPopup = false }
                 }
 
-            VStack(spacing: 18) {
+            // Everything is sized to fit as one piece — four games, the
+            // head-to-head panel and the buttons all land well inside even
+            // the shortest iPhone, so there's nothing to scroll.
+            VStack(spacing: 14) {
+
                 Text("Scoreboard 🏆")
                     .font(.title3).fontWeight(.black)
 
-                VStack(spacing: 4) {
+                headToHeadPanel
+
+                VStack(spacing: 7) {
                     ForEach(competitiveGames, id: \.id) { game in
                         scoreRow(game)
-                        if game.id != competitiveGames.last?.id {
-                            Divider()
-                        }
                     }
                 }
-                .padding(14)
-                .background(.white.opacity(0.6))
-                .clipShape(RoundedRectangle(cornerRadius: 18))
 
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Button {
                         showResetConfirm = true
                     } label: {
-                        Text("Reset Scores")
+                        Text("Reset")
                             .font(.subheadline).fontWeight(.bold)
                             .foregroundColor(.red)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
+                            .padding(.vertical, 12)
                             .background(.white.opacity(0.9))
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(Color.red.opacity(0.25), lineWidth: 1))
@@ -451,21 +577,26 @@ struct PlayCenterView: View {
                             .font(.subheadline).fontWeight(.bold)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
+                            .padding(.vertical, 12)
                             .background(
                                 LinearGradient(
-                                    colors: [.orange, .yellow],
+                                    colors: [myTint, partnerTint],
                                     startPoint: .leading, endPoint: .trailing
                                 )
                             )
                             .clipShape(Capsule())
                     }
                 }
+                .padding(.top, 2)
             }
-            .padding(22)
+            .padding(18)
             .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 26))
-            .padding(.horizontal, 28)
+            .clipShape(RoundedRectangle(cornerRadius: 28))
+            .overlay(
+                RoundedRectangle(cornerRadius: 28)
+                    .stroke(.white.opacity(0.6), lineWidth: 1)
+            )
+            .padding(.horizontal, 26)
         }
         .transition(.opacity)
     }
