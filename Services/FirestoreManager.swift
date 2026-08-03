@@ -706,6 +706,10 @@ class FirestoreManager {
             .collection("games")
             .document("traceDrawing")
 
+        // Captured outside the transaction: identifies this phone regardless
+        // of what the player has renamed themselves to.
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -715,6 +719,8 @@ class FirestoreManager {
 
                 let leftPlayer = data["leftPlayer"] as? String ?? ""
                 let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let leftDeviceID = data["leftDeviceID"] as? String ?? ""
+                let rightDeviceID = data["rightDeviceID"] as? String ?? ""
                 let status = data["status"] as? String ?? "lobby"
 
                 var updates: [String: Any] = ["updatedAt": Timestamp()]
@@ -738,25 +744,50 @@ class FirestoreManager {
                 // Assign a side without ever clearing the partner's slot.
                 let assignedSide: String
 
-                if leftPlayer == username {
+                // Matched on the device first, not the display name —
+                // renaming yourself used to match neither slot, so you'd
+                // fall through and steal your partner's, and they'd steal
+                // it back on their next join, leaving you both stuck.
+                if leftDeviceID == myDeviceID {
                     assignedSide = "left"
-                } else if rightPlayer == username {
+                    updates["leftPlayer"] = username
+                } else if rightDeviceID == myDeviceID {
                     assignedSide = "right"
+                    updates["rightPlayer"] = username
+                } else if leftDeviceID.isEmpty && leftPlayer == username {
+                    // Lobby from before device IDs were recorded — adopt it.
+                    assignedSide = "left"
+                    updates["leftDeviceID"] = myDeviceID
+                } else if rightDeviceID.isEmpty && rightPlayer == username {
+                    assignedSide = "right"
+                    updates["rightDeviceID"] = myDeviceID
                 } else if leftPlayer.isEmpty {
                     assignedSide = "left"
                     updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
                     updates["leftReady"] = false
                     updates["leftComplete"] = false
                 } else if rightPlayer.isEmpty {
                     assignedSide = "right"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
                     updates["rightComplete"] = false
+                } else if leftDeviceID.isEmpty {
+                    // A leftover name from before device IDs, with no device
+                    // actually holding it — take that rather than bumping a
+                    // real player out of theirs.
+                    assignedSide = "left"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
+                    updates["leftComplete"] = false
                 } else {
-                    // Both slots already taken by other names (stale data from a
-                    // previous pairing). Reclaim the right slot for this user.
+                    // Both slots genuinely held by other devices (stale data
+                    // from a previous pairing). Reclaim the right slot.
                     assignedSide = "right"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
                     updates["rightComplete"] = false
                 }
@@ -1075,6 +1106,10 @@ class FirestoreManager {
             .collection("games")
             .document("ticTacToe")
 
+        // Captured outside the transaction: identifies this phone regardless
+        // of what the player has renamed themselves to.
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -1084,6 +1119,8 @@ class FirestoreManager {
 
                 let leftPlayer = data["leftPlayer"] as? String ?? ""
                 let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let leftDeviceID = data["leftDeviceID"] as? String ?? ""
+                let rightDeviceID = data["rightDeviceID"] as? String ?? ""
                 let status = data["status"] as? String ?? "lobby"
 
                 var updates: [String: Any] = ["updatedAt": Timestamp()]
@@ -1103,23 +1140,47 @@ class FirestoreManager {
                 // Assign a side without ever clearing the partner's slot.
                 let assignedSide: String
 
-                if leftPlayer == username {
+                // Matched on the device first, not the display name —
+                // renaming yourself used to match neither slot, so you'd
+                // fall through and steal your partner's, and they'd steal
+                // it back on their next join, leaving you both stuck.
+                if leftDeviceID == myDeviceID {
                     assignedSide = "X"
-                } else if rightPlayer == username {
+                    updates["leftPlayer"] = username
+                } else if rightDeviceID == myDeviceID {
                     assignedSide = "O"
+                    updates["rightPlayer"] = username
+                } else if leftDeviceID.isEmpty && leftPlayer == username {
+                    // Lobby from before device IDs were recorded — adopt it.
+                    assignedSide = "X"
+                    updates["leftDeviceID"] = myDeviceID
+                } else if rightDeviceID.isEmpty && rightPlayer == username {
+                    assignedSide = "O"
+                    updates["rightDeviceID"] = myDeviceID
                 } else if leftPlayer.isEmpty {
                     assignedSide = "X"
                     updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
                     updates["leftReady"] = false
                 } else if rightPlayer.isEmpty {
                     assignedSide = "O"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
+                } else if leftDeviceID.isEmpty {
+                    // A leftover name from before device IDs, with no device
+                    // actually holding it — take that rather than bumping a
+                    // real player out of theirs.
+                    assignedSide = "X"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
                 } else {
-                    // Both slots already taken by other names (stale data from a
-                    // previous pairing). Reclaim the right slot for this user.
+                    // Both slots genuinely held by other devices (stale data
+                    // from a previous pairing). Reclaim the right slot.
                     assignedSide = "O"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
                 }
 
@@ -1165,6 +1226,8 @@ class FirestoreManager {
             .collection("games")
             .document("ticTacToe")
 
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -1183,6 +1246,7 @@ class FirestoreManager {
                 var updates: [String: Any] = [
                     readyKey: isReady,
                     (side == "X" ? "leftPlayer" : "rightPlayer"): username,
+                    (side == "X" ? "leftDeviceID" : "rightDeviceID"): myDeviceID,
                     "updatedAt": Timestamp()
                 ]
 
@@ -1430,6 +1494,10 @@ class FirestoreManager {
             .collection("games")
             .document("dotsAndBoxes")
 
+        // Captured outside the transaction: identifies this phone regardless
+        // of what the player has renamed themselves to.
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -1439,6 +1507,8 @@ class FirestoreManager {
 
                 let leftPlayer = data["leftPlayer"] as? String ?? ""
                 let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let leftDeviceID = data["leftDeviceID"] as? String ?? ""
+                let rightDeviceID = data["rightDeviceID"] as? String ?? ""
                 let status = data["status"] as? String ?? "lobby"
 
                 var updates: [String: Any] = ["updatedAt": Timestamp()]
@@ -1466,21 +1536,47 @@ class FirestoreManager {
 
                 let assignedSide: String
 
-                if leftPlayer == username {
+                // Matched on the device first, not the display name —
+                // renaming yourself used to match neither slot, so you'd
+                // fall through and steal your partner's, and they'd steal
+                // it back on their next join, leaving you both stuck.
+                if leftDeviceID == myDeviceID {
                     assignedSide = "X"
-                } else if rightPlayer == username {
+                    updates["leftPlayer"] = username
+                } else if rightDeviceID == myDeviceID {
                     assignedSide = "O"
+                    updates["rightPlayer"] = username
+                } else if leftDeviceID.isEmpty && leftPlayer == username {
+                    // Lobby from before device IDs were recorded — adopt it.
+                    assignedSide = "X"
+                    updates["leftDeviceID"] = myDeviceID
+                } else if rightDeviceID.isEmpty && rightPlayer == username {
+                    assignedSide = "O"
+                    updates["rightDeviceID"] = myDeviceID
                 } else if leftPlayer.isEmpty {
                     assignedSide = "X"
                     updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
                     updates["leftReady"] = false
                 } else if rightPlayer.isEmpty {
                     assignedSide = "O"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
+                } else if leftDeviceID.isEmpty {
+                    // A leftover name from before device IDs, with no device
+                    // actually holding it — take that rather than bumping a
+                    // real player out of theirs.
+                    assignedSide = "X"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
                 } else {
+                    // Both slots genuinely held by other devices (stale data
+                    // from a previous pairing). Reclaim the right slot.
                     assignedSide = "O"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
                 }
 
@@ -1540,6 +1636,8 @@ class FirestoreManager {
             .collection("games")
             .document("dotsAndBoxes")
 
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -1558,6 +1656,7 @@ class FirestoreManager {
                 var updates: [String: Any] = [
                     readyKey: isReady,
                     (side == "X" ? "leftPlayer" : "rightPlayer"): username,
+                    (side == "X" ? "leftDeviceID" : "rightDeviceID"): myDeviceID,
                     "updatedAt": Timestamp()
                 ]
 
@@ -1863,6 +1962,10 @@ class FirestoreManager {
             .collection("games")
             .document("connectFour")
 
+        // Captured outside the transaction: identifies this phone regardless
+        // of what the player has renamed themselves to.
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -1872,6 +1975,8 @@ class FirestoreManager {
 
                 let leftPlayer = data["leftPlayer"] as? String ?? ""
                 let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let leftDeviceID = data["leftDeviceID"] as? String ?? ""
+                let rightDeviceID = data["rightDeviceID"] as? String ?? ""
                 let status = data["status"] as? String ?? "lobby"
 
                 var updates: [String: Any] = ["updatedAt": Timestamp()]
@@ -1891,21 +1996,47 @@ class FirestoreManager {
 
                 let assignedSide: String
 
-                if leftPlayer == username {
+                // Matched on the device first, not the display name —
+                // renaming yourself used to match neither slot, so you'd
+                // fall through and steal your partner's, and they'd steal
+                // it back on their next join, leaving you both stuck.
+                if leftDeviceID == myDeviceID {
                     assignedSide = "R"
-                } else if rightPlayer == username {
+                    updates["leftPlayer"] = username
+                } else if rightDeviceID == myDeviceID {
                     assignedSide = "Y"
+                    updates["rightPlayer"] = username
+                } else if leftDeviceID.isEmpty && leftPlayer == username {
+                    // Lobby from before device IDs were recorded — adopt it.
+                    assignedSide = "R"
+                    updates["leftDeviceID"] = myDeviceID
+                } else if rightDeviceID.isEmpty && rightPlayer == username {
+                    assignedSide = "Y"
+                    updates["rightDeviceID"] = myDeviceID
                 } else if leftPlayer.isEmpty {
                     assignedSide = "R"
                     updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
                     updates["leftReady"] = false
                 } else if rightPlayer.isEmpty {
                     assignedSide = "Y"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
+                } else if leftDeviceID.isEmpty {
+                    // A leftover name from before device IDs, with no device
+                    // actually holding it — take that rather than bumping a
+                    // real player out of theirs.
+                    assignedSide = "R"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
                 } else {
+                    // Both slots genuinely held by other devices (stale data
+                    // from a previous pairing). Reclaim the right slot.
                     assignedSide = "Y"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
                 }
 
@@ -1953,6 +2084,8 @@ class FirestoreManager {
             .collection("games")
             .document("connectFour")
 
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -1971,6 +2104,7 @@ class FirestoreManager {
                 var updates: [String: Any] = [
                     readyKey: isReady,
                     (side == "R" ? "leftPlayer" : "rightPlayer"): username,
+                    (side == "R" ? "leftDeviceID" : "rightDeviceID"): myDeviceID,
                     "updatedAt": Timestamp()
                 ]
 
@@ -2268,6 +2402,10 @@ class FirestoreManager {
             .collection("games")
             .document("memoryMatch")
 
+        // Captured outside the transaction: identifies this phone regardless
+        // of what the player has renamed themselves to.
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -2277,6 +2415,8 @@ class FirestoreManager {
 
                 let leftPlayer = data["leftPlayer"] as? String ?? ""
                 let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let leftDeviceID = data["leftDeviceID"] as? String ?? ""
+                let rightDeviceID = data["rightDeviceID"] as? String ?? ""
                 let status = data["status"] as? String ?? "lobby"
 
                 var updates: [String: Any] = ["updatedAt": Timestamp()]
@@ -2296,21 +2436,48 @@ class FirestoreManager {
 
                 let assignedSide: String
 
-                if leftPlayer == username {
+                // Matched on the device first, not the display name —
+                // renaming yourself used to match neither slot, so you'd
+                // fall through and steal your partner's, and they'd steal
+                // it back on their next join, leaving you both stuck.
+                if leftDeviceID == myDeviceID {
                     assignedSide = "left"
-                } else if rightPlayer == username {
+                    updates["leftPlayer"] = username
+                } else if rightDeviceID == myDeviceID {
                     assignedSide = "right"
+                    updates["rightPlayer"] = username
+                } else if leftDeviceID.isEmpty && leftPlayer == username {
+                    // Lobby from before device IDs were recorded — adopt it.
+                    assignedSide = "left"
+                    updates["leftDeviceID"] = myDeviceID
+                } else if rightDeviceID.isEmpty && rightPlayer == username {
+                    assignedSide = "right"
+                    updates["rightDeviceID"] = myDeviceID
                 } else if leftPlayer.isEmpty {
                     assignedSide = "left"
                     updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
                     updates["leftReady"] = false
                 } else if rightPlayer.isEmpty {
                     assignedSide = "right"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
+                } else if leftDeviceID.isEmpty {
+                    // A leftover name from before device IDs, with no device
+                    // actually holding it — take that rather than bumping a
+                    // real player out of theirs.
+                    assignedSide = "left"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
+                    updates["leftComplete"] = false
                 } else {
+                    // Both slots genuinely held by other devices (stale data
+                    // from a previous pairing). Reclaim the right slot.
                     assignedSide = "right"
                     updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
                     updates["rightReady"] = false
                 }
 
@@ -2357,6 +2524,8 @@ class FirestoreManager {
             .collection("games")
             .document("memoryMatch")
 
+        let myDeviceID = deviceID
+
         db.runTransaction { transaction, errorPointer in
 
             do {
@@ -2375,6 +2544,7 @@ class FirestoreManager {
                 var updates: [String: Any] = [
                     readyKey: isReady,
                     (side == "left" ? "leftPlayer" : "rightPlayer"): username,
+                    (side == "left" ? "leftDeviceID" : "rightDeviceID"): myDeviceID,
                     "updatedAt": Timestamp()
                 ]
 
