@@ -24,6 +24,9 @@ struct DoodleView: View {
 
     @State private var canvasView = PKCanvasView()
     @State private var selectedHex = "#FF4FA3"
+    // The canvas's own colour, set from the swatch on the canvas corner.
+    @State private var canvasBGHex = "#FFFFFF"
+    @State private var showBGPicker = false
     @State private var brushWidth: CGFloat = 22
     @State private var isEraser = false
     @State private var inkType: PKInkingTool.InkType = .pen
@@ -34,12 +37,13 @@ struct DoodleView: View {
 
     @State private var textItems: [DoodleTextItem] = []
     @State private var emojiItems: [DoodleEmojiItem] = []
-    @State private var showEmojiPicker = false
 
-    // Which sticker the colour palette acts on, and which text item is
-    // currently being typed into directly on the canvas.
+    // Which sticker the colour palette acts on, and which text / emoji item
+    // is currently being typed into directly on the canvas. Only one thing
+    // can be edited at a time, so both editors share one focus flag.
     @State private var selectedItemID: UUID?
     @State private var editingTextID: UUID?
+    @State private var editingEmojiID: UUID?
     @FocusState private var canvasTextFocused: Bool
 
     // Font size a sticker had when the current pinch started, so scaling
@@ -48,16 +52,6 @@ struct DoodleView: View {
 
     @State private var partnerDoodle: UIImage?
     @State private var partnerDoodleSender = ""
-
-    private let emojiChoices = [
-        "😍", "😂", "🥰", "😘", "🤩", "😎",
-        "🥳", "😴", "🤔", "😢", "😡", "🥺",
-        "👍", "👎", "👏", "🙌", "🤗", "💕",
-        "❤️", "💖", "💗", "💛", "💜", "🧡",
-        "🔥", "✨", "🌟", "🎉", "🎈", "🍕",
-        "🍔", "🍩", "☕️", "🌈", "🐶", "🐱",
-        "🦄", "🌸", "🌻", "⭐️"
-    ]
 
     private let cream = LinearGradient(
         colors: [
@@ -100,6 +94,7 @@ struct DoodleView: View {
 
     private var username: String { UserManager.shared.username }
     private var selectedColor: Color { Color(UIColor(hex: selectedHex)) }
+    private var canvasBGColor: Color { Color(UIColor(hex: canvasBGHex)) }
 
     var body: some View {
         ZStack {
@@ -119,6 +114,12 @@ struct DoodleView: View {
                 sendButton
             }
             .padding()
+            // Without this the keyboard shrinks the whole stack, and since
+            // the canvas is a fixed square that pulls its width in too —
+            // leaving a narrow strip of canvas with gaps either side. The
+            // layout now stays put and the keyboard simply covers the
+            // toolbar, with new stickers placed high enough to stay visible.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
 
             if showSentToast {
                 toast
@@ -142,9 +143,6 @@ struct DoodleView: View {
         .onChange(of: inkType) { configureTool() }
         .onDisappear {
             FirestoreManager.shared.stopDoodleListener()
-        }
-        .sheet(isPresented: $showEmojiPicker) {
-            emojiPickerSheet
         }
     }
 
@@ -264,8 +262,8 @@ struct DoodleView: View {
         // needs no cropping to cover it.
         GeometryReader { geo in
             ZStack {
-                DoodleCanvas(canvasView: canvasView)
-                    .background(.white)
+                DoodleCanvas(canvasView: canvasView, background: UIColor(hex: canvasBGHex))
+                    .background(canvasBGColor)
 
                 // Bound so the text of the item being edited can be typed
                 // straight into on the canvas, rather than through a popup.
@@ -279,8 +277,8 @@ struct DoodleView: View {
                         .simultaneousGesture(textMagnifyGesture(for: item))
                 }
 
-                ForEach(emojiItems) { item in
-                    emojiItemView(item)
+                ForEach($emojiItems) { $item in
+                    emojiItemView(item, emoji: $item.emoji)
                         .position(
                             x: item.position.x * geo.size.width,
                             y: item.position.y * geo.size.height
@@ -297,7 +295,69 @@ struct DoodleView: View {
             RoundedRectangle(cornerRadius: 24)
                 .stroke(.white, lineWidth: 3)
         )
+        .overlay(alignment: .topTrailing) {
+            backgroundColorControl
+        }
         .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
+    }
+
+    // Sits in the canvas's own top-right corner rather than the toolbar, so
+    // it's right where the paper is and costs the toolbar no height.
+    private var backgroundColorControl: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                    showBGPicker.toggle()
+                }
+            } label: {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(accent)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(.white.opacity(0.94)))
+                    .overlay(Circle().stroke(canvasBGColor, lineWidth: 3))
+                    .overlay(Circle().stroke(Color.black.opacity(0.1), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
+            }
+            .buttonStyle(.plain)
+
+            if showBGPicker {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.fixed(26), spacing: 8), count: 4),
+                    spacing: 8
+                ) {
+                    ForEach(palette, id: \.hex) { item in
+                        Button {
+                            canvasBGHex = item.hex
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showBGPicker = false
+                            }
+                        } label: {
+                            Circle()
+                                .fill(item.color)
+                                .frame(width: 26, height: 26)
+                                .overlay {
+                                    Circle().stroke(Color.black.opacity(0.12), lineWidth: 1)
+                                    if canvasBGHex == item.hex {
+                                        Circle().stroke(accent, lineWidth: 2.5)
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                // 4 swatches of 26 plus the 8pt gaps between them — without
+                // this the grid stretches to the canvas's full width.
+                .frame(width: 4 * 26 + 3 * 8)
+                .padding(10)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+                .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+            }
+        }
+        .padding(10)
     }
 
     // MARK: - Text & emoji stickers
@@ -344,17 +404,39 @@ struct DoodleView: View {
         }
     }
 
-    private func emojiItemView(_ item: DoodleEmojiItem) -> some View {
-        Text(item.emoji)
-            .font(.system(size: item.fontSize))
-            .fixedSize()
-            .shadow(color: selectionGlow(item.id), radius: 7)
-            .overlay(alignment: .topTrailing) {
-                stickerDeleteBadge {
-                    deleteItem(id: item.id)
+    @ViewBuilder
+    private func emojiItemView(
+        _ item: DoodleEmojiItem,
+        emoji: Binding<String>
+    ) -> some View {
+
+        if editingEmojiID == item.id {
+
+            // A plain field on the canvas — switch to the emoji keyboard
+            // with the 🙂 / globe key and every emoji on the system keyboard
+            // is available, not just a fixed grid of favourites.
+            TextField("…", text: emoji)
+                .font(.system(size: item.fontSize))
+                .multilineTextAlignment(.center)
+                .focused($canvasTextFocused)
+                .submitLabel(.done)
+                .onSubmit { finishEditingEmoji() }
+                .frame(minWidth: 90, maxWidth: 230)
+
+        } else {
+
+            Text(item.emoji)
+                .font(.system(size: item.fontSize))
+                .fixedSize()
+                .shadow(color: selectionGlow(item.id), radius: 7)
+                .overlay(alignment: .topTrailing) {
+                    stickerDeleteBadge {
+                        deleteItem(id: item.id)
+                    }
                 }
-            }
-            .onTapGesture { toggleSelection(item.id) }
+                .onTapGesture(count: 2) { beginEditingEmoji(item.id) }
+                .onTapGesture { toggleSelection(item.id) }
+        }
     }
 
     private func selectionGlow(_ id: UUID) -> Color {
@@ -392,6 +474,7 @@ struct DoodleView: View {
         emojiItems.removeAll { $0.id == id }
         if selectedItemID == id { selectedItemID = nil }
         if editingTextID == id { editingTextID = nil }
+        if editingEmojiID == id { editingEmojiID = nil }
     }
 
     private func addTextItem() {
@@ -403,16 +486,49 @@ struct DoodleView: View {
             color: selectedColor
         )
         textItems.append(item)
-        selectedItemID = item.id
         beginEditingText(item.id)
     }
 
     private func beginEditingText(_ id: UUID) {
         selectedItemID = id
+        editingEmojiID = nil
         editingTextID = id
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             canvasTextFocused = true
         }
+    }
+
+    private func addEmojiItem() {
+        // Same upper-third placement as new text, so it stays visible above
+        // the keyboard while you pick an emoji.
+        let item = DoodleEmojiItem(
+            emoji: "",
+            position: CGPoint(x: 0.5, y: 0.28)
+        )
+        emojiItems.append(item)
+        beginEditingEmoji(item.id)
+    }
+
+    private func beginEditingEmoji(_ id: UUID) {
+        selectedItemID = id
+        editingTextID = nil
+        editingEmojiID = id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            canvasTextFocused = true
+        }
+    }
+
+    private func finishEditingEmoji() {
+        canvasTextFocused = false
+
+        if let id = editingEmojiID,
+           let i = emojiItems.firstIndex(where: { $0.id == id }),
+           emojiItems[i].emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            emojiItems.remove(at: i)
+            if selectedItemID == id { selectedItemID = nil }
+        }
+
+        editingEmojiID = nil
     }
 
     /// Commits whatever was typed. An item left blank is removed rather than
@@ -486,43 +602,6 @@ struct DoodleView: View {
             }
     }
 
-    private var emojiPickerSheet: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible()), count: 6),
-                    spacing: 16
-                ) {
-                    ForEach(emojiChoices, id: \.self) { emoji in
-                        Button {
-                            let item = DoodleEmojiItem(
-                                emoji: emoji,
-                                position: CGPoint(x: 0.5, y: 0.5)
-                            )
-                            emojiItems.append(item)
-                            // Selected on drop so the size controls are
-                            // right there without hunting for a tap target.
-                            selectedItemID = item.id
-                            showEmojiPicker = false
-                        } label: {
-                            Text(emoji).font(.system(size: 32))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding()
-            }
-            .navigationTitle("Pick an emoji")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { showEmojiPicker = false }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-
     // MARK: - Toolbar
 
     private var toolbar: some View {
@@ -565,7 +644,7 @@ struct DoodleView: View {
                     .buttonStyle(.plain)
 
                     Button {
-                        showEmojiPicker = true
+                        addEmojiItem()
                     } label: {
                         toolChipLabel(icon: "face.smiling", label: "Emoji")
                     }
@@ -627,7 +706,9 @@ struct DoodleView: View {
                     emojiItems.removeAll()
                     selectedItemID = nil
                     editingTextID = nil
+                    editingEmojiID = nil
                     canvasTextFocused = false
+                    canvasBGHex = "#FFFFFF"
                 }
             }
         }
@@ -792,10 +873,11 @@ struct DoodleView: View {
     }
 
     private func send() {
-        // Commit any in-progress typing first, so a blank text item can't
-        // make an otherwise-empty canvas look like it has content — and so
-        // the last typed word is definitely included.
+        // Commit any in-progress typing first, so a blank text or emoji
+        // item can't make an otherwise-empty canvas look like it has
+        // content — and so the last thing typed is definitely included.
         finishEditingText()
+        finishEditingEmoji()
         selectedItemID = nil
 
         guard !canvasView.drawing.strokes.isEmpty || !textItems.isEmpty || !emojiItems.isEmpty else {
@@ -829,6 +911,7 @@ struct DoodleView: View {
                 emojiItems.removeAll()
                 selectedItemID = nil
                 editingTextID = nil
+                editingEmojiID = nil
                 withAnimation { showSentToast = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                     withAnimation { showSentToast = false }
@@ -849,7 +932,9 @@ struct DoodleView: View {
 
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
-            UIColor.white.setFill()
+            // Whatever the canvas is showing, so the sent image and the
+            // widget match what you drew on.
+            UIColor(hex: canvasBGHex).setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
             drawingImage.draw(in: CGRect(origin: .zero, size: size))
 
@@ -909,10 +994,11 @@ struct DoodleView: View {
 
 struct DoodleCanvas: UIViewRepresentable {
     let canvasView: PKCanvasView
+    var background: UIColor = .white
 
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.drawingPolicy = .anyInput
-        canvasView.backgroundColor = .white
+        canvasView.backgroundColor = background
         canvasView.isOpaque = true
         // The canvas is a fixed square that never scrolls or zooms, but as a
         // scroll view it still owns a pinch recogniser that would otherwise
@@ -922,7 +1008,9 @@ struct DoodleCanvas: UIViewRepresentable {
         return canvasView
     }
 
-    func updateUIView(_ uiView: PKCanvasView, context: Context) {}
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        uiView.backgroundColor = background
+    }
 }
 
 private extension UIColor {
