@@ -206,108 +206,82 @@ struct Provider: AppIntentTimelineProvider {
 
         return expiresAt
     }
+    /// Mirrors `ContentView.currentEmotionImage` exactly — same love-score
+    /// bands, same faces — so the widget and the Home screen always show
+    /// Ziggy in the same mood instead of drifting apart.
     func widgetImage(for pet: Pet) -> String {
 
-        // Prefer the emotion your partner just sent.
+        // Prefer the emotion your partner just sent. (The app does the same
+        // with its ephemeral message.)
         if let pm = partnerMessage() { return pm.image }
 
-        let hour = currentHour()
-
-        let hoursAway = hoursSinceLastOpen()
-
-        if hour >= 22 || hour < 7 {
-
-            return "ziggy_sleep"
+        switch pet.loveScore {
+        case 90...100: return "ziggy_loveeyes"
+        case 70..<90:  return "ziggy_happie"
+        case 50..<70:  return "ziggy_sleep"
+        case 30..<50:  return "ziggu_cry"
+        case 15..<30:  return "ziggy_angrywithmark"
+        default:       return "ziggy_fireangry"
         }
-
-        if hoursAway < 3 {
-
-            return "ziggy_loveeyes"
-        }
-
-        if hoursAway < 8 {
-
-            return "ziggy_happie"
-        }
-
-        if hoursAway < 16 {
-
-            return "ziggy_tears"
-        }
-
-        if hoursAway < 24 {
-
-            return "ziggy_angrywithmark"
-        }
-
-        return "ziggy_fireangry"
     }
 
+    /// The same wording as before, but keyed to the love-score bands the face
+    /// now uses — otherwise a crying Ziggy could sit under "Best day ever ✨".
     func widgetMessage(for pet: Pet) -> String {
 
         // Prefer the actual cute message your partner just sent.
         if let pm = partnerMessage() { return pm.text }
 
-        let hour = currentHour()
+        switch pet.loveScore {
 
-        let hoursAway = hoursSinceLastOpen()
-
-        if hour >= 22 || hour < 7 {
-
-            return [
-                "Dreaming of you 😴",
-                "Good night ❤️",
-                "See you tomorrow 🌙",
-                "Zzz..."
-            ].randomElement()!
-        }
-
-        if hoursAway < 3 {
-
+        case 90...100:
             return [
                 "Thinking about you ❤️",
                 "You're my favorite ❤️",
                 "Best day ever ✨",
                 "Can we cuddle?"
             ].randomElement()!
-        }
 
-        if hoursAway < 8 {
-
+        case 70..<90:
             return [
                 "Let's play soon!",
                 "Hope you're smiling ✨",
                 "Having a good day?",
                 "Miss you a little ❤️"
             ].randomElement()!
-        }
 
-        if hoursAway < 16 {
+        case 50..<70:
+            return [
+                "Dreaming of you 😴",
+                "Good night ❤️",
+                "See you tomorrow 🌙",
+                "Zzz..."
+            ].randomElement()!
 
+        case 30..<50:
             return [
                 "Where are you? 🥺",
                 "I've been waiting...",
                 "Come back ❤️",
                 "Miss you..."
             ].randomElement()!
-        }
 
-        if hoursAway < 24 {
-
+        case 15..<30:
             return [
                 "You forgot me 😤",
                 "Still waiting...",
                 "Not fair.",
                 "Hello???"
             ].randomElement()!
-        }
 
-        return [
-            "OPEN \(pet.name.uppercased()) NOW 🔥",
-            "WE NEED TO TALK 😤",
-            "I'M UPSET 😭",
-            "HELLO HUMAN."
-        ].randomElement()!
+        default:
+            return [
+                "OPEN \(pet.name.uppercased()) NOW 🔥",
+                "WE NEED TO TALK 😤",
+                "I'M UPSET 😭",
+                "HELLO HUMAN."
+            ].randomElement()!
+        }
     }
     func widgetColors(for pet: Pet) -> [Color] {
 
@@ -377,10 +351,26 @@ struct SimpleEntry: TimelineEntry {
     var doodleSender: String = "Your partner"
 }
 
+/// The room behind Ziggy, matched to the mood he's wearing — the same
+/// scenes the Home screen hero card uses, so the widget feels like part of
+/// the same world.
+func ziggyRoomImageName(for moodImage: String) -> String {
+    switch moodImage {
+    case "ziggy_sleep":
+        return "nightbackground"
+    case "ziggy_tears", "ziggu_cry":
+        return "cry"
+    default:
+        return "Afternoon"
+    }
+}
+
 // 3. THE VIEW (The Look)
 struct ZiggyWidgetEntryView: View {
 
     var entry: Provider.Entry
+
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
 
@@ -403,32 +393,74 @@ struct ZiggyWidgetEntryView: View {
             .clipped()
     }
 
+    @ViewBuilder
     private var defaultBody: some View {
+        // The small widget is nearly square, the medium one is wide — the
+        // same stacked layout can't serve both, so each gets its own.
+        switch family {
+        case .systemSmall:
+            smallBody
+        default:
+            mediumBody
+        }
+    }
 
-        VStack(spacing: 4) {
+    /// Square-ish: the line sits up in the room's empty wall space and Ziggy
+    /// drops to the bottom so he's standing on the floor of the picture
+    /// rather than floating above it.
+    private var smallBody: some View {
+
+        VStack(spacing: 2) {
 
             Text(entry.message)
-                .font(
-                    .system(
-                        size: 14,
-                        weight: .heavy,
-                        design: .rounded
-                    )
-                )
+                .font(.system(size: 11.5, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
-                .lineLimit(3)
-                .minimumScaleFactor(0.6)
+                .lineLimit(2)
+                .minimumScaleFactor(0.65)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
-                .padding(.horizontal, 8)
+                .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                .padding(.top, 12)
+                .padding(.horizontal, 10)
 
             Image(entry.imageName)
                 .resizable()
                 .scaledToFit()
-                .frame(maxHeight: .infinity)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
                 .padding(.bottom, 6)
         }
+    }
+
+    /// Wide: Ziggy on the left, the line reading across the space next to
+    /// him rather than squashed into two words per row.
+    private var mediumBody: some View {
+
+        HStack(spacing: 14) {
+
+            Image(entry.imageName)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .shadow(color: .black.opacity(0.28), radius: 7, y: 4)
+                // Starts his box lower and lets it run to the very bottom
+                // edge, so he sits down on the floor instead of riding level
+                // with the message beside him.
+                .padding(.top, 16)
+
+            Text(entry.message)
+                .font(.system(size: 17, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+                .minimumScaleFactor(0.65)
+                .fixedSize(horizontal: false, vertical: true)
+                .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 6)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
     }
 }
 // 4. THE WIDGET CONFIGURATION
@@ -442,21 +474,33 @@ struct ZiggyWidget: Widget {
 
                     ZStack {
 
+                        // Kept underneath as a fallback, so the widget still
+                        // looks deliberate if the artwork ever fails to load.
                         LinearGradient(
                             colors: entry.colors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
 
-                        Circle()
-                            .fill(.white.opacity(0.12))
-                            .frame(width: 140)
-                            .offset(x: 50, y: 50)
+                        Image(ziggyRoomImageName(for: entry.imageName))
+                            .resizable()
+                            .scaledToFill()
 
-                        Circle()
-                            .fill(.white.opacity(0.08))
-                            .frame(width: 90)
-                            .offset(x: -60, y: -40)
+                        // The afternoon room in particular is bright enough
+                        // to swallow white text, so a flat wash plus a
+                        // stronger band behind the message keeps every line
+                        // readable. The band sits at the top, where the text
+                        // now lives, leaving the floor clean under Ziggy.
+                        Color.black.opacity(0.22)
+
+                        LinearGradient(
+                            colors: [
+                                .black.opacity(0.0),
+                                .black.opacity(0.42)
+                            ],
+                            startPoint: .center,
+                            endPoint: .top
+                        )
                     }
                 }
         }
