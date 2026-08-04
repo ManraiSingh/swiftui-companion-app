@@ -151,6 +151,7 @@ struct PlayCenterView: View {
             DrawingGameView(
                 petVM: petVM
             )
+            .swipeToDismiss()
         }
         .fullScreenCover(
             isPresented: $showTicTacToe
@@ -159,6 +160,7 @@ struct PlayCenterView: View {
             TicTacToeGameView(
                 petVM: petVM
             )
+            .swipeToDismiss()
         }
         .fullScreenCover(
             isPresented: $showDotsAndBoxes
@@ -167,6 +169,7 @@ struct PlayCenterView: View {
             DotsAndBoxesGameView(
                 petVM: petVM
             )
+            .swipeToDismiss()
         }
         .fullScreenCover(
             isPresented: $showConnectFour
@@ -175,6 +178,7 @@ struct PlayCenterView: View {
             ConnectFourGameView(
                 petVM: petVM
             )
+            .swipeToDismiss()
         }
         .fullScreenCover(
             isPresented: $showMemoryMatch
@@ -183,6 +187,7 @@ struct PlayCenterView: View {
             MemoryMatchGameView(
                 petVM: petVM
             )
+            .swipeToDismiss()
         }
     }
 

@@ -1124,10 +1124,10 @@ struct ContentView: View {
                 .zIndex(15)
             }
         }
-        .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM) }
-        .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM) }
-        .fullScreenCover(isPresented: $showDrawingGameView) { PlayCenterView(petVM: petVM) }
-        .fullScreenCover(isPresented: $showDoodleView)       { DoodleView() }
+        .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM).swipeToDismiss() }
+        .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM).swipeToDismiss() }
+        .fullScreenCover(isPresented: $showDrawingGameView) { PlayCenterView(petVM: petVM).swipeToDismiss() }
+        .fullScreenCover(isPresented: $showDoodleView)       { DoodleView().swipeToDismiss() }
         .fullScreenCover(isPresented: $showWidgetOnboarding) {
             WidgetOnboardingView { showWidgetOnboarding = false }
         }
