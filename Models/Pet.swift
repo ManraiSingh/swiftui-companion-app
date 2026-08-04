@@ -75,6 +75,31 @@ struct Pet: Codable {
 
         return "\(days) day ago"
     }
+    /// The face Ziggy wears right now. Lives here because `Pet` is compiled
+    /// into both the app and the widget, so the two can't drift apart.
+    ///
+    /// Order matters:
+    /// 1. Neglect wins outright — a low love score shows whatever the hour,
+    ///    so a day without attention is still visible.
+    /// 2. A recent visit makes him light up, whenever it happened.
+    /// 3. Otherwise he just follows the clock.
+    var moodImage: String {
+
+        if loveScore < 15 { return "ziggy_fireangry" }
+        if loveScore < 30 { return "ziggy_angrywithmark" }
+        if loveScore < 50 { return "ziggu_cry" }
+
+        if Date().timeIntervalSince(lastActionTime) < 2 * 3600 {
+            return "ziggy_loveeyes"
+        }
+
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 22, 23, 0...5: return "ziggy_sleep"      // late night
+        case 6...17:        return "ziggy_happie"     // morning & day
+        default:            return "ziggy_loveeyes"   // 18–21, cosy evening
+        }
+    }
+
     var relationshipDays: Int {
 
         Calendar.current.dateComponents(

@@ -215,14 +215,7 @@ struct Provider: AppIntentTimelineProvider {
         // with its ephemeral message.)
         if let pm = partnerMessage() { return pm.image }
 
-        switch pet.loveScore {
-        case 90...100: return "ziggy_loveeyes"
-        case 70..<90:  return "ziggy_happie"
-        case 50..<70:  return "ziggy_sleep"
-        case 30..<50:  return "ziggu_cry"
-        case 15..<30:  return "ziggy_angrywithmark"
-        default:       return "ziggy_fireangry"
-        }
+        return pet.moodImage
     }
 
     /// The same wording as before, but keyed to the love-score bands the face
@@ -232,9 +225,11 @@ struct Provider: AppIntentTimelineProvider {
         // Prefer the actual cute message your partner just sent.
         if let pm = partnerMessage() { return pm.text }
 
-        switch pet.loveScore {
+        // Keyed to the face he ends up wearing, so the words and the
+        // picture can never contradict each other.
+        switch widgetImage(for: pet) {
 
-        case 90...100:
+        case "ziggy_loveeyes":
             return [
                 "Thinking about you ❤️",
                 "You're my favorite ❤️",
@@ -242,7 +237,7 @@ struct Provider: AppIntentTimelineProvider {
                 "Can we cuddle?"
             ].randomElement()!
 
-        case 70..<90:
+        case "ziggy_happie":
             return [
                 "Let's play soon!",
                 "Hope you're smiling ✨",
@@ -250,7 +245,7 @@ struct Provider: AppIntentTimelineProvider {
                 "Miss you a little ❤️"
             ].randomElement()!
 
-        case 50..<70:
+        case "ziggy_sleep":
             return [
                 "Dreaming of you 😴",
                 "Good night ❤️",
@@ -258,7 +253,7 @@ struct Provider: AppIntentTimelineProvider {
                 "Zzz..."
             ].randomElement()!
 
-        case 30..<50:
+        case "ziggu_cry":
             return [
                 "Where are you? 🥺",
                 "I've been waiting...",
@@ -266,7 +261,7 @@ struct Provider: AppIntentTimelineProvider {
                 "Miss you..."
             ].randomElement()!
 
-        case 15..<30:
+        case "ziggy_angrywithmark":
             return [
                 "You forgot me 😤",
                 "Still waiting...",

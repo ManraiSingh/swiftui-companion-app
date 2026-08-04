@@ -936,14 +936,10 @@ struct ContentView: View {
             return img
         }
         if petVM.hasPendingInstant { return "31" }
-        switch petVM.pet.loveScore {
-        case 90...100: return "ziggy_loveeyes"
-        case 70..<90:  return "ziggy_happie"
-        case 50..<70:  return "ziggy_sleep"
-        case 30..<50:  return "ziggu_cry"
-        case 15..<30:  return "ziggy_angrywithmark"
-        default:       return "ziggy_fireangry"
-        }
+
+        // Time-of-day mood, with neglect and recent visits taking priority.
+        // Shared with the widget via Pet so both always agree.
+        return petVM.pet.moodImage
     }
 
     var shortMoodMessage: String {
@@ -990,13 +986,15 @@ struct ContentView: View {
             return petVM.latestEmotion
         }
 
-        switch petVM.pet.loveScore {
-        case 90...100: return "I can't stop thinking about you ❤️"
-        case 70..<90:  return "Let's make memories together ✨"
-        case 50..<70:  return "Just relaxing today 😴"
-        case 30..<50:  return "I miss you 🥺"
-        case 15..<30:  return "Come spend time with me 😤"
-        default:       return "Where have you been? 💔"
+        // Keyed to the face he's actually wearing, not the raw score — a
+        // sleeping Ziggy shouldn't be saying "I can't stop thinking of you".
+        switch currentEmotionImage {
+        case "ziggy_loveeyes":      return "I can't stop thinking about you ❤️"
+        case "ziggy_happie":        return "Let's make memories together ✨"
+        case "ziggy_sleep":         return "Just relaxing today 😴"
+        case "ziggu_cry":           return "I miss you 🥺"
+        case "ziggy_angrywithmark": return "Come spend time with me 😤"
+        default:                    return "Where have you been? 💔"
         }
     }
 
