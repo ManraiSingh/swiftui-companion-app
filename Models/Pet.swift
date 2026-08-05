@@ -14,6 +14,13 @@ struct Pet: Codable {
 
     var lastActionTime: Date = Date()
     var lastUpdated: Date = Date()
+
+    /// Feeding needs its own clock. `lastActionTime` is whatever happened
+    /// most recently, so a doodle an hour after dinner used to make it look
+    /// like nobody had fed him all day. Optional so pets saved by older
+    /// versions still decode.
+    var lastFedTime: Date? = nil
+
     var events: [Event] = []
     var mood: String {
 
@@ -75,19 +82,47 @@ struct Pet: Codable {
 
         return "\(days) day ago"
     }
+    /// True from the 7pm reminder onwards when neither of you has fed him
+    /// today — the same condition that sends the notification, so the face
+    /// and the alert always agree.
+    ///
+    /// Stops at 22:00 and lets the night look take over; nagging through the
+    /// small hours would just make him look angry until morning.
+    var isHungry: Bool {
+
+        let hour = Calendar.current.component(.hour, from: Date())
+        guard (19...21).contains(hour) else { return false }
+
+        guard let lastFedTime else {
+            // Nothing has been fed since this version shipped, so fall back
+            // to the old signal — otherwise upgrade day shows a false alarm
+            // to someone who already fed him.
+            return !(Calendar.current.isDateInToday(lastActionTime)
+                     && lastAction.contains("Fed"))
+        }
+
+        return !Calendar.current.isDateInToday(lastFedTime)
+    }
+
     /// The face Ziggy wears right now. Lives here because `Pet` is compiled
     /// into both the app and the widget, so the two can't drift apart.
     ///
     /// Order matters:
     /// 1. Neglect wins outright — a low love score shows whatever the hour,
     ///    so a day without attention is still visible.
-    /// 2. A recent visit makes him light up, whenever it happened.
-    /// 3. Otherwise he just follows the clock.
+    /// 2. Waiting on dinner — see `isHungry`.
+    /// 3. A recent visit makes him light up, whenever it happened.
+    /// 4. Otherwise he just follows the clock.
     var moodImage: String {
 
         if loveScore < 15 { return "ziggy_fireangry" }
         if loveScore < 30 { return "ziggy_angrywithmark" }
         if loveScore < 50 { return "ziggu_cry" }
+
+        // Deliberately ahead of the recent-visit check: the reminder is about
+        // food specifically, so a doodle at 6:55 shouldn't hide an empty bowl
+        // while the 7pm notification still goes out.
+        if isHungry { return "ziggy_angrywithhands" }
 
         if Date().timeIntervalSince(lastActionTime) < 2 * 3600 {
             return "ziggy_loveeyes"

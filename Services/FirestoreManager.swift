@@ -98,20 +98,30 @@ class FirestoreManager {
 
             guard let self = self, canSync else { return }
 
+            var payload: [String: Any] = [
+                "name": pet.name,
+                "hunger": pet.hunger,
+                "happiness": pet.happiness,
+                "energy": pet.energy,
+                "loveScore": pet.loveScore,
+                "lastAction": pet.lastAction,
+                "lastActionBy": pet.lastActionBy,
+                "updatedAt": Timestamp()
+            ]
+
+            // Shared so either partner feeding clears the evening reminder —
+            // and the hungry face — for both of them. Added only when set:
+            // this is a merge write, so sending nothing leaves whatever the
+            // other device already wrote alone, rather than wiping it.
+            if let fed = pet.lastFedTime {
+                payload["lastFedTime"] = Timestamp(date: fed)
+            }
+
             self.db.collection("relationships")
                 .document(self.relationshipCode)
                 .collection("data")
                 .document("pet")
-                .setData([
-                    "name": pet.name,
-                    "hunger": pet.hunger,
-                    "happiness": pet.happiness,
-                    "energy": pet.energy,
-                    "loveScore": pet.loveScore,
-                    "lastAction": pet.lastAction,
-                    "lastActionBy": pet.lastActionBy,
-                    "updatedAt": Timestamp()
-                ], merge: true)
+                .setData(payload, merge: true)
         }
     }
 

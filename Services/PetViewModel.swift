@@ -483,6 +483,7 @@ class PetViewModel: ObservableObject {
         pet.lastAction = "Fed \(pet.name) 🍖"
         pet.lastActionBy = UserManager.shared.username
         pet.lastActionTime = Date()
+        pet.lastFedTime = Date()
         pet.lastUpdated = Date()
         addEvent(title: "Fed \(pet.name) 🍖", person: UserManager.shared.username)
 
@@ -620,6 +621,9 @@ class PetViewModel: ObservableObject {
                         data["lastAction"] as? String ?? updatedPet.lastAction
                     updatedPet.lastActionBy =
                         data["lastActionBy"] as? String ?? updatedPet.lastActionBy
+                    updatedPet.lastFedTime =
+                        (data["lastFedTime"] as? Timestamp)?.dateValue()
+                        ?? updatedPet.lastFedTime
 
                     self.pet = updatedPet
 
@@ -895,8 +899,11 @@ class PetViewModel: ObservableObject {
     /// device did. Both partners run this same check independently, so
     /// either one feeding cancels it for both.
     func refreshFeedReminder() {
-        let fedToday = Calendar.current.isDateInToday(pet.lastActionTime)
-            && pet.lastAction.contains("Fed")
+        // Same condition as `Pet.isHungry`, so tonight's alert and the face
+        // on the card can't disagree.
+        let fedToday = pet.lastFedTime.map(Calendar.current.isDateInToday)
+            ?? (Calendar.current.isDateInToday(pet.lastActionTime)
+                && pet.lastAction.contains("Fed"))
 
         NotificationManager.shared.scheduleDailyFeedReminder(
             petName: pet.name,
@@ -980,8 +987,12 @@ class PetViewModel: ObservableObject {
     func ziggyEmotionAfterDismiss() -> String {
 
         // Already fed today — don't turn around and ask for food again.
-        if Calendar.current.isDateInToday(pet.lastActionTime), pet.lastAction.contains("Fed") {
+        if pet.lastFedTime.map(Calendar.current.isDateInToday) ?? false {
             return "So full and happy 🥰"
+        }
+
+        if pet.isHungry {
+            return "Still waiting on dinner 🍖"
         }
 
         switch pet.loveScore {

@@ -269,6 +269,14 @@ struct Provider: AppIntentTimelineProvider {
                 "Hello???"
             ].randomElement()!
 
+        case "ziggy_angrywithhands":
+            return [
+                "Nobody fed me today 🍖",
+                "My bowl is empty 🍖",
+                "Dinner? Anyone?",
+                "Still hungry over here 😤"
+            ].randomElement()!
+
         default:
             return [
                 "OPEN \(pet.name.uppercased()) NOW 🔥",
