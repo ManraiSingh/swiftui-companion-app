@@ -385,15 +385,79 @@ struct ZiggyWidgetEntryView: View {
         }
     }
 
+    @ViewBuilder
     private func doodleBody(_ uiImage: UIImage) -> some View {
+        // Doodles are drawn on a square canvas. That covers the small widget
+        // exactly, but filling a wide one means cropping the sides off the
+        // drawing — so the medium keeps the doodle square and gives the space
+        // it isn't using to Ziggy.
+        switch family {
+        case .systemSmall:
+            smallDoodleBody(uiImage)
+        default:
+            mediumDoodleBody(uiImage)
+        }
+    }
 
-        // The drawing fully covers the widget, edge-to-edge — no card,
-        // no caption, just the doodle itself.
+    /// The drawing fully covers the widget, edge-to-edge — no card, no
+    /// caption, just the doodle itself. Square canvas in a square widget, so
+    /// nothing is lost.
+    private func smallDoodleBody(_ uiImage: UIImage) -> some View {
+
         Image(uiImage: uiImage)
             .resizable()
             .scaledToFill()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+    }
+
+    /// Ziggy on the left reacting to it, the drawing kept square on the
+    /// right at the size it was drawn for.
+    private func mediumDoodleBody(_ uiImage: UIImage) -> some View {
+
+        HStack(spacing: 12) {
+
+            // While a drawing is up he wears his painter's outfit rather than
+            // his usual mood face — he's the one who just made it. Reverts on
+            // its own when the doodle expires and the normal layout returns.
+            Image("ziggy_artist")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .shadow(color: .black.opacity(0.28), radius: 7, y: 4)
+                // Sits him down on the studio floor rather than hovering over
+                // it: 12pt cancels the row's bottom padding, the rest covers
+                // the empty strip the artist artwork carries below the
+                // character and settles him onto the floorboards. Safe as a
+                // fixed number because this layout always pairs the same
+                // mascot with the same background.
+                .padding(.bottom, -30)
+                // Fitting inside the row's height left him noticeably smaller
+                // than the drawing beside him. There's spare width on this
+                // side, so he grows from his feet up into it — the extra
+                // reaches into the empty wall above rather than crowding the
+                // doodle.
+                .scaleEffect(1.10, anchor: .bottom)
+
+            // A clear square sized by the widget's height, with the drawing
+            // filling it. Because the doodle is already square this crops
+            // nothing — it just stops the wide widget stretching it.
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(.white.opacity(0.9), lineWidth: 2.5)
+                }
+                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder
@@ -485,25 +549,31 @@ struct ZiggyWidget: Widget {
                             endPoint: .bottomTrailing
                         )
 
-                        Image(ziggyRoomImageName(for: entry.imageName))
+                        // A drawing puts Ziggy in his studio; otherwise the
+                        // room follows his mood.
+                        Image(entry.doodleImageData != nil
+                              ? "art_background"
+                              : ziggyRoomImageName(for: entry.imageName))
                             .resizable()
                             .scaledToFill()
 
-                        // The afternoon room in particular is bright enough
-                        // to swallow white text, so a flat wash plus a
-                        // stronger band behind the message keeps every line
-                        // readable. The band sits at the top, where the text
-                        // now lives, leaving the floor clean under Ziggy.
-                        Color.black.opacity(0.22)
+                        // These two only exist to keep white text readable —
+                        // the afternoon room in particular is bright enough to
+                        // swallow it. The doodle layout has no text at all, so
+                        // it skips them and the studio stays bright.
+                        if entry.doodleImageData == nil {
 
-                        LinearGradient(
-                            colors: [
-                                .black.opacity(0.0),
-                                .black.opacity(0.42)
-                            ],
-                            startPoint: .center,
-                            endPoint: .top
-                        )
+                            Color.black.opacity(0.22)
+
+                            LinearGradient(
+                                colors: [
+                                    .black.opacity(0.0),
+                                    .black.opacity(0.42)
+                                ],
+                                startPoint: .center,
+                                endPoint: .top
+                            )
+                        }
                     }
                 }
         }
@@ -511,7 +581,8 @@ struct ZiggyWidget: Widget {
         .supportedFamilies([.systemSmall, .systemMedium])
         .configurationDisplayName("Ziggy")
         .description("Your cute connected pet.")
-        // Let the doodle fill the whole widget edge-to-edge.
+        // Lets the small widget's doodle run edge-to-edge; the medium
+        // layouts set their own padding instead.
         .contentMarginsDisabled()
     }
 }
