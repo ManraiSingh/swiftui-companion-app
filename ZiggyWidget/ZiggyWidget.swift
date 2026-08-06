@@ -531,6 +531,70 @@ struct ZiggyWidgetEntryView: View {
     }
 }
 // 4. THE WIDGET CONFIGURATION
+/// The room behind Ziggy.
+///
+/// Split out of `containerBackground` so it can read `widgetFamily` — the
+/// small size needs to make a different decision to the medium one.
+struct ZiggyWidgetBackground: View {
+
+    let entry: SimpleEntry
+
+    @Environment(\.widgetFamily) private var family
+
+    private var hasDoodle: Bool { entry.doodleImageData != nil }
+
+    /// A small widget's doodle covers its whole face, so the room behind it
+    /// is never visible — decoding one there spends the extension's memory
+    /// budget on something nobody can see, and going over that budget is
+    /// what leaves the widget stuck on its blurred placeholder.
+    private var roomIsVisible: Bool {
+        !(hasDoodle && family == .systemSmall)
+    }
+
+    var body: some View {
+
+        ZStack {
+
+            // Kept underneath as a fallback, so the widget still looks
+            // deliberate if the artwork ever fails to load.
+            LinearGradient(
+                colors: entry.colors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            if roomIsVisible {
+
+                // A drawing puts Ziggy in his studio; otherwise the room
+                // follows his mood.
+                Image(hasDoodle
+                      ? "art_background"
+                      : ziggyRoomImageName(for: entry.imageName))
+                    .resizable()
+                    .scaledToFill()
+
+                // These two only exist to keep white text readable — the
+                // afternoon room in particular is bright enough to swallow
+                // it. The doodle layout has no text at all, so it skips them
+                // and the studio stays bright.
+                if !hasDoodle {
+
+                    Color.black.opacity(0.22)
+
+                    LinearGradient(
+                        colors: [
+                            .black.opacity(0.0),
+                            .black.opacity(0.42)
+                        ],
+                        startPoint: .center,
+                        endPoint: .top
+                    )
+                }
+            }
+        }
+    }
+}
+
 struct ZiggyWidget: Widget {
     let kind: String = "ZiggyWidget"
 
@@ -538,43 +602,7 @@ struct ZiggyWidget: Widget {
         AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
             ZiggyWidgetEntryView(entry: entry)
                 .containerBackground(for: .widget) {
-
-                    ZStack {
-
-                        // Kept underneath as a fallback, so the widget still
-                        // looks deliberate if the artwork ever fails to load.
-                        LinearGradient(
-                            colors: entry.colors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-
-                        // A drawing puts Ziggy in his studio; otherwise the
-                        // room follows his mood.
-                        Image(entry.doodleImageData != nil
-                              ? "art_background"
-                              : ziggyRoomImageName(for: entry.imageName))
-                            .resizable()
-                            .scaledToFill()
-
-                        // These two only exist to keep white text readable —
-                        // the afternoon room in particular is bright enough to
-                        // swallow it. The doodle layout has no text at all, so
-                        // it skips them and the studio stays bright.
-                        if entry.doodleImageData == nil {
-
-                            Color.black.opacity(0.22)
-
-                            LinearGradient(
-                                colors: [
-                                    .black.opacity(0.0),
-                                    .black.opacity(0.42)
-                                ],
-                                startPoint: .center,
-                                endPoint: .top
-                            )
-                        }
-                    }
+                    ZiggyWidgetBackground(entry: entry)
                 }
         }
         // ADD BOTH SIZES HERE
