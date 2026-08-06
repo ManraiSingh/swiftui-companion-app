@@ -628,8 +628,10 @@ class PetViewModel: ObservableObject {
                     self.pet = updatedPet
 
                     PersistenceManager.shared.savePet(updatedPet)
+                    // savePet already refreshes the widget, and only when the
+                    // data actually changed — reloading again here just burns
+                    // the day's widget-refresh budget twice as fast.
                     WidgetDataManager.shared.savePet(updatedPet)
-                    WidgetCenter.shared.reloadAllTimelines()
                 }
             }
     }
@@ -1065,9 +1067,9 @@ class PetViewModel: ObservableObject {
     private func save() {
 
         PersistenceManager.shared.savePet(pet)
+        // See above: savePet handles the widget refresh on its own.
         WidgetDataManager.shared.savePet(pet)
         FirestoreManager.shared.savePet(pet)
-        WidgetCenter.shared.reloadAllTimelines()
     }
 }
 

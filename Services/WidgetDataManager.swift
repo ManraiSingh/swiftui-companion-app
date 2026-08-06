@@ -19,15 +19,24 @@ class WidgetDataManager {
 
     func savePet(_ pet: Pet) {
 
-        if let data = try? JSONEncoder().encode(pet) {
+        guard let data = try? JSONEncoder().encode(pet) else { return }
 
-            sharedDefaults?.set(
-                data,
-                forKey: key
-            )
+        // Nothing changed — usually the Firestore listener echoing back a
+        // write we just made. Reloading here would spend one of the day's
+        // widget refreshes to redraw the identical picture.
+        //
+        // iOS budgets a widget to roughly 40–70 reloads a day and silently
+        // ignores the rest, which freezes it until the budget refills. The
+        // Simulator enforces no budget at all, so this only ever goes wrong
+        // on a real device.
+        if sharedDefaults?.data(forKey: key) == data { return }
 
-            WidgetCenter.shared.reloadAllTimelines()
-        }
+        sharedDefaults?.set(
+            data,
+            forKey: key
+        )
+
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// Stores the latest cute message + Ziggy emotion image for the widget
