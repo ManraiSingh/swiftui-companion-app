@@ -375,13 +375,95 @@ struct ZiggyWidgetEntryView: View {
 
     @Environment(\.widgetFamily) private var family
 
+    /// The Lock Screen (and Watch) sizes. They render in the system's vibrant
+    /// mode — no colour, just luminance — so they need their own layout
+    /// rather than a shrunk-down Home Screen one.
+    private var isAccessory: Bool {
+        switch family {
+        case .accessoryRectangular, .accessoryCircular, .accessoryInline:
+            return true
+        default:
+            return false
+        }
+    }
+
     var body: some View {
 
-        if let data = entry.doodleImageData,
-           let uiImage = UIImage(data: data) {
+        // Checked first on purpose: a doodle is a full-bleed colour image, and
+        // vibrant mode would flatten it into a grey smudge on the Lock Screen.
+        // The accessory sizes show Ziggy's face instead.
+        if isAccessory {
+            accessoryBody
+        } else if let data = entry.doodleImageData,
+                  let uiImage = UIImage(data: data) {
             doodleBody(uiImage)
         } else {
             defaultBody
+        }
+    }
+
+    // MARK: - Lock Screen
+
+    @ViewBuilder
+    private var accessoryBody: some View {
+        switch family {
+        case .accessoryRectangular:
+            accessoryRectangularBody
+        default:
+            // Circular / inline aren't offered yet, but a widget must render
+            // something for every family it's handed.
+            accessoryRectangularBody
+        }
+    }
+
+    /// Ziggy on the left, how he's feeling on the right.
+    ///
+    /// Deliberately not cropped to his head, tempting as that is at this size:
+    /// the mascot PNGs carry between 17% and 23% empty space above the
+    /// character, so one fixed crop lands in a different place on each mood.
+    private var accessoryRectangularBody: some View {
+
+        HStack(spacing: 8) {
+
+            // Capped, or a square mascot would take the full 72pt height in
+            // width too and leave the words nowhere to go on a ~157pt row.
+            Image(entry.imageName)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 54)
+
+            VStack(alignment: .leading, spacing: 2) {
+
+                Text(accessoryMoodLine)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Text("\(entry.loveScore) love")
+                    .font(.caption)
+                    .opacity(0.75)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Two words at most — the rectangle is roughly 160×72pt and the text
+    /// shares it with Ziggy.
+    private var accessoryMoodLine: String {
+
+        if entry.doodleImageData != nil { return "New doodle" }
+
+        switch entry.imageName {
+        case "ziggy_loveeyes":       return "In love"
+        case "ziggy_happie":         return "Happy"
+        case "ziggy_sleep":          return "Sleeping"
+        case "ziggy_angrywithhands": return "Hungry"
+        case "ziggu_cry", "ziggy_tears": return "Misses you"
+        case "ziggy_angrywithmark":  return "Annoyed"
+        case "ziggy_fireangry":      return "Heartbroken"
+        default:                     return "Happy"
         }
     }
 
@@ -543,6 +625,18 @@ struct ZiggyWidgetBackground: View {
 
     private var hasDoodle: Bool { entry.doodleImageData != nil }
 
+    /// Lock Screen sizes sit directly on the user's wallpaper and get no
+    /// background of their own — a room image there would be flattened to a
+    /// grey haze behind the text and hurt legibility.
+    private var isAccessory: Bool {
+        switch family {
+        case .accessoryRectangular, .accessoryCircular, .accessoryInline:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// A small widget's doodle covers its whole face, so the room behind it
     /// is never visible — decoding one there spends the extension's memory
     /// budget on something nobody can see, and going over that budget is
@@ -552,6 +646,15 @@ struct ZiggyWidgetBackground: View {
     }
 
     var body: some View {
+
+        if isAccessory {
+            Color.clear
+        } else {
+            homeScreenBackground
+        }
+    }
+
+    private var homeScreenBackground: some View {
 
         ZStack {
 
@@ -606,7 +709,7 @@ struct ZiggyWidget: Widget {
                 }
         }
         // ADD BOTH SIZES HERE
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
         .configurationDisplayName("Ziggy")
         .description("Your cute connected pet.")
         // Lets the small widget's doodle run edge-to-edge; the medium
