@@ -115,18 +115,44 @@ struct Pet: Codable {
     /// 4. Otherwise he just follows the clock.
     var moodImage: String {
 
-        if loveScore < 15 { return "ziggy_fireangry" }
-        if loveScore < 30 { return "ziggy_angrywithmark" }
-        if loveScore < 50 { return "ziggu_cry" }
-
-        // Deliberately ahead of the recent-visit check: the reminder is about
-        // food specifically, so a doodle at 6:55 shouldn't hide an empty bowl
-        // while the 7pm notification still goes out.
-        if isHungry { return "ziggy_angrywithhands" }
+        if let urgent = urgentMood { return urgent }
 
         if Date().timeIntervalSince(lastActionTime) < 2 * 3600 {
             return "ziggy_loveeyes"
         }
+
+        return clockMood
+    }
+
+    /// The same mood minus the "you just visited" glow.
+    ///
+    /// The room is drawn from this rather than `moodImage`. Visiting lights up
+    /// his *face*, but it shouldn't wind the clock back — opening the app at
+    /// midnight used to put the afternoon sun in the window for the next two
+    /// hours. Everything else (neglect, hunger, the hour) is identical.
+    var settledMoodImage: String {
+
+        if let urgent = urgentMood { return urgent }
+
+        return clockMood
+    }
+
+    /// States that outrank both the clock and a recent visit.
+    ///
+    /// Hunger sits deliberately ahead of the visit check: the reminder is
+    /// about food specifically, so a doodle at 6:55 shouldn't hide an empty
+    /// bowl while the 7pm notification still goes out.
+    private var urgentMood: String? {
+
+        if loveScore < 15 { return "ziggy_fireangry" }
+        if loveScore < 30 { return "ziggy_angrywithmark" }
+        if loveScore < 50 { return "ziggu_cry" }
+        if isHungry { return "ziggy_angrywithhands" }
+
+        return nil
+    }
+
+    private var clockMood: String {
 
         switch Calendar.current.component(.hour, from: Date()) {
         case 22, 23, 0...5: return "ziggy_sleep"      // late night

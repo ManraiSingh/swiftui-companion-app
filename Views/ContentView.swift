@@ -1366,7 +1366,7 @@ struct ContentView: View {
     /// sent at midnight swapped the night room for the sunlit afternoon one.
     /// Keying the room off the pet's own mood leaves it on the clock.
     private var heroBackgroundName: String {
-        switch petVM.pet.moodImage {
+        switch petVM.pet.settledMoodImage {
         case "ziggy_sleep": return "nightbackground"
         case "ziggu_cry":   return "cry"
         default:            return "Afternoon"

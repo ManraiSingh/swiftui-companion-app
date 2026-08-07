@@ -128,7 +128,7 @@ struct Provider: AppIntentTimelineProvider {
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
             colors: doodle != nil ? doodleColors : widgetColors(for: pet),
-            roomMoodImage: pet.moodImage,
+            roomMoodImage: pet.settledMoodImage,
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
@@ -146,7 +146,7 @@ struct Provider: AppIntentTimelineProvider {
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
             colors: doodle != nil ? doodleColors : widgetColors(for: pet),
-            roomMoodImage: pet.moodImage,
+            roomMoodImage: pet.settledMoodImage,
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
@@ -190,7 +190,7 @@ struct Provider: AppIntentTimelineProvider {
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
             colors: doodle != nil ? doodleColors : widgetColors(for: pet),
-            roomMoodImage: pet.moodImage,
+            roomMoodImage: pet.settledMoodImage,
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
