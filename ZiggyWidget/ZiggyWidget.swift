@@ -84,12 +84,14 @@ struct Provider: AppIntentTimelineProvider {
         let isPinned = respectPin
             && (d?.bool(forKey: "ziggy_widget_doodle_pinned") ?? false)
 
-        // An unpinned doodle lives 12 hours. When the pin is being ignored we
-        // apply that same window, so a doodle pinned for 30 days can't linger
-        // on the Lock Screen for a month.
+        // On the Lock Screen a doodle is news, not decoration — there's no
+        // drawing there, just a line of text. So it gets the same 30 minutes
+        // a one-tap message gets, then the widget goes back to Ziggy's mood.
+        // The Home Screen keeps the full window (12h, or 30 days if pinned)
+        // because there the drawing itself is the thing worth keeping.
         let effectiveExpiry = isPinned
             ? expiresAt
-            : min(expiresAt, time.addingTimeInterval(12 * 3600))
+            : min(expiresAt, time.addingTimeInterval(respectPin ? 12 * 3600 : 30 * 60))
 
         guard effectiveExpiry > Date() else { return nil }
 
