@@ -289,7 +289,13 @@ struct DoodleView: View {
             }
         }
         .aspectRatio(1, contentMode: .fit)
-        .frame(maxWidth: .infinity)
+        // No `maxWidth: .infinity` here. The canvas is square, so when a
+        // partner's doodle is sitting above it there's less height to work
+        // with and the square comes out narrower than the screen. Stretching
+        // the frame anyway left the rounded border spanning the full width
+        // with dead space between it and the canvas. Letting the card hug the
+        // square keeps them the same size; with no partner doodle there's
+        // room for the square to fill the width and nothing changes.
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
