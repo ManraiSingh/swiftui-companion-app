@@ -388,6 +388,21 @@ struct ZiggyWidgetEntryView: View {
     }
 
     var body: some View {
+        content
+            .containerBackground(for: .widget) {
+                // Lock Screen widgets sit straight on the wallpaper and must
+                // stay empty here — a room image would both haze the text and
+                // spend memory the accessory budget doesn't have.
+                if isAccessory {
+                    Color.clear
+                } else {
+                    ZiggyWidgetBackground(entry: entry, family: family)
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
 
         // Checked first on purpose: a doodle is a full-bleed colour image, and
         // vibrant mode would flatten it into a grey smudge on the Lock Screen.
@@ -621,21 +636,13 @@ struct ZiggyWidgetBackground: View {
 
     let entry: SimpleEntry
 
-    @Environment(\.widgetFamily) private var family
+    /// Passed in rather than read from the environment. This view is built
+    /// inside `containerBackground`, and reading the family there is not
+    /// dependable — getting it wrong means loading a full room image for a
+    /// size that never displays one.
+    let family: WidgetFamily
 
     private var hasDoodle: Bool { entry.doodleImageData != nil }
-
-    /// Lock Screen sizes sit directly on the user's wallpaper and get no
-    /// background of their own — a room image there would be flattened to a
-    /// grey haze behind the text and hurt legibility.
-    private var isAccessory: Bool {
-        switch family {
-        case .accessoryRectangular, .accessoryCircular, .accessoryInline:
-            return true
-        default:
-            return false
-        }
-    }
 
     /// A small widget's doodle covers its whole face, so the room behind it
     /// is never visible — decoding one there spends the extension's memory
@@ -645,16 +652,9 @@ struct ZiggyWidgetBackground: View {
         !(hasDoodle && family == .systemSmall)
     }
 
+    // Only ever built for the Home Screen sizes — the caller substitutes a
+    // clear background for the Lock Screen before reaching this view.
     var body: some View {
-
-        if isAccessory {
-            Color.clear
-        } else {
-            homeScreenBackground
-        }
-    }
-
-    private var homeScreenBackground: some View {
 
         ZStack {
 
@@ -703,10 +703,12 @@ struct ZiggyWidget: Widget {
 
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
+            // The background is applied inside the entry view, not here: it
+            // depends on `widgetFamily`, and only a view inside the entry
+            // view is guaranteed to read the real one. Deciding it out here
+            // risked loading a full room image behind a Lock Screen widget,
+            // whose memory allowance is far smaller than the Home Screen's.
             ZiggyWidgetEntryView(entry: entry)
-                .containerBackground(for: .widget) {
-                    ZiggyWidgetBackground(entry: entry)
-                }
         }
         // ADD BOTH SIZES HERE
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
