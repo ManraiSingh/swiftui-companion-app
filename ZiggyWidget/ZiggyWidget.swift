@@ -438,37 +438,65 @@ struct ZiggyWidgetEntryView: View {
     /// character, so one fixed crop lands in a different place on each mood.
     private var accessoryRectangularBody: some View {
 
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
 
             // Capped, or a square mascot would take the full 72pt height in
             // width too and leave the words nowhere to go on a ~157pt row.
             Image(entry.imageName)
                 .resizable()
                 .scaledToFit()
-                .frame(maxWidth: 54)
+                .frame(maxWidth: 46)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
 
-                Text(accessoryMoodLine)
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                // Mood on the left, love score pinned right — the Spacer
+                // between them is what makes this row span the full width
+                // instead of hugging its text.
+                HStack(spacing: 4) {
 
-                Text("\(entry.loveScore) love")
-                    .font(.caption)
-                    .opacity(0.75)
+                    Text(accessoryMoodLine)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+
+                    Spacer(minLength: 2)
+
+                    Text("\(entry.loveScore)")
+                        .font(.subheadline)
+                        .opacity(0.8)
+                }
+
+                Text(accessoryDetail)
+                    .font(.caption2)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .opacity(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: 0)
+            // Claims the rest of the row so the text block reaches the far
+            // edge rather than stopping halfway.
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// The second line. Long enough to be worth reading at a glance, short
+    /// enough for two lines of caption text.
+    private var accessoryDetail: String {
+
+        if entry.doodleImageData != nil {
+            return "from \(entry.doodleSender)"
+        }
+
+        return entry.message
     }
 
     /// Two words at most — the rectangle is roughly 160×72pt and the text
     /// shares it with Ziggy.
     private var accessoryMoodLine: String {
 
-        if entry.doodleImageData != nil { return "New doodle" }
+        // Kept short: this row shares its width with the love score, and the
+        // line beneath already says who it's from.
+        if entry.doodleImageData != nil { return "Doodle" }
 
         switch entry.imageName {
         case "ziggy_loveeyes":       return "In love"
