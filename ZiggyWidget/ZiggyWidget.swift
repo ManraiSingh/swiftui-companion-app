@@ -66,34 +66,18 @@ struct Provider: AppIntentTimelineProvider {
 
     /// The partner's latest hand-drawn doodle, if it's still fresh and newer
     /// than any pending message. Returns image data + who drew it.
-    /// - Parameter respectPin: pass `false` to treat the doodle as if it were
-    ///   never pinned. The Lock Screen only shows a line of text about a
-    ///   doodle rather than the drawing itself, so honouring a month-long pin
-    ///   there would freeze that widget on "Doodle" instead of keeping
-    ///   something worth looking at on screen.
-    func partnerDoodle(respectPin: Bool = true) -> (data: Data, sender: String)? {
+    func partnerDoodle() -> (data: Data, sender: String)? {
         let d = UserDefaults(suiteName: "group.com.manrai.ziggy")
 
         guard
             let time = d?.object(forKey: "ziggy_widget_doodle_time") as? Date,
             let expiresAt = d?.object(
                 forKey: "ziggy_widget_doodle_expires_at"
-            ) as? Date
+            ) as? Date,
+            expiresAt > Date()
         else { return nil }
 
-        let isPinned = respectPin
-            && (d?.bool(forKey: "ziggy_widget_doodle_pinned") ?? false)
-
-        // On the Lock Screen a doodle is news, not decoration — there's no
-        // drawing there, just a line of text. So it gets the same 30 minutes
-        // a one-tap message gets, then the widget goes back to Ziggy's mood.
-        // The Home Screen keeps the full window (12h, or 30 days if pinned)
-        // because there the drawing itself is the thing worth keeping.
-        let effectiveExpiry = isPinned
-            ? expiresAt
-            : min(expiresAt, time.addingTimeInterval(respectPin ? 12 * 3600 : 30 * 60))
-
-        guard effectiveExpiry > Date() else { return nil }
+        let isPinned = d?.bool(forKey: "ziggy_widget_doodle_pinned") ?? false
 
         // Let a newer one-tap message / instant take priority over the
         // doodle — but only if that message is still active, and only if
@@ -124,17 +108,6 @@ struct Provider: AppIntentTimelineProvider {
         return (imageData, sender)
     }
 
-    /// The Lock Screen / Watch sizes. They show a doodle only as a line of
-    /// text, so they deliberately opt out of the pin.
-    func isAccessory(_ family: WidgetFamily) -> Bool {
-        switch family {
-        case .accessoryRectangular, .accessoryCircular, .accessoryInline:
-            return true
-        default:
-            return false
-        }
-    }
-
     /// A dedicated, always-romantic pastel palette for the doodle card — it's
     /// a deliberate cute gesture, so it shouldn't inherit the generic
     /// hour-of-day mood gradient (which can turn moody indigo at night).
@@ -145,7 +118,7 @@ struct Provider: AppIntentTimelineProvider {
 
     func placeholder(in context: Context) -> SimpleEntry {
         let pet = loadPet()
-        let doodle = partnerDoodle(respectPin: !isAccessory(context.family))
+        let doodle = partnerDoodle()
 
         return SimpleEntry(
             date: Date(),
@@ -162,7 +135,7 @@ struct Provider: AppIntentTimelineProvider {
 
     func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
         let pet = loadPet()
-        let doodle = partnerDoodle(respectPin: !isAccessory(context.family))
+        let doodle = partnerDoodle()
 
         return SimpleEntry(
             date: Date(),
@@ -205,7 +178,7 @@ struct Provider: AppIntentTimelineProvider {
         let nextUpdate = partnerMessageExpiry()
             ?? Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
         let pet = loadPet()
-        let doodle = partnerDoodle(respectPin: !isAccessory(context.family))
+        let doodle = partnerDoodle()
 
         let entry = SimpleEntry(
             date: currentDate,
@@ -402,74 +375,22 @@ struct ZiggyWidgetEntryView: View {
 
     @Environment(\.widgetFamily) private var family
 
-    /// The Lock Screen (and Watch) sizes. They render in the system's vibrant
-    /// mode — no colour, just luminance — so they need their own layout
-    /// rather than a shrunk-down Home Screen one.
-    private var isAccessory: Bool {
-        switch family {
-        case .accessoryRectangular, .accessoryCircular, .accessoryInline:
-            return true
-        default:
-            return false
-        }
-    }
-
     var body: some View {
         content
             .containerBackground(for: .widget) {
-                // Lock Screen widgets sit straight on the wallpaper and must
-                // stay empty here — a room image would both haze the text and
-                // spend memory the accessory budget doesn't have.
-                if isAccessory {
-                    Color.clear
-                } else {
-                    ZiggyWidgetBackground(entry: entry, family: family)
-                }
+                ZiggyWidgetBackground(entry: entry, family: family)
             }
     }
 
     @ViewBuilder
     private var content: some View {
 
-        // Checked first on purpose: a doodle is a full-bleed colour image, and
-        // vibrant mode would flatten it into a grey smudge on the Lock Screen.
-        // The accessory sizes show Ziggy's face instead.
-        if isAccessory {
-            accessoryBody
-        } else if let data = entry.doodleImageData,
-                  let uiImage = UIImage(data: data) {
+        if let data = entry.doodleImageData,
+           let uiImage = UIImage(data: data) {
             doodleBody(uiImage)
         } else {
             defaultBody
         }
-    }
-
-    // MARK: - Lock Screen
-
-    /// Just Ziggy, wearing whatever he's feeling.
-    ///
-    /// No words on purpose. A widget can't refresh on demand — iOS budgets
-    /// reloads and a push may be minutes late — and a stale line of text
-    /// ("Doodle from Anr", hours after the fact) reads as broken. A slightly
-    /// stale drawing of a happy dog doesn't. So the Lock Screen shows only
-    /// the thing that still looks right when it's late.
-    @ViewBuilder
-    private var accessoryBody: some View {
-        switch family {
-        case .accessoryCircular:
-            ZStack {
-                AccessoryWidgetBackground()
-                mascot.padding(2)
-            }
-        default:
-            mascot
-        }
-    }
-
-    private var mascot: some View {
-        Image(entry.imageName)
-            .resizable()
-            .scaledToFit()
     }
 
     @ViewBuilder
@@ -626,10 +547,10 @@ struct ZiggyWidgetBackground: View {
 
     let entry: SimpleEntry
 
-    /// Passed in rather than read from the environment. This view is built
-    /// inside `containerBackground`, and reading the family there is not
-    /// dependable — getting it wrong means loading a full room image for a
-    /// size that never displays one.
+    /// Passed in rather than read from the environment: this view is built
+    /// inside `containerBackground`, where reading `widgetFamily` isn't
+    /// dependable, and the small size needs a different decision to the
+    /// medium one.
     let family: WidgetFamily
 
     private var hasDoodle: Bool { entry.doodleImageData != nil }
@@ -642,8 +563,6 @@ struct ZiggyWidgetBackground: View {
         !(hasDoodle && family == .systemSmall)
     }
 
-    // Only ever built for the Home Screen sizes — the caller substitutes a
-    // clear background for the Lock Screen before reaching this view.
     var body: some View {
 
         ZStack {
@@ -693,16 +612,13 @@ struct ZiggyWidget: Widget {
 
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
-            // The background is applied inside the entry view, not here: it
-            // depends on `widgetFamily`, and only a view inside the entry
-            // view is guaranteed to read the real one. Deciding it out here
-            // risked loading a full room image behind a Lock Screen widget,
-            // whose memory allowance is far smaller than the Home Screen's.
+            // The background is applied inside the entry view, where
+            // `widgetFamily` can be read reliably — it decides whether the
+            // room is drawn at all.
             ZiggyWidgetEntryView(entry: entry)
         }
         // ADD BOTH SIZES HERE
-        .supportedFamilies([.systemSmall, .systemMedium,
-                            .accessoryCircular, .accessoryRectangular])
+        .supportedFamilies([.systemSmall, .systemMedium])
         .configurationDisplayName("Ziggy")
         .description("Your cute connected pet.")
         // Lets the small widget's doodle run edge-to-edge; the medium
