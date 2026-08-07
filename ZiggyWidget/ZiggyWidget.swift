@@ -66,18 +66,32 @@ struct Provider: AppIntentTimelineProvider {
 
     /// The partner's latest hand-drawn doodle, if it's still fresh and newer
     /// than any pending message. Returns image data + who drew it.
-    func partnerDoodle() -> (data: Data, sender: String)? {
+    /// - Parameter respectPin: pass `false` to treat the doodle as if it were
+    ///   never pinned. The Lock Screen only shows a line of text about a
+    ///   doodle rather than the drawing itself, so honouring a month-long pin
+    ///   there would freeze that widget on "Doodle" instead of keeping
+    ///   something worth looking at on screen.
+    func partnerDoodle(respectPin: Bool = true) -> (data: Data, sender: String)? {
         let d = UserDefaults(suiteName: "group.com.manrai.ziggy")
 
         guard
             let time = d?.object(forKey: "ziggy_widget_doodle_time") as? Date,
             let expiresAt = d?.object(
                 forKey: "ziggy_widget_doodle_expires_at"
-            ) as? Date,
-            expiresAt > Date()
+            ) as? Date
         else { return nil }
 
-        let isPinned = d?.bool(forKey: "ziggy_widget_doodle_pinned") ?? false
+        let isPinned = respectPin
+            && (d?.bool(forKey: "ziggy_widget_doodle_pinned") ?? false)
+
+        // An unpinned doodle lives 12 hours. When the pin is being ignored we
+        // apply that same window, so a doodle pinned for 30 days can't linger
+        // on the Lock Screen for a month.
+        let effectiveExpiry = isPinned
+            ? expiresAt
+            : min(expiresAt, time.addingTimeInterval(12 * 3600))
+
+        guard effectiveExpiry > Date() else { return nil }
 
         // Let a newer one-tap message / instant take priority over the
         // doodle — but only if that message is still active, and only if
@@ -108,6 +122,17 @@ struct Provider: AppIntentTimelineProvider {
         return (imageData, sender)
     }
 
+    /// The Lock Screen / Watch sizes. They show a doodle only as a line of
+    /// text, so they deliberately opt out of the pin.
+    func isAccessory(_ family: WidgetFamily) -> Bool {
+        switch family {
+        case .accessoryRectangular, .accessoryCircular, .accessoryInline:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// A dedicated, always-romantic pastel palette for the doodle card — it's
     /// a deliberate cute gesture, so it shouldn't inherit the generic
     /// hour-of-day mood gradient (which can turn moody indigo at night).
@@ -118,7 +143,7 @@ struct Provider: AppIntentTimelineProvider {
 
     func placeholder(in context: Context) -> SimpleEntry {
         let pet = loadPet()
-        let doodle = partnerDoodle()
+        let doodle = partnerDoodle(respectPin: !isAccessory(context.family))
 
         return SimpleEntry(
             date: Date(),
@@ -135,7 +160,7 @@ struct Provider: AppIntentTimelineProvider {
 
     func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
         let pet = loadPet()
-        let doodle = partnerDoodle()
+        let doodle = partnerDoodle(respectPin: !isAccessory(context.family))
 
         return SimpleEntry(
             date: Date(),
@@ -178,7 +203,7 @@ struct Provider: AppIntentTimelineProvider {
         let nextUpdate = partnerMessageExpiry()
             ?? Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
         let pet = loadPet()
-        let doodle = partnerDoodle()
+        let doodle = partnerDoodle(respectPin: !isAccessory(context.family))
 
         let entry = SimpleEntry(
             date: currentDate,
