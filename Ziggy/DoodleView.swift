@@ -837,7 +837,10 @@ struct DoodleView: View {
 
     private func configureTool() {
         if isEraser {
-            canvasView.tool = PKEraserTool(.bitmap)
+            // The width matters here too — without it the eraser ignores the
+            // size slider and stays one fixed size, even though the slider
+            // and its preview dot are right there suggesting otherwise.
+            canvasView.tool = PKEraserTool(.bitmap, width: brushWidth)
         } else {
             canvasView.tool = PKInkingTool(
                 inkType,
