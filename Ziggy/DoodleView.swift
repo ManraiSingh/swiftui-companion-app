@@ -643,13 +643,6 @@ struct DoodleView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button {
-                        addEmojiItem()
-                    } label: {
-                        toolChipLabel(icon: "face.smiling", label: "Emoji")
-                    }
-                    .buttonStyle(.plain)
-
                     ForEach(inkTypes, id: \.label) { item in
                         Button {
                             inkType = item.type
