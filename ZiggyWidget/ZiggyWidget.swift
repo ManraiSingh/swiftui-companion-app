@@ -128,6 +128,7 @@ struct Provider: AppIntentTimelineProvider {
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
             colors: doodle != nil ? doodleColors : widgetColors(for: pet),
+            roomMoodImage: pet.moodImage,
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
@@ -145,6 +146,7 @@ struct Provider: AppIntentTimelineProvider {
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
             colors: doodle != nil ? doodleColors : widgetColors(for: pet),
+            roomMoodImage: pet.moodImage,
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
@@ -188,6 +190,7 @@ struct Provider: AppIntentTimelineProvider {
             loveScore: pet.loveScore,
             relationshipDays: pet.relationshipDays,
             colors: doodle != nil ? doodleColors : widgetColors(for: pet),
+            roomMoodImage: pet.moodImage,
             doodleImageData: doodle?.data,
             doodleSender: doodle?.sender ?? "Your partner"
         )
@@ -349,6 +352,11 @@ struct SimpleEntry: TimelineEntry {
     let loveScore: Int
     let relationshipDays: Int
     let colors: [Color]
+
+    /// The pet's own mood, ignoring any partner message currently overriding
+    /// the face. The room is keyed off this so a note arriving at midnight
+    /// changes Ziggy without swapping the night room for the afternoon one.
+    var roomMoodImage: String = "ziggy_happie"
 
     var doodleImageData: Data? = nil
     var doodleSender: String = "Your partner"
@@ -581,7 +589,7 @@ struct ZiggyWidgetBackground: View {
                 // follows his mood.
                 Image(hasDoodle
                       ? "art_background"
-                      : ziggyRoomImageName(for: entry.imageName))
+                      : ziggyRoomImageName(for: entry.roomMoodImage))
                     .resizable()
                     .scaledToFill()
 

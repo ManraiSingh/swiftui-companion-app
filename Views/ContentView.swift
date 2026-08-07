@@ -1358,8 +1358,15 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 40))
     }
 
+    /// The room follows `pet.moodImage`, not `currentEmotionImage`.
+    ///
+    /// The two differ whenever something transient is on screen — a one-tap
+    /// message, a doodle, a pending Instant. Those change the face Ziggy is
+    /// wearing, and they used to drag the room along with them, so a note
+    /// sent at midnight swapped the night room for the sunlit afternoon one.
+    /// Keying the room off the pet's own mood leaves it on the clock.
     private var heroBackgroundName: String {
-        switch currentEmotionImage {
+        switch petVM.pet.moodImage {
         case "ziggy_sleep": return "nightbackground"
         case "ziggu_cry":   return "cry"
         default:            return "Afternoon"
