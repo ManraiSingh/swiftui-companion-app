@@ -24,6 +24,10 @@ struct DoodleView: View {
 
     @State private var canvasView = PKCanvasView()
     @State private var selectedHex = "#FF4FA3"
+
+    /// Where the thumb sits on the spectrum bar, in unit coordinates.
+    /// Defaults to roughly the pink the pen starts on.
+    @State private var colorBarPoint = CGPoint(x: 0.92, y: 0.34)
     // The canvas's own colour, set from the swatch on the canvas corner.
     @State private var canvasBGHex = "#FFFFFF"
     @State private var showBGPicker = false
@@ -608,37 +612,103 @@ struct DoodleView: View {
             }
     }
 
+    // MARK: - Colour bar
+
+    /// Hold anywhere on the bar and slide, the way Snapchat's picker works.
+    ///
+    /// Across is hue. Up and down inside the bar is how light or dark that hue
+    /// is — near the top you get whites and pastels, the middle is the pure
+    /// colour, the bottom runs to black. That keeps every shade the old row of
+    /// circles offered (and everything between them) in one strip.
+    private var colorBar: some View {
+
+        GeometryReader { geo in
+
+            ZStack(alignment: .topLeading) {
+
+                LinearGradient(colors: spectrum, startPoint: .leading, endPoint: .trailing)
+
+                // Tint at the top, shade at the bottom, pure hue through
+                // the middle — matching how a touch is read below.
+                LinearGradient(
+                    stops: [
+                        .init(color: .white, location: 0.0),
+                        .init(color: .clear, location: 0.5),
+                        .init(color: .black, location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                thumb(in: geo.size)
+            }
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.9), lineWidth: 2))
+            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+            .contentShape(Capsule())
+            // minimumDistance 0 so a plain tap picks a colour too, not just
+            // a drag.
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        pickColor(at: value.location, in: geo.size)
+                    }
+            )
+        }
+        .frame(height: 38)
+        .padding(.vertical, 2)
+    }
+
+    private var spectrum: [Color] {
+        stride(from: 0.0, through: 1.0, by: 1.0 / 12.0).map {
+            Color(hue: $0, saturation: 1, brightness: 1)
+        }
+    }
+
+    private func thumb(in size: CGSize) -> some View {
+        Circle()
+            .fill(selectedColor)
+            .frame(width: 26, height: 26)
+            .overlay(Circle().stroke(.white, lineWidth: 3))
+            .shadow(color: .black.opacity(0.3), radius: 3)
+            .position(
+                x: min(max(colorBarPoint.x * size.width, 13), size.width - 13),
+                y: size.height / 2
+            )
+            .allowsHitTesting(false)
+    }
+
+    private func pickColor(at point: CGPoint, in size: CGSize) {
+
+        guard size.width > 0, size.height > 0 else { return }
+
+        let x = min(max(point.x / size.width, 0), 1)
+        let y = min(max(point.y / size.height, 0), 1)
+
+        let color: UIColor
+        if y < 0.5 {
+            // Top half: white through to the pure hue.
+            color = UIColor(hue: x, saturation: y / 0.5, brightness: 1, alpha: 1)
+        } else {
+            // Bottom half: the pure hue down to black.
+            color = UIColor(hue: x, saturation: 1, brightness: 1 - ((y - 0.5) / 0.5), alpha: 1)
+        }
+
+        colorBarPoint = CGPoint(x: x, y: y)
+        selectedHex = color.hexString
+        isEraser = false
+
+        // Matches the old swatches: picking a colour also recolours the text
+        // you have selected, and the pen always follows so you can never get
+        // stuck unable to change ink colour.
+        recolorSelectedText(to: selectedHex)
+    }
+
     // MARK: - Toolbar
 
     private var toolbar: some View {
         VStack(spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(palette, id: \.hex) { item in
-                        Button {
-                            selectedHex = item.hex
-                            isEraser = false
-                            // Also recolours the tapped-on text, if there is
-                            // one. The pen always follows too, so you can
-                            // never get stuck unable to change ink colour.
-                            recolorSelectedText(to: item.hex)
-                        } label: {
-                            Circle()
-                                .fill(item.color)
-                                .frame(width: 28, height: 28)
-                                .overlay {
-                                    Circle().stroke(Color.black.opacity(0.08), lineWidth: 1)
-                                    if selectedHex == item.hex && !isEraser {
-                                        Circle().stroke(.white, lineWidth: 3)
-                                    }
-                                }
-                                .shadow(radius: selectedHex == item.hex ? 3 : 0)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
+            colorBar
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -1016,6 +1086,19 @@ struct DoodleCanvas: UIViewRepresentable {
 }
 
 private extension UIColor {
+    /// `#RRGGBB`. The doodle stores colours as hex strings, so a colour picked
+    /// off the spectrum bar has to come back out in the same form.
+    var hexString: String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        getRed(&r, green: &g, blue: &b, alpha: &a)
+        return String(
+            format: "#%02X%02X%02X",
+            Int(round(max(0, min(1, r)) * 255)),
+            Int(round(max(0, min(1, g)) * 255)),
+            Int(round(max(0, min(1, b)) * 255))
+        )
+    }
+
     convenience init(hex: String) {
         let cleaned = hex.trimmingCharacters(
             in: CharacterSet.alphanumerics.inverted
