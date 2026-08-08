@@ -11,6 +11,31 @@ private struct DoodleTextItem: Identifiable {
     var fontSize: CGFloat = 32
 }
 
+/// A circle with a tail pointing right — the colour preview that appears
+/// while a finger is on the spectrum bar.
+private struct ColorPin: Shape {
+    func path(in rect: CGRect) -> Path {
+        let r = rect.height / 2
+        let centre = CGPoint(x: rect.minX + r, y: rect.midY)
+        let tip = CGPoint(x: rect.maxX, y: rect.midY)
+        let d = tip.x - centre.x
+        guard d > r else { return Path(ellipseIn: rect) }
+
+        let tangent = acos(r / d)
+        var path = Path()
+        path.addArc(
+            center: centre,
+            radius: r,
+            startAngle: .radians(tangent),
+            endAngle: .radians(-tangent),
+            clockwise: false
+        )
+        path.addLine(to: tip)
+        path.closeSubpath()
+        return path
+    }
+}
+
 private struct DoodleEmojiItem: Identifiable {
     let id = UUID()
     var emoji: String
@@ -25,9 +50,11 @@ struct DoodleView: View {
     @State private var canvasView = PKCanvasView()
     @State private var selectedHex = "#FF4FA3"
 
-    /// Where the thumb sits on the spectrum bar, in unit coordinates.
-    /// Defaults to roughly the pink the pen starts on.
-    @State private var colorBarPoint = CGPoint(x: 0.92, y: 0.34)
+    /// How far down the spectrum bar the current colour sits, 0...1.
+    @State private var colorBarFraction: CGFloat = 0.92
+
+    /// The preview pin only exists while a finger is on the bar.
+    @State private var isPickingColor = false
     // The canvas's own colour, set from the swatch on the canvas corner.
     @State private var canvasBGHex = "#FFFFFF"
     @State private var showBGPicker = false
@@ -307,6 +334,13 @@ struct DoodleView: View {
         )
         .overlay(alignment: .topTrailing) {
             backgroundColorControl
+        }
+        // Sits on the canvas edge like Snapchat's. Applied after the
+        // clipShape above so the preview pin can hang outside the card.
+        .overlay(alignment: .trailing) {
+            verticalColorBar
+                .padding(.vertical, 64)
+                .padding(.trailing, 12)
         }
         .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
     }
@@ -614,88 +648,90 @@ struct DoodleView: View {
 
     // MARK: - Colour bar
 
-    /// Hold anywhere on the bar and slide, the way Snapchat's picker works.
-    ///
-    /// Across is hue. Up and down inside the bar is how light or dark that hue
-    /// is — near the top you get whites and pastels, the middle is the pure
-    /// colour, the bottom runs to black. That keeps every shade the old row of
-    /// circles offered (and everything between them) in one strip.
-    private var colorBar: some View {
+    /// The stops the bar is drawn from. Picking samples this same array, so
+    /// the colour you get is exactly the one under your finger.
+    private var barStops: [UIColor] {
+        var stops: [UIColor] = [.white]
+        for i in 0...11 {
+            stops.append(UIColor(hue: CGFloat(i) / 12.0, saturation: 1, brightness: 1, alpha: 1))
+        }
+        stops.append(.black)
+        return stops
+    }
+
+    private func barColor(at fraction: CGFloat) -> UIColor {
+        let stops = barStops
+        let last = stops.count - 1
+        let pos = min(max(fraction, 0), 1) * CGFloat(last)
+        let i = min(Int(pos), last - 1)
+        let t = pos - CGFloat(i)
+
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        stops[i].getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        stops[i + 1].getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+
+        return UIColor(
+            red:   r1 + (r2 - r1) * t,
+            green: g1 + (g2 - g1) * t,
+            blue:  b1 + (b2 - b1) * t,
+            alpha: 1
+        )
+    }
+
+    /// A thin spectrum strip down the edge of the canvas. Hold it and slide,
+    /// and a teardrop shows the colour you're on — the same gesture as
+    /// Snapchat's, so it needs no explaining.
+    private var verticalColorBar: some View {
 
         GeometryReader { geo in
 
-            ZStack(alignment: .topLeading) {
-
-                LinearGradient(colors: spectrum, startPoint: .leading, endPoint: .trailing)
-
-                // Tint at the top, shade at the bottom, pure hue through
-                // the middle — matching how a touch is read below.
-                LinearGradient(
-                    stops: [
-                        .init(color: .white, location: 0.0),
-                        .init(color: .clear, location: 0.5),
-                        .init(color: .black, location: 1.0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-
-                thumb(in: geo.size)
-            }
+            LinearGradient(
+                colors: barStops.map(Color.init),
+                startPoint: .top,
+                endPoint: .bottom
+            )
             .clipShape(Capsule())
             .overlay(Capsule().stroke(.white.opacity(0.9), lineWidth: 2))
-            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
-            .contentShape(Capsule())
-            // minimumDistance 0 so a plain tap picks a colour too, not just
-            // a drag.
+            .shadow(color: .black.opacity(0.18), radius: 3, x: -1)
+            // Widened well beyond the visible strip: 14pt is a hard target
+            // to hit with a thumb, and missing it would draw on the canvas.
+            .contentShape(Capsule().inset(by: -18))
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        pickColor(at: value.location, in: geo.size)
+                        pickColor(atY: value.location.y, in: geo.size.height)
+                        isPickingColor = true
+                    }
+                    .onEnded { _ in
+                        isPickingColor = false
                     }
             )
+            .overlay(alignment: .top) {
+                if isPickingColor {
+                    ColorPin()
+                        .fill(selectedColor)
+                        .overlay(ColorPin().stroke(.white, lineWidth: 3))
+                        .frame(width: 78, height: 60)
+                        .shadow(color: .black.opacity(0.28), radius: 5)
+                        // Tail points back at the strip, centred on the touch.
+                        .offset(x: -88, y: colorBarFraction * geo.size.height - 30)
+                        .allowsHitTesting(false)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPickingColor)
         }
-        .frame(height: 38)
-        .padding(.vertical, 2)
+        .frame(width: 14)
     }
 
-    private var spectrum: [Color] {
-        stride(from: 0.0, through: 1.0, by: 1.0 / 12.0).map {
-            Color(hue: $0, saturation: 1, brightness: 1)
-        }
-    }
+    private func pickColor(atY y: CGFloat, in height: CGFloat) {
 
-    private func thumb(in size: CGSize) -> some View {
-        Circle()
-            .fill(selectedColor)
-            .frame(width: 26, height: 26)
-            .overlay(Circle().stroke(.white, lineWidth: 3))
-            .shadow(color: .black.opacity(0.3), radius: 3)
-            .position(
-                x: min(max(colorBarPoint.x * size.width, 13), size.width - 13),
-                y: size.height / 2
-            )
-            .allowsHitTesting(false)
-    }
+        guard height > 0 else { return }
 
-    private func pickColor(at point: CGPoint, in size: CGSize) {
-
-        guard size.width > 0, size.height > 0 else { return }
-
-        let x = min(max(point.x / size.width, 0), 1)
-        let y = min(max(point.y / size.height, 0), 1)
-
-        let color: UIColor
-        if y < 0.5 {
-            // Top half: white through to the pure hue.
-            color = UIColor(hue: x, saturation: y / 0.5, brightness: 1, alpha: 1)
-        } else {
-            // Bottom half: the pure hue down to black.
-            color = UIColor(hue: x, saturation: 1, brightness: 1 - ((y - 0.5) / 0.5), alpha: 1)
-        }
-
-        colorBarPoint = CGPoint(x: x, y: y)
-        selectedHex = color.hexString
+        let fraction = min(max(y / height, 0), 1)
+        colorBarFraction = fraction
+        selectedHex = barColor(at: fraction).hexString
         isEraser = false
 
         // Matches the old swatches: picking a colour also recolours the text
@@ -708,7 +744,6 @@ struct DoodleView: View {
 
     private var toolbar: some View {
         VStack(spacing: 12) {
-            colorBar
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
