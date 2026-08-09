@@ -55,6 +55,10 @@ struct DoodleView: View {
 
     /// The preview pin only exists while a finger is on the bar.
     @State private var isPickingColor = false
+
+    /// The bar starts open, shrinks to a bead once you begin drawing, and
+    /// toggles back open when the bead is tapped.
+    @State private var isColorBarOpen = true
     // The canvas's own colour, set from the swatch on the canvas corner.
     @State private var canvasBGHex = "#FFFFFF"
     @State private var showBGPicker = false
@@ -293,7 +297,14 @@ struct DoodleView: View {
         // needs no cropping to cover it.
         GeometryReader { geo in
             ZStack {
-                DoodleCanvas(canvasView: canvasView, background: UIColor(hex: canvasBGHex))
+                DoodleCanvas(
+                    canvasView: canvasView,
+                    background: UIColor(hex: canvasBGHex),
+                    onDrawingBegan: {
+                        guard isColorBarOpen else { return }
+                        withAnimation(bubble) { isColorBarOpen = false }
+                    }
+                )
                     .background(canvasBGColor)
 
                 // Bound so the text of the item being edited can be typed
@@ -395,6 +406,9 @@ struct DoodleView: View {
                 // this the grid stretches to the canvas's full width.
                 .frame(width: 4 * 26 + 3 * 8)
                 .padding(10)
+                // Shifted inward while the spectrum bar is open, or the
+                // right-hand swatches sit underneath it.
+                .padding(.trailing, isColorBarOpen ? 30 : 0)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
@@ -682,47 +696,77 @@ struct DoodleView: View {
     /// A thin spectrum strip down the edge of the canvas. Hold it and slide,
     /// and a teardrop shows the colour you're on — the same gesture as
     /// Snapchat's, so it needs no explaining.
+    ///
+    /// Once you start drawing it shrinks to a bead the size of the background
+    /// button, so it stops covering the canvas. It's the same `Capsule`
+    /// throughout — a capsule at equal width and height is a circle — so the
+    /// two states genuinely morph into each other rather than cross-fading.
     private var verticalColorBar: some View {
 
         GeometryReader { geo in
 
-            LinearGradient(
-                colors: barStops.map(Color.init),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .clipShape(Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.9), lineWidth: 2))
-            .shadow(color: .black.opacity(0.18), radius: 3, x: -1)
-            // Widened well beyond the visible strip: 14pt is a hard target
-            // to hit with a thumb, and missing it would draw on the canvas.
-            .contentShape(Capsule().inset(by: -18))
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        pickColor(atY: value.location.y, in: geo.size.height)
-                        isPickingColor = true
+            let openHeight = geo.size.height
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                LinearGradient(
+                    colors: barStops.map(Color.init),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(
+                    width: isColorBarOpen ? 14 : 32,
+                    height: isColorBarOpen ? openHeight : 32
+                )
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(.white.opacity(0.92), lineWidth: 2))
+                .shadow(color: .black.opacity(0.18), radius: 3, x: -1)
+                // Widened well beyond the visible strip: 14pt is a hard
+                // target for a thumb, and missing it would draw on the canvas.
+                .contentShape(Capsule().inset(by: -16))
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard isColorBarOpen else { return }
+                            pickColor(atY: value.location.y, in: openHeight)
+                            isPickingColor = true
+                        }
+                        .onEnded { _ in
+                            if isColorBarOpen {
+                                isPickingColor = false
+                            } else {
+                                withAnimation(bubble) { isColorBarOpen = true }
+                            }
+                        }
+                )
+                .overlay(alignment: .top) {
+                    if isPickingColor && isColorBarOpen {
+                        ColorPin()
+                            .fill(selectedColor)
+                            .overlay(ColorPin().stroke(.white, lineWidth: 3))
+                            .frame(width: 78, height: 60)
+                            .shadow(color: .black.opacity(0.28), radius: 5)
+                            // Tail points back at the strip, centred on the touch.
+                            .offset(x: -88, y: colorBarFraction * openHeight - 30)
+                            .allowsHitTesting(false)
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
                     }
-                    .onEnded { _ in
-                        isPickingColor = false
-                    }
-            )
-            .overlay(alignment: .top) {
-                if isPickingColor {
-                    ColorPin()
-                        .fill(selectedColor)
-                        .overlay(ColorPin().stroke(.white, lineWidth: 3))
-                        .frame(width: 78, height: 60)
-                        .shadow(color: .black.opacity(0.28), radius: 5)
-                        // Tail points back at the strip, centred on the touch.
-                        .offset(x: -88, y: colorBarFraction * geo.size.height - 30)
-                        .allowsHitTesting(false)
-                        .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
+
+                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(bubble, value: isColorBarOpen)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPickingColor)
         }
-        .frame(width: 14)
+        .frame(width: 32)
+    }
+
+    /// Loose enough to overshoot slightly, so the bar visibly pops between
+    /// its two shapes instead of just resizing.
+    private var bubble: Animation {
+        .spring(response: 0.38, dampingFraction: 0.58)
     }
 
     private func pickColor(atY y: CGFloat, in height: CGFloat) {
@@ -1103,10 +1147,29 @@ struct DoodleCanvas: UIViewRepresentable {
     let canvasView: PKCanvasView
     var background: UIColor = .white
 
+    /// Fires the moment a stroke starts, so the colour bar can get out of
+    /// the way.
+    var onDrawingBegan: () -> Void = {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onDrawingBegan: onDrawingBegan)
+    }
+
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
+        var onDrawingBegan: () -> Void
+        init(onDrawingBegan: @escaping () -> Void) {
+            self.onDrawingBegan = onDrawingBegan
+        }
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            onDrawingBegan()
+        }
+    }
+
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.drawingPolicy = .anyInput
         canvasView.backgroundColor = background
         canvasView.isOpaque = true
+        canvasView.delegate = context.coordinator
         // The canvas is a fixed square that never scrolls or zooms, but as a
         // scroll view it still owns a pinch recogniser that would otherwise
         // compete with pinching a sticker to resize it. Drawing is handled
@@ -1117,6 +1180,8 @@ struct DoodleCanvas: UIViewRepresentable {
 
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
         uiView.backgroundColor = background
+        // Refreshed each pass so the closure never captures stale state.
+        context.coordinator.onDrawingBegan = onDrawingBegan
     }
 }
 
