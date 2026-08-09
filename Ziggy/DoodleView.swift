@@ -350,7 +350,8 @@ struct DoodleView: View {
         // clipShape above so the preview pin can hang outside the card.
         .overlay(alignment: .trailing) {
             verticalColorBar
-                .padding(.vertical, 64)
+                .padding(.top, 52)
+                .padding(.bottom, 24)
                 .padding(.trailing, 12)
         }
         .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
@@ -359,7 +360,14 @@ struct DoodleView: View {
     // Sits in the canvas's own top-right corner rather than the toolbar, so
     // it's right where the paper is and costs the toolbar no height.
     private var backgroundColorControl: some View {
-        VStack(alignment: .trailing, spacing: 8) {
+        // The grid opens to the LEFT of the button, not underneath it. Below
+        // is where the colour bar lives — open or collapsed to its bead — so
+        // anything dropped there ends up behind it.
+        HStack(alignment: .top, spacing: 8) {
+
+            if showBGPicker {
+                backgroundSwatchGrid
+            }
 
             Button {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
@@ -376,9 +384,13 @@ struct DoodleView: View {
                     .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
+        }
+        .padding(10)
+    }
 
-            if showBGPicker {
-                LazyVGrid(
+    private var backgroundSwatchGrid: some View {
+        Group {
+            LazyVGrid(
                     columns: Array(repeating: GridItem(.fixed(26), spacing: 8), count: 4),
                     spacing: 8
                 ) {
@@ -406,16 +418,11 @@ struct DoodleView: View {
                 // this the grid stretches to the canvas's full width.
                 .frame(width: 4 * 26 + 3 * 8)
                 .padding(10)
-                // Shifted inward while the spectrum bar is open, or the
-                // right-hand swatches sit underneath it.
-                .padding(.trailing, isColorBarOpen ? 30 : 0)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
                 .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
-            }
         }
-        .padding(10)
     }
 
     // MARK: - Text & emoji stickers
@@ -673,6 +680,12 @@ struct DoodleView: View {
         return stops
     }
 
+    /// A full turn of hue, first stop repeated last so the wheel closes
+    /// without a visible seam.
+    private var wheelStops: [Color] {
+        (0...12).map { Color(hue: Double($0 % 12) / 12.0, saturation: 1, brightness: 1) }
+    }
+
     private func barColor(at fraction: CGFloat) -> UIColor {
         let stops = barStops
         let last = stops.count - 1
@@ -707,19 +720,41 @@ struct DoodleView: View {
 
             let openHeight = geo.size.height
 
+            // Top-aligned, not centred: the slot already clears the
+            // background button above, so the closed bead lands directly
+            // beneath it and the two line up.
             VStack(spacing: 0) {
-                Spacer(minLength: 0)
 
-                LinearGradient(
-                    colors: barStops.map(Color.init),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                ZStack {
+                    // Cross-fades as it shrinks: a vertical ramp reads well
+                    // in a tall strip, a colour wheel reads well in a bead.
+                    LinearGradient(
+                        colors: barStops.map(Color.init),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .opacity(isColorBarOpen ? 1 : 0)
+
+                    AngularGradient(colors: wheelStops, center: .center)
+                        .opacity(isColorBarOpen ? 0 : 1)
+                }
                 .frame(
                     width: isColorBarOpen ? 14 : 32,
                     height: isColorBarOpen ? openHeight : 32
                 )
                 .clipShape(Capsule())
+                // Hollows out into a ring with a plus once it's a bead.
+                .overlay {
+                    if !isColorBarOpen {
+                        ZStack {
+                            Circle().fill(.white.opacity(0.96)).padding(6)
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(accent)
+                        }
+                        .transition(.opacity)
+                    }
+                }
                 .overlay(Capsule().stroke(.white.opacity(0.92), lineWidth: 2))
                 .shadow(color: .black.opacity(0.18), radius: 3, x: -1)
                 // Widened well beyond the visible strip: 14pt is a hard
