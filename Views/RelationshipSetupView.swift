@@ -26,19 +26,21 @@ struct RelationshipSetupView: View {
         !joinCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var inviteURL: URL {
-        URL(string: "ziggy://invite?code=\(generatedCode)")!
-    }
+    /// An invite is, by definition, sent to someone who doesn't have Ziggy
+    /// yet — so the link has to be one that works before the app exists on
+    /// their phone. A `ziggy://` URL can't: custom schemes only resolve once
+    /// the app is installed, and most messaging apps won't even turn one into
+    /// a tappable link. This one opens the App Store listing instead, and
+    /// arrives as a proper preview card in Messages and WhatsApp.
+    private let appStoreURL = "https://apps.apple.com/app/id6785883853"
 
     private var inviteMessage: String {
         """
-        Come raise Ziggy with me.
+        Come raise Ziggy with me 🐶
 
-        Tap this invite link:
-        \(inviteURL.absoluteString)
+        Get Ziggy: \(appStoreURL)
 
-        If the link does not open, enter this code in Ziggy:
-        \(generatedCode)
+        Then enter my code: \(generatedCode)
         """
     }
 
