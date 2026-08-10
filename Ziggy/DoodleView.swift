@@ -62,6 +62,11 @@ struct DoodleView: View {
     // The canvas's own colour, set from the swatch on the canvas corner.
     @State private var canvasBGHex = "#FFFFFF"
     @State private var showBGPicker = false
+
+    /// Where the crosshair sits on the background square, and whatever is
+    /// typed in the hex / name field beneath it.
+    @State private var bgPickPoint = CGPoint(x: 0.0, y: 0.0)
+    @State private var bgInput = "#FFFFFF"
     @State private var brushWidth: CGFloat = 22
     @State private var isEraser = false
     @State private var inkType: PKInkingTool.InkType = .pen
@@ -388,42 +393,140 @@ struct DoodleView: View {
         .padding(10)
     }
 
+    /// Background picker: a gradient square you hold and slide across, with a
+    /// field underneath for typing an exact colour.
+    ///
+    /// Replaces the old sixteen fixed swatches. Across the square is hue, down
+    /// it runs tint → pure colour → shade, so every colour is reachable
+    /// without a second control cluttering the canvas.
     private var backgroundSwatchGrid: some View {
-        Group {
-            LazyVGrid(
-                    columns: Array(repeating: GridItem(.fixed(26), spacing: 8), count: 4),
-                    spacing: 8
-                ) {
-                    ForEach(palette, id: \.hex) { item in
-                        Button {
-                            canvasBGHex = item.hex
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                showBGPicker = false
-                            }
-                        } label: {
-                            Circle()
-                                .fill(item.color)
-                                .frame(width: 26, height: 26)
-                                .overlay {
-                                    Circle().stroke(Color.black.opacity(0.12), lineWidth: 1)
-                                    if canvasBGHex == item.hex {
-                                        Circle().stroke(accent, lineWidth: 2.5)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                    }
+
+        VStack(alignment: .leading, spacing: 10) {
+
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+
+                    LinearGradient(
+                        colors: (0...12).map { Color(hue: Double($0) / 12.0, saturation: 1, brightness: 1) },
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white, location: 0.0),
+                            .init(color: .clear, location: 0.5),
+                            .init(color: .black, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+
+                    // Where you last picked. Ringed in both black and white so
+                    // it stays visible over pale and dark areas alike.
+                    Circle()
+                        .strokeBorder(.white, lineWidth: 2.5)
+                        .background(Circle().strokeBorder(.black.opacity(0.35), lineWidth: 4))
+                        .frame(width: 20, height: 20)
+                        .position(
+                            x: bgPickPoint.x * geo.size.width,
+                            y: bgPickPoint.y * geo.size.height
+                        )
+                        .allowsHitTesting(false)
                 }
-                // 4 swatches of 26 plus the 8pt gaps between them — without
-                // this the grid stretches to the canvas's full width.
-                .frame(width: 4 * 26 + 3 * 8)
-                .padding(10)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
-                .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            pickBackground(at: value.location, in: geo.size)
+                        }
+                )
+            }
+            .frame(width: 150, height: 132)
+
+            HStack(spacing: 8) {
+
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(canvasBGColor)
+                    .frame(width: 26, height: 26)
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(.black.opacity(0.15), lineWidth: 1))
+
+                TextField("#FFFFFF or “sky”", text: $bgInput)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit { applyBackgroundInput() }
+                    .frame(width: 108)
+            }
         }
+        .padding(12)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+        .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
     }
+
+    private func pickBackground(at point: CGPoint, in size: CGSize) {
+
+        guard size.width > 0, size.height > 0 else { return }
+
+        let x = min(max(point.x / size.width, 0), 1)
+        let y = min(max(point.y / size.height, 0), 1)
+
+        let color: UIColor
+        if y < 0.5 {
+            color = UIColor(hue: x, saturation: y / 0.5, brightness: 1, alpha: 1)
+        } else {
+            color = UIColor(hue: x, saturation: 1, brightness: 1 - ((y - 0.5) / 0.5), alpha: 1)
+        }
+
+        bgPickPoint = CGPoint(x: x, y: y)
+        canvasBGHex = color.hexString
+        bgInput = canvasBGHex
+    }
+
+    /// Accepts `#RRGGBB`, bare `RRGGBB`, or one of the named colours.
+    /// Anything unrecognised is left alone rather than silently turning the
+    /// canvas an unexpected shade.
+    private func applyBackgroundInput() {
+
+        let raw = bgInput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        if let named = DoodleView.namedColors[raw] {
+            canvasBGHex = named
+            bgInput = named
+            return
+        }
+
+        let hex = raw.hasPrefix("#") ? String(raw.dropFirst()) : raw
+        if hex.count == 6, hex.allSatisfy({ $0.isHexDigit }) {
+            canvasBGHex = "#" + hex.uppercased()
+            bgInput = canvasBGHex
+            return
+        }
+
+        // Not something we understand — put the current colour back so the
+        // field never sits there showing a value that isn't real.
+        bgInput = canvasBGHex
+    }
+
+    /// Plain-English names, so "sky" or "cream" work as well as a hex code.
+    private static let namedColors: [String: String] = [
+        "white": "#FFFFFF",  "black": "#111827", "grey": "#8E8E93",
+        "gray": "#8E8E93",   "cream": "#FFF6E5", "beige": "#F5EBDC",
+        "red": "#EF4444",    "rose": "#FF477E",  "pink": "#FF4FA3",
+        "blush": "#FFD1DC",  "coral": "#FF7F6B", "peach": "#FFCBA4",
+        "orange": "#F97316", "gold": "#F5C542",  "yellow": "#FFD166",
+        "lime": "#B7E778",   "green": "#22C55E", "mint": "#2DD4BF",
+        "teal": "#14B8A6",   "cyan": "#22D3EE",  "sky": "#7DD3FC",
+        "blue": "#00A6FB",   "navy": "#1E3A8A",  "indigo": "#4F46E5",
+        "purple": "#9B5DE5", "lavender": "#C9B6FF", "violet": "#8B5CF6",
+        "magenta": "#E040FB","brown": "#8D5524", "tan": "#D2A679"
+    ]
 
     // MARK: - Text & emoji stickers
 
