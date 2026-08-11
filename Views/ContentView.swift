@@ -1110,17 +1110,22 @@ struct ContentView: View {
             }
 
             // A floating bar, not a sheet or a safeAreaInset — either of
-            // those would still shrink the home screen's own measured
-            // layout underneath. This just tracks the keyboard's real
-            // height itself and pads up to sit right above it, so the
-            // rest of the UI never has to resize to make room for it.
+            // those would shrink the home screen's own measured layout
+            // underneath.
+            //
+            // This one is deliberately the only thing on screen that still
+            // respects the keyboard's safe area. The page behind it opts out
+            // (see above), so nothing else resizes, and SwiftUI drops the bar
+            // exactly onto the top of the keyboard for us. Measuring the
+            // keyboard by hand and padding up by that much used to leave it
+            // floating ~100pt high, because the padding stacked on top of the
+            // home-indicator inset the bar was already sitting above.
             if showComposeBar {
                 VStack {
                     Spacer()
                     floatingComposeBar
-                        .padding(.bottom, max(composeKeyboardHeight, 8))
+                        .padding(.bottom, 8)
                 }
-                .ignoresSafeArea(.keyboard, edges: .bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(15)
             }
