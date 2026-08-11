@@ -2556,11 +2556,20 @@ struct InviteConnectionView: View {
         isConnecting = true
         failed = false
 
-        FirestoreManager.shared.joinRelationship(code: code) {
+        FirestoreManager.shared.joinRelationship(code: code) { joined in
             DispatchQueue.main.async {
+                isConnecting = false
+
+                // Only remember the code once we're genuinely a member.
+                // Saving it regardless is what left people looking paired
+                // while every screen came up empty.
+                guard joined else {
+                    failed = true
+                    return
+                }
+
                 RelationshipManager.shared.saveCode(code)
                 onConnected()
-                isConnecting = false
             }
         }
 

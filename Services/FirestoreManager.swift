@@ -47,6 +47,36 @@ class FirestoreManager {
         }
     }
 
+    /// Throws away the current anonymous session and starts a fresh one.
+    ///
+    /// A phone restored from a backup, or set up with device transfer, can
+    /// come back holding a Firebase session in its keychain that *looks*
+    /// valid — `currentUser` is non-nil, so `ensureSignedIn` hands it straight
+    /// back — but whose token can no longer be refreshed. Every request then
+    /// fails as permission-denied, and since nothing ever re-authenticates,
+    /// the app stays broken no matter how many times it's relaunched or how
+    /// often the code is re-entered. This is the way out.
+    private func reauthenticate(_ completion: @escaping (String?) -> Void) {
+        try? Auth.auth().signOut()
+        Auth.auth().signInAnonymously { result, _ in
+            completion(result?.user.uid)
+        }
+    }
+
+    private func writeMembership(
+        code: String,
+        uid: String,
+        completion: @escaping (Bool) -> Void
+    ) {
+        db.collection("relationships")
+            .document(code)
+            .setData([
+                "members": FieldValue.arrayUnion([uid])
+            ], merge: true) { error in
+                completion(error == nil)
+            }
+    }
+
     // Every send/listen call gated through this, but the membership write
     // is idempotent (arrayUnion of our own uid) — once it succeeds for the
     // current code there's nothing more to do, so we skip the network
@@ -75,16 +105,35 @@ class FirestoreManager {
                 return
             }
 
-            self.db.collection("relationships")
-                .document(self.relationshipCode)
-                .setData([
-                    "members": FieldValue.arrayUnion([uid])
-                ], merge: true) { error in
-                    if error == nil {
-                        self.membershipEnsuredForCode = self.relationshipCode
-                    }
-                    completion(error == nil)
+            self.writeMembership(code: self.relationshipCode, uid: uid) { ok in
+
+                // Same recovery as joining: a restored phone can hold a
+                // session that no longer authenticates, which would otherwise
+                // leave an already-paired user permanently locked out of their
+                // own relationship. Retrying once with a fresh session heals
+                // installs that are already broken, without the user having to
+                // do anything.
+                guard !ok else {
+                    self.membershipEnsuredForCode = self.relationshipCode
+                    completion(true)
+                    return
                 }
+
+                self.reauthenticate { freshUID in
+
+                    guard let freshUID = freshUID else {
+                        completion(false)
+                        return
+                    }
+
+                    self.writeMembership(code: self.relationshipCode, uid: freshUID) { healed in
+                        if healed {
+                            self.membershipEnsuredForCode = self.relationshipCode
+                        }
+                        completion(healed)
+                    }
+                }
+            }
         }
     }
 
@@ -228,27 +277,50 @@ class FirestoreManager {
     /// Joins an existing relationship by adding the current user as a member.
     /// `completion` runs after the membership write so listeners start with
     /// access already granted.
+    /// Reports whether the join actually succeeded.
+    ///
+    /// It used to swallow the result: both the signed-out path and a failed
+    /// write called the same completion as success. The caller then saved the
+    /// code regardless, so the app looked paired while the uid was never added
+    /// to `members` — and since reads require membership, every screen came up
+    /// empty with nothing explaining why. That's the "entered the same code on
+    /// my new phone and it stopped working" case.
     func joinRelationship(
         code: String,
-        completion: @escaping () -> Void = {}
+        completion: @escaping (Bool) -> Void = { _ in }
     ) {
-        guard !code.isEmpty else { completion(); return }
+        guard !code.isEmpty else { completion(false); return }
 
         ensureSignedIn { [weak self] uid in
 
             guard let self = self, let uid = uid else {
-                DispatchQueue.main.async { completion() }
+                DispatchQueue.main.async { completion(false) }
                 return
             }
 
-            self.db.collection("relationships")
-                .document(code)
-                .setData([
-                    "members": FieldValue.arrayUnion([uid])
-                ], merge: true) { _ in
+            self.writeMembership(code: code, uid: uid) { ok in
+
+                if ok {
                     self.refreshSavedDeviceToken()
-                    DispatchQueue.main.async { completion() }
+                    DispatchQueue.main.async { completion(true) }
+                    return
                 }
+
+                // Most likely a stale restored session — try once with a
+                // brand-new one before giving up.
+                self.reauthenticate { freshUID in
+
+                    guard let freshUID = freshUID else {
+                        DispatchQueue.main.async { completion(false) }
+                        return
+                    }
+
+                    self.writeMembership(code: code, uid: freshUID) { healed in
+                        if healed { self.refreshSavedDeviceToken() }
+                        DispatchQueue.main.async { completion(healed) }
+                    }
+                }
+            }
         }
     }
 

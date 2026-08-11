@@ -251,7 +251,12 @@ struct RelationshipSetupView: View {
 
                             // Become a member first, then connect (so the
                             // realtime listeners start with access granted).
-                            FirestoreManager.shared.joinRelationship(code: code) {
+                            inviteError = ""
+                            FirestoreManager.shared.joinRelationship(code: code) { joined in
+                                guard joined else {
+                                    inviteError = "Could not join that code. Check your connection and try again."
+                                    return
+                                }
                                 RelationshipManager.shared.saveCode(code)
                             }
 
