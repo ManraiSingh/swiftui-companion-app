@@ -97,6 +97,11 @@ struct TicTacToeGameView: View {
                 }
             }
             .padding()
+            // Without this the stack is centred in the ZStack, so on a screen
+            // taller than the content everything drifts into the middle — the
+            // close button ends up halfway down the display with dead space
+            // above and below it.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .onAppear {
             joinGame()
@@ -252,6 +257,10 @@ struct TicTacToeGameView: View {
             Spacer()
         }
         .padding(18)
+        // Fills the height left under the header, so the card reaches the
+        // bottom of the screen rather than stopping short. The Spacer above
+        // then spreads the rows out inside it.
+        .frame(maxHeight: .infinity)
         .background(.white.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }

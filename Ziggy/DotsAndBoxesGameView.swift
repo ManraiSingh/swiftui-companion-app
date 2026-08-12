@@ -160,6 +160,9 @@ struct DotsAndBoxesGameView: View {
                 }
             }
             .padding()
+            // Without this the stack is centred in the ZStack, so on a screen
+            // taller than the content everything drifts into the middle.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             if showHowToPlay {
                 howToPlayOverlay
@@ -414,6 +417,9 @@ struct DotsAndBoxesGameView: View {
             Spacer()
         }
         .padding(18)
+        // Fills the height under the header so the card reaches the
+        // bottom instead of stopping short.
+        .frame(maxHeight: .infinity)
         .background(.white.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }

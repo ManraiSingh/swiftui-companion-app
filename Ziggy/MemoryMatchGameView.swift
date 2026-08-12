@@ -104,6 +104,7 @@ struct MemoryMatchGameView: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .onAppear {
             joinGame()
@@ -249,6 +250,9 @@ struct MemoryMatchGameView: View {
             Spacer()
         }
         .padding(18)
+        // Fills the height under the header so the card reaches the
+        // bottom instead of stopping short.
+        .frame(maxHeight: .infinity)
         .background(.white.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }

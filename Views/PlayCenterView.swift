@@ -39,9 +39,14 @@ struct PlayCenterView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 18) {
+            // Six cards plus the hero and scoreboard overflow a phone
+            // screen, and without a scroll the last game was simply cut off
+            // at the bottom with no way to reach it.
+            ScrollView(showsIndicators: false) {
 
-                header
+                VStack(spacing: 18) {
+
+                    header
 
                 HStack(spacing: 12) {
 
@@ -117,9 +122,11 @@ struct PlayCenterView: View {
                     }
                 }
 
-                Spacer()
+                }
+                .padding()
             }
-            .padding()
+            // Only scrolls when it needs to, so a short screen doesn't bounce.
+            .scrollBounceBehavior(.basedOnSize)
 
             if showScoreboardPopup {
                 scoreboardPopup
