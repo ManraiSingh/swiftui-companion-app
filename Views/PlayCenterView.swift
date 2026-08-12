@@ -225,7 +225,9 @@ struct PlayCenterView: View {
                 .fill(.clear)
                 .frame(width: 42, height: 42)
         }
-        .padding(.top, 24)
+        // Enough to clear the Dynamic Island without leaving the title
+        // stranded in the middle of the gap below it.
+        .padding(.top, 6)
     }
 
     private func gameCard(
