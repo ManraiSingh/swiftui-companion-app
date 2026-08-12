@@ -265,6 +265,8 @@ struct InstantView: View {
 
     private var sendView: some View {
 
+        GeometryReader { proxy in
+
         ScrollView {
 
             VStack(spacing: 14) {
@@ -298,6 +300,11 @@ struct InstantView: View {
                         .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
                         .padding(.horizontal, 16)
                 }
+
+                // The picture belongs at the top; everything you actually
+                // tap belongs at the bottom, within thumb reach — same shape
+                // as the game lobbies.
+                Spacer(minLength: 16)
 
                 HStack(spacing: 12) {
 
@@ -357,6 +364,10 @@ struct InstantView: View {
             }
             .padding(.top, 6)
             .padding(.bottom, 20)
+            // At least a screenful, so the Spacer above has room to push the
+            // buttons to the bottom. Taller content still scrolls normally.
+            .frame(minHeight: proxy.size.height, alignment: .top)
+        }
         }
     }
 
