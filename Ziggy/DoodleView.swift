@@ -72,6 +72,7 @@ struct DoodleView: View {
     @State private var inkType: PKInkingTool.InkType = .pen
     @State private var isSending = false
     @State private var showSentToast = false
+    @State private var toastMessage = "Sent 🎉"
     @State private var showPinPrompt = false
     @State private var showPartnerDoodlePopup = false
 
@@ -1059,8 +1060,16 @@ struct DoodleView: View {
         .disabled(isSending)
     }
 
+    private func showToast(_ message: String) {
+        toastMessage = message
+        withAnimation { showSentToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
+            withAnimation { showSentToast = false }
+        }
+    }
+
     private var toast: some View {
-        Text("Sent 🎉")
+        Text(toastMessage)
             .font(.headline).fontWeight(.bold)
             .foregroundColor(.white)
             .padding(.horizontal, 22).padding(.vertical, 12)
@@ -1181,8 +1190,9 @@ struct DoodleView: View {
 
         let exported = exportDrawing()
         let resized = downscale(exported, maxDimension: 700)
-        guard let data = resized.jpegData(compressionQuality: 0.7) else {
+        guard let data = jpegWithinDocumentLimit(resized) else {
             isSending = false
+            showToast("Couldn't prepare that doodle 😕")
             return
         }
         let base64 = data.base64EncodedString()
@@ -1194,17 +1204,21 @@ struct DoodleView: View {
         ) { error in
             DispatchQueue.main.async {
                 isSending = false
-                guard error == nil else { return }
+
+                // Used to return silently here: the spinner stopped, the
+                // canvas kept its drawing and nothing was said, so a failed
+                // send looked exactly like a button that did nothing.
+                guard error == nil else {
+                    showToast("Couldn't send — check your connection")
+                    return
+                }
                 canvasView.drawing = PKDrawing()
                 textItems.removeAll()
                 emojiItems.removeAll()
                 selectedItemID = nil
                 editingTextID = nil
                 editingEmojiID = nil
-                withAnimation { showSentToast = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                    withAnimation { showSentToast = false }
-                }
+                showToast("Sent 🎉")
             }
         }
     }
@@ -1272,10 +1286,40 @@ struct DoodleView: View {
             width: image.size.width * scale,
             height: image.size.height * scale
         )
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+
+        // Force scale = 1 so the output's real PIXEL size matches newSize.
+        // Left to itself the renderer uses the screen's scale, which turns a
+        // 700-point downscale into 2100 pixels on a 3x phone — nine times the
+        // pixels, and a busy doodle then encodes to ~993KB, right up against
+        // the 1 MiB ceiling on the Firestore document it has to fit inside.
+        // `WidgetDataManager.downscale` already does this; this copy didn't.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: newSize))
         }
+    }
+
+    /// JPEG data guaranteed to fit in a Firestore document once base64'd.
+    ///
+    /// Base64 costs a third on top, and the document carries a few small
+    /// fields besides the image, so the budget is well under 1 MiB. Dropping
+    /// quality is far better than a send that fails.
+    private func jpegWithinDocumentLimit(_ image: UIImage) -> Data? {
+
+        let maxBase64Bytes = 900_000
+
+        for quality in [0.7, 0.5, 0.35, 0.2] as [CGFloat] {
+            guard let data = image.jpegData(compressionQuality: quality) else { continue }
+            // base64 is 4 bytes out for every 3 in.
+            if (data.count + 2) / 3 * 4 <= maxBase64Bytes { return data }
+        }
+
+        // Nothing fit even at the lowest quality — shrink the image itself.
+        let smaller = downscale(image, maxDimension: 460)
+        return smaller.jpegData(compressionQuality: 0.5)
     }
 }
 
