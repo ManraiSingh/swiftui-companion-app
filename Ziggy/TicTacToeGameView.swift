@@ -206,6 +206,10 @@ struct TicTacToeGameView: View {
                 )
             }
 
+            // Everything above is the state of the room; the two actions
+            // belong at the bottom of the card, under the thumb.
+            Spacer(minLength: 20)
+
             ShareLink(item: inviteMessage) {
                 Label("Share Invite", systemImage: "square.and.arrow.up")
                     .fontWeight(.bold)
@@ -253,8 +257,6 @@ struct TicTacToeGameView: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
             }
-
-            Spacer()
         }
         .padding(18)
         // Fills the height left under the header, so the card reaches the
@@ -395,15 +397,28 @@ struct TicTacToeGameView: View {
 
     private var boardView: some View {
 
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
-            spacing: 10
-        ) {
-            ForEach(0..<9, id: \.self) { index in
-                cellButton(index)
+        // The grid itself must stay square, but the card around it fills the
+        // height that's left. Otherwise a 3x3 board — which can never be
+        // taller than the screen is wide — leaves a bare band of background
+        // under it on every phone.
+        VStack(spacing: 0) {
+
+            Spacer(minLength: 0)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
+                spacing: 10
+            ) {
+                ForEach(0..<9, id: \.self) { index in
+                    cellButton(index)
+                }
             }
+            .aspectRatio(1, contentMode: .fit)
+
+            Spacer(minLength: 0)
         }
         .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.white.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 28))
         .overlay(
@@ -413,7 +428,6 @@ struct TicTacToeGameView: View {
                     lineWidth: 3
                 )
         )
-        .aspectRatio(1, contentMode: .fit)
         .animation(.easeInOut(duration: 0.25), value: myTurn)
     }
 

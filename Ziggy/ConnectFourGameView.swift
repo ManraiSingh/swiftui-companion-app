@@ -227,6 +227,10 @@ struct ConnectFourGameView: View {
                 )
             }
 
+            // The state of the room sits above; the two actions belong at
+            // the bottom of the card, under the thumb.
+            Spacer(minLength: 20)
+
             ShareLink(item: inviteMessage) {
                 Label("Share Invite", systemImage: "square.and.arrow.up")
                     .fontWeight(.bold)
@@ -274,8 +278,6 @@ struct ConnectFourGameView: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
             }
-
-            Spacer()
         }
         .padding(18)
         // Fills the height under the header so the card reaches the
@@ -486,6 +488,10 @@ struct ConnectFourGameView: View {
                 )
         )
         .animation(.easeInOut(duration: 0.25), value: myTurn)
+        // The board is a fixed size, so rather than stretching it this just
+        // absorbs the height left under the header and centres it — no bare
+        // band of background underneath.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func holeView(row: Int, col: Int) -> some View {

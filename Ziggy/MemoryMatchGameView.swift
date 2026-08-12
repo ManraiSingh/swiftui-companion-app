@@ -199,6 +199,10 @@ struct MemoryMatchGameView: View {
                 )
             }
 
+            // The state of the room sits above; the two actions belong at
+            // the bottom of the card, under the thumb.
+            Spacer(minLength: 20)
+
             ShareLink(item: inviteMessage) {
                 Label("Share Invite", systemImage: "square.and.arrow.up")
                     .fontWeight(.bold)
@@ -246,8 +250,6 @@ struct MemoryMatchGameView: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
             }
-
-            Spacer()
         }
         .padding(18)
         // Fills the height under the header so the card reaches the
@@ -399,6 +401,10 @@ struct MemoryMatchGameView: View {
             }
         }
         .padding(14)
+        // Lets the card take the height left under the header, so a board
+        // that can't grow past the screen width doesn't leave a bare
+        // band of background beneath it.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.white.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 22))
     }
