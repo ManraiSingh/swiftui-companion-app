@@ -137,6 +137,37 @@ class FirestoreManager {
         }
     }
 
+    /// Everything tied to the relationship you're leaving.
+    ///
+    /// Disconnecting used to clear only the local code, leaving every
+    /// listener attached and the membership cache still holding the old
+    /// code. Rejoining the *same* code then short-circuited the membership
+    /// check and piled new listeners on top of the stale ones, which is how
+    /// you could end up able to send while nothing arrived.
+    func handleDisconnect() {
+
+        membershipEnsuredForCode = nil
+
+        for listener in [
+            petListener, emotionListener, relationshipMembersListener,
+            eventsListener, airHockeyListener, traceGameListener,
+            scoresListener, ticTacToeListener, dotsAndBoxesListener,
+            connectFourListener, memoryMatchListener, instantBadgeListener,
+            instantViewListener, doodleViewListener, doodleWidgetListener
+        ] {
+            listener?.remove()
+        }
+
+        petListener = nil;              emotionListener = nil
+        relationshipMembersListener = nil; eventsListener = nil
+        airHockeyListener = nil;        traceGameListener = nil
+        scoresListener = nil;           ticTacToeListener = nil
+        dotsAndBoxesListener = nil;     connectFourListener = nil
+        memoryMatchListener = nil;      instantBadgeListener = nil
+        instantViewListener = nil;      doodleViewListener = nil
+        doodleWidgetListener = nil
+    }
+
     func savePet(_ pet: Pet) {
 
         guard !relationshipCode.isEmpty else {
@@ -326,6 +357,14 @@ class FirestoreManager {
 
     private var relationshipMembersListener: ListenerRegistration?
 
+    /// These two used to be created and thrown away — the registration was
+    /// never stored, so nothing could ever remove them. Every
+    /// `RelationshipChanged` (a disconnect posts one, rejoining posts
+    /// another) stacked a fresh pair on top of the last, all firing at once
+    /// on the same documents.
+    private var petListener: ListenerRegistration?
+    private var emotionListener: ListenerRegistration?
+
     /// Watches the relationship's member count so both the code-generator and
     /// the joiner can be told the moment they're BOTH actually connected —
     /// covers both sides with one listener, since joining always brings the
@@ -363,7 +402,8 @@ class FirestoreManager {
                 !self.relationshipCode.isEmpty
             else { return }
 
-            self.db.collection("relationships")
+            self.petListener?.remove()
+            self.petListener = self.db.collection("relationships")
                 .document(self.relationshipCode)
                 .collection("data")
                 .document("pet")
@@ -436,7 +476,8 @@ class FirestoreManager {
                 !self.relationshipCode.isEmpty
             else { return }
 
-            self.db.collection("relationships")
+            self.emotionListener?.remove()
+            self.emotionListener = self.db.collection("relationships")
                 .document(self.relationshipCode)
                 .collection("emotions")
                 .order(by: "timestamp", descending: true)

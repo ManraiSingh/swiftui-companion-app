@@ -42,6 +42,11 @@ final class RelationshipManager: ObservableObject {
 
     func disconnect() {
 
+        // Tear the old relationship down completely before forgetting the
+        // code — otherwise its listeners keep running against it, and
+        // rejoining stacks a second set on top rather than starting clean.
+        FirestoreManager.shared.handleDisconnect()
+
         relationshipCode = ""
 
         UserDefaults.standard.removeObject(
