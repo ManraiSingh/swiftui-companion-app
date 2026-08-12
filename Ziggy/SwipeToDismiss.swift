@@ -3,11 +3,16 @@ import SwiftUI
 /// Left-edge swipe to go back, the way a pushed screen behaves.
 ///
 /// These screens are presented with `.fullScreenCover`, which has no gesture
-/// of its own, so this adds one. The drag has to *start* within a narrow
-/// strip of the screen's left edge — everything further in (canvas strokes,
-/// game boards, sliders, horizontal rows) is untouched, and because the
-/// gesture is attached to the parent, any child that wants the drag still
-/// wins it.
+/// of its own, so this adds one.
+///
+/// The gesture lives on a narrow strip pinned to the left edge — it is not
+/// attached to the screen as a whole. That distinction matters more than it
+/// looks. It used to sit on the whole view and merely *check* in its handler
+/// that the drag began near the edge, but a recogniser covering the screen is
+/// armed over the drawing canvas too, and once a drag passes its threshold it
+/// can claim the touch before PencilKit sees it. Which one wins is a race, so
+/// it worked on some phones and left others unable to draw at all. Confining
+/// the strip means it cannot compete for a touch it was never meant to get.
 struct SwipeToDismiss: ViewModifier {
 
     @Environment(\.dismiss) private var dismiss
@@ -36,31 +41,42 @@ struct SwipeToDismiss: ViewModifier {
         content
             .offset(x: offset)
             .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.85), value: offset)
-            .gesture(
-                DragGesture(minimumDistance: 12, coordinateSpace: .global)
-                    .onChanged { value in
-                        guard startedAtEdge(value) else { return }
-                        // Rightward, and more sideways than up/down, so a
-                        // scroll never gets mistaken for a back swipe.
-                        guard value.translation.width > 0,
-                              abs(value.translation.width) > abs(value.translation.height)
-                        else { return }
+            .overlay(alignment: .leading) {
+                // The only place the gesture exists. Nothing interactive sits
+                // in this sliver, and a real edge swipe starts within a few
+                // points of the bezel anyway.
+                Color.clear
+                    .frame(width: edgeWidth)
+                    .contentShape(Rectangle())
+                    .gesture(edgeDrag)
+                    .ignoresSafeArea()
+            }
+    }
 
-                        offset = min(value.translation.width, maxPeek)
-                    }
-                    .onEnded { value in
-                        guard startedAtEdge(value) else { return }
+    private var edgeDrag: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .onChanged { value in
+                guard startedAtEdge(value) else { return }
+                // Rightward, and more sideways than up/down, so a
+                // scroll never gets mistaken for a back swipe.
+                guard value.translation.width > 0,
+                      abs(value.translation.width) > abs(value.translation.height)
+                else { return }
 
-                        let pulledFarEnough = value.translation.width > dismissDistance
-                        let flickedHard = value.predictedEndTranslation.width > 220
+                offset = min(value.translation.width, maxPeek)
+            }
+            .onEnded { value in
+                guard startedAtEdge(value) else { return }
 
-                        if pulledFarEnough || flickedHard {
-                            dismiss()
-                        }
+                let pulledFarEnough = value.translation.width > dismissDistance
+                let flickedHard = value.predictedEndTranslation.width > 220
 
-                        offset = 0
-                    }
-            )
+                if pulledFarEnough || flickedHard {
+                    dismiss()
+                }
+
+                offset = 0
+            }
     }
 }
 
