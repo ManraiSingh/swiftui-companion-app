@@ -1,96 +1,131 @@
-# Ziggy 🐶
+# Ziggy
 
-A SwiftUI + Firebase **couple's companion app** built around one shared virtual pet. Two partners connect with a private code and raise **Ziggy** together  feeding, playing, sending photos and little love notes that sync between their phones in real time.
+A SwiftUI and Firebase companion app for couples, built around a single shared virtual pet.
 
-> Think of it as a Tamagotchi you and your partner keep alive together  every action one person takes shows up instantly on the other's screen.
+Two people pair with a private code and look after Ziggy together — feeding, playing, drawing and sending short notes that sync between both phones in real time. Anything one partner does appears on the other's screen within seconds, and on their Home Screen widget without either of them opening the app.
 
----
-
-## ✨ Features
-
-- 🐶 **One shared pet, live-synced** — hunger, happiness, energy and a "love score" update in real time across both phones via Firestore snapshot listeners.
-- 💞 **Private pairing** — partners link up with a generated "love code" or a tap-to-join invite link; all data lives under that relationship. A one-time cute **"You're Connected!"** popup celebrates the moment both partners first join, then never shows again.
-- 📸 **Instants** — snap a photo (in-app camera or gallery), drag a caption anywhere on it, and send it. Ephemeral by design: a new instant replaces the old one, so images don't pile up.
-- 🎨 **Doodle** — draw a sketch with PencilKit (7 pen types including fountain pen, watercolor, and crayon, a 16-color palette, text/emoji stickers, and a bold adjustable brush) and it shows up live, edge-to-edge, on your partner's Home Screen widget. Tap a partner's doodle to see it full-size, and optionally **pin** a doodle so it stays on the widget until you send a new one, instead of being replaced by the next message.
-- 💌 **One-tap love notes** — quick emotion messages (Miss You, Good Night, Hug…) that reorder by how often you use them, plus a **custom note composer** that floats above the keyboard (not a sheet), with an emotion picker that sets the exact Ziggy face your partner sees.
-- 🔔 **Home Screen popups** — a Ziggy-themed popup surfaces the moment your partner sends a Doodle or an Instant, separate from the in-app preview.
-- 🎭 **Emotional Ziggy** — the mascot's expression reflects mood, incoming messages, and pending instants — and now decays more honestly if nobody's shown Ziggy attention in a while. Rename Ziggy in Settings and the name propagates everywhere — header, activity feed (past **and** future memories), notifications, widget.
-- ❓ **Daily questions** — a shared question each day from a bank of 200+, so it doesn't repeat for over six months; answers reveal once both partners respond.
-- 🎮 **Mini-games** — **Trace Together**, a live collaborative two-player drawing game across nine shapes; **Tic Tac Toe**, **Connect 4**, and **Dots and Boxes**, real-time networked matches with server-validated moves — all with a shared lobby/ready-up flow and a love-score reward on completion.
-- 🏆 **Scoreboard** — a persistent win tally across every competitive mini-game, tallied server-side the instant a match ends (not by an easily-doubled "claim" tap), with a per-game breakdown and a one-tap reset for both partners.
-- 🕰️ **Activity timeline** — "Our Memories," a shared, live-synced log of everything **both** partners have done, styled as mirrored chat bubbles.
-- 🔔 **Push + local notifications** — real alerts (Cloud Functions + APNs) when your partner feeds, plays, sends a note, an Instant, a Doodle, or invites you to a game; local reminders when Ziggy needs attention; and a once-daily evening nudge to feed Ziggy — but only if neither partner has fed them yet that day.
-- 🧩 **Home Screen widget** (WidgetKit) showing Ziggy's current state, your partner's latest message, or their live (optionally pinned) Doodle — with a one-time in-app walkthrough guiding new couples through adding it, since iOS gives apps no way to add a widget automatically.
-- ⭐ **Cute rating prompt** — after a genuinely happy milestone, a custom in-app ask offers to open Apple's native App Store review sheet.
-- 🗑️ **Privacy-first** — in-app data deletion that wipes the relationship's data from the server, plus a no-pressure "Continue without sharing" option on the invite screen for anyone who'd rather not share the link right away.
+Available on the [App Store](https://apps.apple.com/app/id6785883853).
 
 ---
 
-## 🛠️ Tech Stack
+## Features
 
-| Area | Tech |
-|------|------|
+**Shared pet**
+One pet, two phones. Hunger, happiness, energy and a love score stay in sync across both devices through Firestore snapshot listeners. Ziggy's expression follows the time of day, goes hungry in the evening if neither partner has fed him, and reflects whatever was last sent.
+
+**Pairing**
+Partners link with a generated code or a shared invite link. All relationship data is scoped to that pairing.
+
+**Doodle**
+A PencilKit canvas with seven pen types, a hold-and-slide colour picker, custom canvas backgrounds, and on-canvas text. Finished drawings appear on the partner's Home Screen widget within seconds. A doodle can be pinned so it stays on the widget until replaced.
+
+**Instants**
+Photos from the camera or library with a draggable caption. Deliberately ephemeral — each new instant replaces the previous one.
+
+**Notes**
+One-tap messages that reorder by frequency of use, plus a custom composer that floats above the keyboard and lets the sender choose which expression Ziggy wears on delivery.
+
+**Games**
+Five real-time two-player games: Trace Together, Tic Tac Toe, Connect 4, Dots and Boxes and Memory Match. Each has a shared lobby and ready-up flow, with results tallied server-side into a persistent scoreboard.
+
+**Daily questions**
+A shared prompt each day drawn from a bank of over 200. Answers are revealed once both partners have responded.
+
+**Home Screen widget**
+A WidgetKit extension showing Ziggy's current mood in a room that follows the clock, the partner's latest message, or their most recent doodle. Includes a guided walkthrough for adding it, since iOS provides no way to install a widget programmatically.
+
+**Notifications**
+Push notifications through Cloud Functions and APNs when a partner feeds Ziggy, plays a game, or sends a note, instant or doodle. A single daily reminder in the evening, sent only if neither partner has fed him that day.
+
+**Activity timeline**
+A live-synced log of both partners' actions, presented as a shared conversation.
+
+---
+
+## Tech stack
+
+| Area | Technology |
+|------|------------|
 | UI | SwiftUI |
-| Realtime backend | Firebase Firestore (snapshot listeners + transactions) |
-| Push notifications | Firebase Cloud Functions (TypeScript) + APNs |
+| Realtime backend | Cloud Firestore (snapshot listeners, transactions) |
+| Authentication | Firebase Anonymous Auth |
+| Push notifications | Cloud Functions (TypeScript) with APNs |
 | Analytics | Firebase Analytics |
-| Widget | WidgetKit + App Groups |
-| Drawing | PencilKit (Doodle with text/emoji stickers, Trace Together) |
-| Media | PhotosUI, UIImagePickerController (camera) |
-| Notifications | UserNotifications (local + remote) |
-| Persistence | UserDefaults + local cache |
-| Architecture | MVVM with shared service singletons |
+| Widget | WidgetKit, App Groups |
+| Drawing | PencilKit |
+| Media | PhotosUI, UIImagePickerController |
+| Local notifications | UserNotifications |
+| Persistence | UserDefaults with a local cache |
+| Architecture | MVVM with service singletons |
 
 ---
 
-## 🧱 Architecture
+## Architecture
 
-State flows through an observable `PetViewModel`, with focused service singletons handling each concern:
+State flows through an observable `PetViewModel`, with focused services handling each concern.
 
 ```
 Views (SwiftUI)
-   │  observe
-   ▼
-PetViewModel  ──────────────┐
-   │                        │
-   ├─ FirestoreManager      │  realtime sync, emotions, instants, games, scoreboard
-   ├─ RelationshipManager   │  pairing / love code
-   ├─ PersistenceManager    │  local pet cache
-   ├─ WidgetDataManager     │  shared App Group store
-   ├─ NotificationManager   │  local + daily feed reminders
-   └─ DailyQuestionManager  │  daily prompts
+   |  observe
+   v
+PetViewModel
+   |
+   +- FirestoreManager        realtime sync, messages, instants, games, scoreboard
+   +- RelationshipManager     pairing and relationship code
+   +- PersistenceManager      local pet cache
+   +- WidgetDataManager       shared App Group store
+   +- NotificationManager     local and scheduled reminders
+   +- DailyQuestionManager    daily prompts
 ```
+
+`Pet` is compiled into both the app and the widget extension, so mood logic cannot drift between the two.
 
 ### Project structure
 
 ```
 Ziggy/
 ├─ Models/         Pet, Event, UserManager
-├─ Services/       PetViewModel + Firestore/Relationship/Persistence/Widget/Notification/DailyQuestion managers
-├─ Views/          Onboarding, RelationshipSetup, Home (ContentView), Feed, Instant, Activity, Settings, PlayCenter (games + Scoreboard), WidgetOnboarding, Trace Together
-├─ Ziggy/          App entry point, assets, Firebase config, Doodle (PencilKit), Tic Tac Toe, Connect Four, Dots and Boxes
+├─ Services/       PetViewModel and the Firestore, Relationship, Persistence,
+│                  Widget, Notification and DailyQuestion managers
+├─ Views/          Onboarding, pairing, home, feed, instant, activity,
+│                  settings, play centre, widget walkthrough
+├─ Ziggy/          App entry point, assets, Firebase config, Doodle and games
 ├─ ZiggyWidget/    Home Screen widget extension
-└─ functions/      Firebase Cloud Functions (TypeScript) — partner push notifications
+└─ functions/      Cloud Functions (TypeScript) for partner notifications
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting started
 
 ### Requirements
-- Xcode 16+
-- iOS 17+ device or simulator
-- A Firebase project (free Spark plan works for development)
 
+- Xcode 16 or later
+- iOS 17 or later
+- A Firebase project (the free Spark plan is sufficient for development)
 
+### Setup
 
-## 🗺️ Roadmap
-
-- [ ] Harden Firestore join rules for the device-recovery edge case (re-pairing after losing local auth state)
-- [ ] App Check
-- [ ] Move Instant/Doodle images to Firebase Storage (currently base64 in Firestore docs)
-- [ ] iPad-native layout (currently iPhone-only)
+1. Clone the repository and open `Ziggy.xcodeproj`.
+2. Create a Firebase project and register an iOS app with the bundle identifier used by the target.
+3. Download `GoogleService-Info.plist` and place it in the `Ziggy/` directory.
+4. Enable Anonymous Authentication and Cloud Firestore in the Firebase console.
+5. Set the App Group identifier on both the app and widget targets so they share a container.
+6. Deploy the Cloud Functions in `functions/` if push notifications are required. They expect APNs credentials to be configured as secrets.
 
 ---
 
+## Roadmap
 
+- Approval step when joining an existing relationship
+- Firebase App Check
+- Move instant and doodle images to Cloud Storage, currently encoded into Firestore documents
+- Account recovery beyond anonymous authentication
+- Unit test coverage for mood, scoring and scheduling logic
+- iPad layout
+
+---
+
+## Licence
+
+All rights reserved. This repository is public for reference; the app and its assets are not licensed for redistribution.
