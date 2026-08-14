@@ -1,6 +1,6 @@
-# Ziggy
+d# Ziggy
 
-A SwiftUI and Firebase companion app for couples, built around a single shared virtual pet.
+A SwiftUI companion app for couples, built around a single shared virtual pet.
 
 Two people pair with a private code and look after Ziggy together — feeding, playing, drawing and sending short notes that sync between both phones in real time. Anything one partner does appears on the other's screen within seconds, and on their Home Screen widget without either of them opening the app.
 
