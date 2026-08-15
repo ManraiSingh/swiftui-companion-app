@@ -47,6 +47,10 @@ final class RelationshipManager: ObservableObject {
         // rejoining stacks a second set on top rather than starting clean.
         FirestoreManager.shared.handleDisconnect()
 
+        // The scrapbook keeps its own listeners, so it needs telling too or
+        // the next relationship opens on the last one's shelf.
+        Task { @MainActor in ScrapbookManager.shared.handleDisconnect() }
+
         relationshipCode = ""
 
         UserDefaults.standard.removeObject(

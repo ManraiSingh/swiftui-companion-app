@@ -868,6 +868,8 @@ struct ContentView: View {
                 TabView {
                     homeView
                         .tabItem { Label("Home", systemImage: "house.fill") }
+                    ScrapbookShelfView()
+                        .tabItem { Label("Scrapbook", systemImage: "books.vertical.fill") }
                     ActivityView(petVM: petVM)
                         .tabItem { Label("Activity", systemImage: "clock.fill") }
                     SettingsView(petVM: petVM)
