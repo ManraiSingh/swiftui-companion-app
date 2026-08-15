@@ -123,12 +123,32 @@ struct ScrapbookShelfView: View {
         return manager.resolvedOrnaments.first { $0.id == id }
     }
 
-    /// The saved order, as it stands in Firestore.
+    /// The saved order, as it stands in Firestore — with the panel's drafts
+    /// painted over whichever item is selected.
+    ///
+    /// The sliders only write on release, so without this the shelf went on
+    /// showing the saved size and tilt until the finger came up. Previewing
+    /// the draft here is what makes the spine grow and lean as the slider
+    /// moves, and the row reflow around it comes along for free.
     private var baseItems: [ShelfItem] {
-        (manager.books.map(ShelfItem.init(book:))
-         + manager.resolvedOrnaments.map {
-             ShelfItem(ornament: $0, boxHeight: ShelfMetrics.ornamentBox)
-         })
+
+        let books = manager.books.map { book -> ScrapbookBook in
+            guard case .book(let id) = selection, id == book.id else { return book }
+            var preview = book
+            preview.sizeScale = draftSize
+            preview.tilt = draftTilt
+            return preview
+        }
+
+        let ornaments = manager.resolvedOrnaments.map { placement -> ScrapbookOrnamentPlacement in
+            guard case .ornament(let id) = selection, id == placement.id else { return placement }
+            var preview = placement
+            preview.scale = draftOrnamentScale
+            return preview
+        }
+
+        return (books.map(ShelfItem.init(book:))
+                + ornaments.map { ShelfItem(ornament: $0, boxHeight: ShelfMetrics.ornamentBox) })
             .sorted { $0.position < $1.position }
     }
 
@@ -795,8 +815,9 @@ private struct BookSpine: View {
             x: isLifted ? 0 : 2,
             y: isLifted ? 8 : 2
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: book.tilt)
-        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: book.sizeScale)
+        // Size and tilt are deliberately unanimated: they now track a slider
+        // under the finger, and a spring chasing a continuous value reads as
+        // lag rather than polish. Only the lift is animated.
         .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isLifted)
     }
 
