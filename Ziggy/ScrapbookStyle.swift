@@ -196,12 +196,23 @@ enum ScrapbookStyle {
     }
 
     static let fonts: [FontChoice] = [
-        FontChoice(label: "Hand",   design: .rounded,    weight: .semibold, italic: false),
-        FontChoice(label: "Serif",  design: .serif,      weight: .regular,  italic: false),
-        FontChoice(label: "Note",   design: .serif,      weight: .regular,  italic: true),
-        FontChoice(label: "Clean",  design: .default,    weight: .medium,   italic: false),
-        FontChoice(label: "Type",   design: .monospaced, weight: .regular,  italic: false),
-        FontChoice(label: "Bold",   design: .rounded,    weight: .black,    italic: false)
+        FontChoice(label: "Hand",    design: .rounded,    weight: .semibold, italic: false),
+        FontChoice(label: "Serif",   design: .serif,      weight: .regular,  italic: false),
+        FontChoice(label: "Note",    design: .serif,      weight: .regular,  italic: true),
+        FontChoice(label: "Clean",   design: .default,    weight: .medium,   italic: false),
+        FontChoice(label: "Type",    design: .monospaced, weight: .regular,  italic: false),
+        FontChoice(label: "Bold",    design: .rounded,    weight: .black,    italic: false),
+
+        FontChoice(label: "Title",   design: .serif,      weight: .black,    italic: false),
+        FontChoice(label: "Quote",   design: .serif,      weight: .semibold, italic: true),
+        FontChoice(label: "Light",   design: .default,    weight: .thin,     italic: false),
+        FontChoice(label: "Slant",   design: .rounded,    weight: .bold,     italic: true),
+        FontChoice(label: "Caps",    design: .default,    weight: .heavy,    italic: false),
+        FontChoice(label: "Soft",    design: .rounded,    weight: .light,    italic: false),
+        FontChoice(label: "Ticket",  design: .monospaced, weight: .bold,     italic: false),
+        FontChoice(label: "Whisper", design: .default,    weight: .regular,  italic: true),
+        FontChoice(label: "Heavy",   design: .default,    weight: .black,    italic: false),
+        FontChoice(label: "Book",    design: .serif,      weight: .medium,   italic: false)
     ]
 
     static func font(_ index: Int, size: CGFloat) -> Font {

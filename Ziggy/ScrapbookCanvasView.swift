@@ -42,12 +42,15 @@ struct ScrapbookCanvasView: View {
     // Sheets
     @State private var photoItem: PhotosPickerItem?
     @State private var showingStickers = false
-    @State private var showingText = false
     @State private var showingPaper = false
     @State private var showingCamera = false
-    @State private var textDraft = ""
     @State private var textFontIndex = 0
     @State private var textColor = "#2E2A27"
+
+    /// The text element being typed into, straight on the page.
+    @State private var typingID: String?
+    @State private var typedText = ""
+    @FocusState private var typingFocused: Bool
 
     @State private var paperIndex: Int
     @State private var photoPickerOpen = false
@@ -94,6 +97,15 @@ struct ScrapbookCanvasView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
+            if typingID != nil {
+                TypingBar(
+                    fontIndex: $textFontIndex,
+                    colorHex: $textColor,
+                    onDone: { finishTyping() }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             if tool == .brush || tool == .eraser {
                 BrushBar(color: $brushColor, width: $brushWidth, isEraser: tool == .eraser)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -108,14 +120,6 @@ struct ScrapbookCanvasView: View {
         .sheet(isPresented: $showingStickers) {
             StickerPicker { emoji in addSticker(emoji) }
                 .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showingText) {
-            TextComposer(
-                text: $textDraft,
-                fontIndex: $textFontIndex,
-                colorHex: $textColor
-            ) { addText() }
-            .presentationDetents([.height(420)])
         }
         .sheet(isPresented: $showingPaper) {
             CanvasPaperPicker(selected: paperIndex) { index in
@@ -186,6 +190,9 @@ struct ScrapbookCanvasView: View {
                     canvasSize: canvasSize,
                     isSelected: element.id == selectedID && tool == .select
                 )
+                // The one being typed into is drawn by the field instead, so
+                // the words don't appear twice.
+                .opacity(element.id == typingID ? 0 : 1)
                 .allowsHitTesting(tool == .select)
                 .onTapGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -193,6 +200,25 @@ struct ScrapbookCanvasView: View {
                     }
                 }
                 .gesture(transformGesture(for: element, canvasSize: canvasSize))
+            }
+
+            // The caret, sitting where the finished text will sit.
+            if let id = typingID,
+               let element = manager.elements.first(where: { $0.id == id }) {
+
+                TextField("Type…", text: $typedText, axis: .vertical)
+                    .font(ScrapbookStyle.font(textFontIndex, size: element.widthValue * 3))
+                    .foregroundStyle(Color(scrapbookHex: textColor))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(1...4)
+                    .focused($typingFocused)
+                    .submitLabel(.done)
+                    .onSubmit { finishTyping() }
+                    .frame(width: canvasSize.width * 0.82)
+                    .position(
+                        x: element.x * canvasSize.width,
+                        y: element.y * canvasSize.height
+                    )
             }
 
             // The stroke in progress.
@@ -263,26 +289,11 @@ struct ScrapbookCanvasView: View {
                     height: value.translation.height / canvasSize.height
                 )
             }
-            .onEnded { _ in
-                guard tool == .select, selectedID == element.id, !element.locked else { return }
-                var moved = element
-                moved.x = min(max(element.x + Double(dragOffset.width), 0.02), 0.98)
-                moved.y = min(max(element.y + Double(dragOffset.height), 0.02), 0.98)
-                dragOffset = .zero
-                manager.move(moved, bookID: book.id, pageID: page.id)
-            }
 
         let pinch = MagnifyGesture()
             .onChanged { value in
                 guard engage() else { return }
                 pinchScale = value.magnification
-            }
-            .onEnded { _ in
-                guard tool == .select, selectedID == element.id, !element.locked else { return }
-                var scaled = element
-                scaled.scale = min(max(element.scale * pinchScale, 0.2), 4)
-                pinchScale = 1
-                manager.move(scaled, bookID: book.id, pageID: page.id)
             }
 
         let spin = RotateGesture()
@@ -290,31 +301,57 @@ struct ScrapbookCanvasView: View {
                 guard engage() else { return }
                 spinAngle = value.rotation.degrees
             }
-            .onEnded { _ in
-                guard tool == .select, selectedID == element.id, !element.locked else { return }
-                var turned = element
-                turned.rotation = element.rotation + spinAngle
-                spinAngle = 0
-                manager.move(turned, bookID: book.id, pageID: page.id)
-            }
 
         // Pinch and turn are paired first so two fingers can do both at once,
         // with the drag riding alongside.
+        //
+        // The three only report movement. Committing is done once, here, when
+        // the whole gesture ends.
+        //
+        // Each used to write on its own end, and each wrote the full set of
+        // fields off the element as it was before the gesture. So lifting after
+        // a turn fired the drag's commit too, which wrote back the original
+        // angle — the turn was applied and then immediately undone. Position
+        // and scale were being clobbered the same way; a turn just made it
+        // visible.
         return drag.simultaneously(with: pinch.simultaneously(with: spin))
+            .onEnded { _ in
+
+                defer {
+                    dragOffset = .zero
+                    pinchScale = 1
+                    spinAngle = 0
+                }
+
+                guard tool == .select, selectedID == element.id, !element.locked else { return }
+
+                var settled = element
+                settled.x = min(max(element.x + Double(dragOffset.width), 0.02), 0.98)
+                settled.y = min(max(element.y + Double(dragOffset.height), 0.02), 0.98)
+                settled.scale = min(max(element.scale * pinchScale, 0.2), 4)
+                settled.rotation = element.rotation + spinAngle
+
+                manager.move(settled, bookID: book.id, pageID: page.id)
+            }
     }
 
-    /// Drawing, and tapping empty paper to deselect.
+    /// Drawing, erasing, and tapping empty paper to deselect.
     private func canvasGesture(canvasSize: CGSize) -> some Gesture {
 
         DragGesture(minimumDistance: 0)
             .onChanged { value in
 
-                guard tool == .brush || tool == .eraser else { return }
-
                 let point = CGPoint(
                     x: value.location.x / canvasSize.width,
                     y: value.location.y / canvasSize.height
                 )
+
+                if tool == .eraser {
+                    erase(at: point, canvasSize: canvasSize)
+                    return
+                }
+
+                guard tool == .brush else { return }
 
                 // Sampling every point makes for enormous payloads; a stroke
                 // reads the same with a small minimum step between samples.
@@ -333,16 +370,14 @@ struct ScrapbookCanvasView: View {
                     return
                 }
 
-                guard livePoints.count > 1 else {
+                guard tool == .brush, livePoints.count > 1 else {
                     livePoints = []
                     return
                 }
 
                 var element = ScrapbookElement(id: UUID().uuidString, kind: .stroke)
                 element.payload = ScrapbookStroke.encode(livePoints)
-                element.colorHex = tool == .eraser
-                    ? hexForPaper(paperIndex)
-                    : brushColor
+                element.colorHex = brushColor
                 element.widthValue = brushWidth
                 element.z = manager.nextZ
                 element.x = 0.5
@@ -353,11 +388,36 @@ struct ScrapbookCanvasView: View {
             }
     }
 
-    /// The eraser paints in the paper's own colour rather than removing
-    /// pixels. True erasing would mean rasterising the page on every stroke,
-    /// which is a lot of machinery for a feature that reads the same.
-    private func hexForPaper(_ index: Int) -> String {
-        ScrapbookStyle.paper(index).name == "Night" ? "#292B3D" : "#F8F0DE"
+    /// Rubs out the drawing under the finger, and only the drawing.
+    ///
+    /// It used to paint a paper-coloured stroke instead, which covered photos
+    /// and text as readily as pencil and left a smear of paint behind that
+    /// couldn't itself be removed. Working on the strokes themselves means it
+    /// can't touch anything that isn't drawn.
+    private func erase(at point: CGPoint, canvasSize: CGSize) {
+
+        // The eraser's reach, in the page's normalised units.
+        let reach = (brushWidth / 2 + 6) / canvasSize.width
+
+        for element in manager.elements where element.kind == .stroke && !element.locked {
+
+            let points = ScrapbookStroke.decode(element.payload)
+
+            // Compared in page proportions rather than raw numbers — the page
+            // is taller than it is wide, so a plain distance would make the
+            // eraser reach further vertically than it looks.
+            let aspect = canvasSize.height / canvasSize.width
+
+            let touched = points.contains { sample in
+                let dx = sample.x - point.x
+                let dy = (sample.y - point.y) * aspect
+                return (dx * dx + dy * dy) <= reach * reach
+            }
+
+            if touched {
+                manager.delete(element.id, bookID: book.id, pageID: page.id)
+            }
+        }
     }
 
     // MARK: Adding
@@ -419,24 +479,57 @@ struct ScrapbookCanvasView: View {
         selectedID = element.id
     }
 
-    private func addText() {
+    /// Starts a new piece of text on the page and puts the caret in it.
+    ///
+    /// Typing happens on the page itself rather than in a sheet — you see the
+    /// words in place, in the font and colour they'll keep, instead of writing
+    /// them somewhere else and finding out afterwards.
+    private func startTyping() {
 
-        let clean = textDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
+        if typingID != nil { finishTyping(); return }
 
         var element = ScrapbookElement(id: UUID().uuidString, kind: .text)
-        element.payload = clean
+        element.payload = ""
         element.fontIndex = textFontIndex
         element.colorHex = textColor
         element.widthValue = 7
         element.z = manager.nextZ
-        element.rotation = Double.random(in: -3...3)
         element.x = 0.5
-        element.y = Double.random(in: 0.3...0.7)
+        element.y = 0.42
 
         manager.add(element, bookID: book.id, pageID: page.id)
-        selectedID = element.id
-        textDraft = ""
+
+        typedText = ""
+        typingID = element.id
+        selectedID = nil
+        tool = .select
+        typingFocused = true
+    }
+
+    /// Puts the typed words on the page. Text nobody typed is thrown away
+    /// rather than left as an invisible element to trip over later.
+    private func finishTyping() {
+
+        guard let id = typingID,
+              var element = manager.elements.first(where: { $0.id == id }) else {
+            typingID = nil
+            return
+        }
+
+        let clean = typedText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if clean.isEmpty {
+            manager.delete(id, bookID: book.id, pageID: page.id)
+        } else {
+            element.payload = clean
+            element.fontIndex = textFontIndex
+            element.colorHex = textColor
+            manager.update(element, bookID: book.id, pageID: page.id)
+        }
+
+        typingID = nil
+        typedText = ""
+        typingFocused = false
     }
 
     // MARK: Selected element actions
@@ -501,8 +594,8 @@ struct ScrapbookCanvasView: View {
                 withAnimation { tool = tool == .brush ? .select : .brush; selectedID = nil }
             }
 
-            toolButton("textformat", "Text") {
-                showingText = true
+            toolButton("textformat", "Text", active: typingID != nil) {
+                startTyping()
             }
 
             toolButton("face.smiling", "Stickers") {
@@ -710,91 +803,72 @@ private struct StickerPicker: View {
 
 // MARK: - Text composer
 
-private struct TextComposer: View {
+// MARK: - Typing bar
 
-    @Binding var text: String
+/// Font and colour, while the words are being typed on the page.
+private struct TypingBar: View {
+
     @Binding var fontIndex: Int
     @Binding var colorHex: String
-    let onAdd: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
+    let onDone: () -> Void
 
     var body: some View {
 
-        VStack(spacing: 16) {
-
-            Text("Write something")
-                .font(.system(size: 19, weight: .bold, design: .serif))
-                .padding(.top, 18)
-
-            TextField("A few words…", text: $text, axis: .vertical)
-                .font(ScrapbookStyle.font(fontIndex, size: 20))
-                .foregroundStyle(Color(scrapbookHex: colorHex))
-                .multilineTextAlignment(.center)
-                .lineLimit(1...4)
-                .focused($focused)
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.secondary.opacity(0.10))
-                )
-                .padding(.horizontal, 20)
+        VStack(spacing: 8) {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(Array(ScrapbookStyle.fonts.enumerated()), id: \.offset) { index, choice in
                         Text(choice.label)
                             .font(ScrapbookStyle.font(index, size: 14))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .foregroundStyle(fontIndex == index
+                                             ? Color(red: 0.16, green: 0.14, blue: 0.22)
+                                             : .white)
+                            .lineLimit(1)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 7)
                             .background(
                                 Capsule().fill(fontIndex == index
-                                               ? Color.primary.opacity(0.15)
-                                               : Color.secondary.opacity(0.08))
+                                               ? Color.white
+                                               : Color.white.opacity(0.12))
                             )
                             .onTapGesture { fontIndex = index }
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(ScrapbookStyle.inkPalette, id: \.self) { hex in
-                        Circle()
-                            .fill(Color(scrapbookHex: hex))
-                            .frame(width: 26, height: 26)
-                            .overlay(
-                                Circle().strokeBorder(.primary.opacity(0.7),
-                                                      lineWidth: colorHex == hex ? 3 : 0.5)
-                            )
-                            .onTapGesture { colorHex = hex }
+            HStack(spacing: 10) {
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(ScrapbookStyle.inkPalette, id: \.self) { hex in
+                            Circle()
+                                .fill(Color(scrapbookHex: hex))
+                                .frame(width: 26, height: 26)
+                                .overlay(
+                                    Circle().strokeBorder(.white,
+                                                          lineWidth: colorHex == hex ? 3 : 1)
+                                )
+                                .onTapGesture { colorHex = hex }
+                        }
                     }
+                    .padding(.leading, 16)
                 }
-                .padding(.horizontal, 20)
-            }
 
-            Button {
-                onAdd()
-                dismiss()
-            } label: {
-                Text("Add to page")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .fill(Color(red: 0.29, green: 0.30, blue: 0.42))
-                    )
+                Button(action: onDone) {
+                    Text("Done")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.16, green: 0.14, blue: 0.22))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(.white))
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 20)
-
-            Spacer(minLength: 0)
         }
-        .onAppear { focused = true }
+        .padding(.vertical, 8)
     }
 }
 
