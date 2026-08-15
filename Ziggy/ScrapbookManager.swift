@@ -260,7 +260,9 @@ final class ScrapbookManager: ObservableObject {
     /// What's actually drawn: whatever the couple arranged, or the stock
     /// arrangement until one of them moves something.
     var resolvedOrnaments: [ScrapbookOrnamentPlacement] {
-        ornaments.isEmpty ? ScrapbookOrnamentPlacement.defaults() : ornaments
+        ornaments.isEmpty
+            ? ScrapbookOrnamentPlacement.defaults(spanning: books.map(\.position))
+            : ornaments
     }
 
     /// Writes the whole arrangement back. It's one small array, so replacing

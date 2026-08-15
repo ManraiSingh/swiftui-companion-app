@@ -108,20 +108,46 @@ struct ScrapbookOrnamentPlacement: Identifiable, Equatable {
 
     var displayWidth: CGFloat { ornament.width * clampedScale }
 
-    /// The stock arrangement, sitting after whatever books already exist.
+    /// The stock arrangement: one of every object, spread through the books
+    /// rather than queued up behind them.
     ///
-    /// The base is far past any plausible `timeIntervalSince1970`, which is
-    /// what books seed their position from, so a new shelf opens with the
-    /// books first and the ornaments trailing them.
-    static func defaults(count: Int = 6) -> [ScrapbookOrnamentPlacement] {
+    /// Bunching them all after the last book left them piled onto whichever
+    /// shelf they happened to land on and the lower shelves bare. Threading
+    /// their positions through the range the books occupy puts something on
+    /// every shelf, which is what a shelf actually looks like.
+    ///
+    /// Only ever used until somebody moves something — the moment there's a
+    /// saved arrangement, that wins.
+    static func defaults(spanning bookPositions: [Double]) -> [ScrapbookOrnamentPlacement] {
 
         let kinds = ScrapbookOrnament.allCases
 
-        return (0..<count).map { index in
-            ScrapbookOrnamentPlacement(
+        guard let first = bookPositions.min(),
+              let last = bookPositions.max(),
+              last > first else {
+
+            // Nothing to thread through yet, so just line them up.
+            return kinds.enumerated().map { index, kind in
+                ScrapbookOrnamentPlacement(
+                    id: "o\(index)",
+                    position: Double(index) * 1_000,
+                    kind: kind.rawValue
+                )
+            }
+        }
+
+        let span = last - first
+
+        return kinds.enumerated().map { index, kind in
+
+            // Runs a little past the last book, so the tail of the shelf gets
+            // an ornament too rather than ending on a spine.
+            let through = Double(index + 1) / Double(kinds.count) * 1.15
+
+            return ScrapbookOrnamentPlacement(
                 id: "o\(index)",
-                position: 4_000_000_000 + Double(index) * 1_000,
-                kind: kinds[(index * 3) % kinds.count].rawValue
+                position: first + span * through,
+                kind: kind.rawValue
             )
         }
     }
