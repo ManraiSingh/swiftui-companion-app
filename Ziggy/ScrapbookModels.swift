@@ -144,6 +144,10 @@ struct ShelfItem: Identifiable, Equatable {
     let position: Double
     let width: CGFloat
 
+    /// How tall it stands, so it can be sat on the shelf surface rather than
+    /// aligned by a stack.
+    let height: CGFloat
+
     var isMovable: Bool {
         if case .addSlot = kind { return false }
         return true
@@ -154,20 +158,23 @@ struct ShelfItem: Identifiable, Equatable {
         kind = .book(book)
         position = book.position
         width = book.displayThickness
+        height = book.displayHeight
     }
 
-    init(ornament: ScrapbookOrnamentPlacement) {
+    init(ornament: ScrapbookOrnamentPlacement, boxHeight: CGFloat) {
         id = ornament.id
         kind = .ornament(ornament)
         position = ornament.position
         width = ornament.displayWidth
+        height = boxHeight
     }
 
-    init(addSlotWidth: CGFloat) {
+    init(addSlotWidth: CGFloat, height: CGFloat) {
         id = "__add__"
         kind = .addSlot
         position = .greatestFiniteMagnitude
         width = addSlotWidth
+        self.height = height
     }
 }
 

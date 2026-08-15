@@ -55,7 +55,14 @@ private enum ShelfMetrics {
     static let addSlot: CGFloat = 50
     static let ornamentBox: CGFloat = 134
 
+    static let bookSlotHeight: CGFloat = 138
+
     static var pitch: CGFloat { tierHeight + plankHeight }
+
+    /// The y of the shelf surface that the items on `tier` stand on.
+    static func floorY(_ tier: Int) -> CGFloat {
+        topCap + CGFloat(tier) * pitch + tierHeight
+    }
 
     /// Which shelf a point falls on, for a drop.
     static func tier(forY y: CGFloat, count: Int) -> Int {
@@ -119,7 +126,9 @@ struct ScrapbookShelfView: View {
     /// The saved order, as it stands in Firestore.
     private var baseItems: [ShelfItem] {
         (manager.books.map(ShelfItem.init(book:))
-         + manager.resolvedOrnaments.map(ShelfItem.init(ornament:)))
+         + manager.resolvedOrnaments.map {
+             ShelfItem(ornament: $0, boxHeight: ShelfMetrics.ornamentBox)
+         })
             .sorted { $0.position < $1.position }
     }
 
@@ -144,7 +153,10 @@ struct ScrapbookShelfView: View {
         var row: [ShelfItem] = []
         var used: CGFloat = 0
 
-        for item in list + [ShelfItem(addSlotWidth: ShelfMetrics.addSlot)] {
+        let slot = ShelfItem(addSlotWidth: ShelfMetrics.addSlot,
+                             height: ShelfMetrics.bookSlotHeight)
+
+        for item in list + [slot] {
 
             let needed = item.width + (row.isEmpty ? 0 : ShelfMetrics.spacing)
 
@@ -297,9 +309,29 @@ struct ScrapbookShelfView: View {
 
     // MARK: The bookcase
 
+    /// Where every item stands, in the bookcase's own coordinates.
+    private func placements(_ rows: [[ShelfItem]]) -> [String: CGPoint] {
+
+        var map: [String: CGPoint] = [:]
+
+        for (tier, row) in rows.enumerated() {
+            var x = ShelfMetrics.inset
+            for item in row {
+                map[item.id] = CGPoint(x: x, y: ShelfMetrics.floorY(tier) - item.height)
+                x += item.width + ShelfMetrics.spacing
+            }
+        }
+
+        return map
+    }
+
     private var etagere: some View {
 
-        ZStack(alignment: .topLeading) {
+        let rows = tiers
+        let spots = placements(rows)
+        let height = ShelfMetrics.topCap + CGFloat(rows.count) * ShelfMetrics.pitch
+
+        return ZStack(alignment: .topLeading) {
 
             HStack {
                 post
@@ -307,23 +339,37 @@ struct ScrapbookShelfView: View {
                 post
             }
 
+            // The furniture: the top and one plank under each row.
             VStack(spacing: 0) {
 
                 Outlined(radius: 3, fill: ScrapbookStyle.woodLight)
                     .frame(height: ShelfMetrics.topCap)
 
-                ForEach(Array(tiers.enumerated()), id: \.offset) { _, row in
-                    tierView(row)
+                ForEach(0..<rows.count, id: \.self) { _ in
+                    Color.clear.frame(height: ShelfMetrics.tierHeight)
+                    Outlined(radius: 3, fill: ScrapbookStyle.wood)
+                        .frame(height: ShelfMetrics.plankHeight)
                 }
             }
-            // Scoped to the rows on purpose. On the whole bookcase it also
-            // caught the floating copy below, which then sprang toward the
-            // finger on every reorder instead of tracking it — the lag.
+
+            // Every item in one flat list, placed by offset rather than nested
+            // inside a stack per shelf.
+            //
+            // With a container per row, an item crossing onto another shelf
+            // was destroyed by one ForEach and rebuilt by the next — and the
+            // drag gesture died with the view it was attached to, which is
+            // why dragging up or down stuck halfway. One list keeps each view
+            // alive wherever it moves to.
+            ForEach(rows.flatMap { $0 }) { item in
+                itemView(item)
+                    .offset(
+                        x: spots[item.id]?.x ?? 0,
+                        y: spots[item.id]?.y ?? 0
+                    )
+            }
             .animation(.spring(response: 0.34, dampingFraction: 0.84), value: items.map(\.id))
 
             // The thing being carried, drawn on top and following the finger.
-            // Keeping it out of the row means the row is free to reflow
-            // underneath it and show where it will land.
             if let id = dragging, let item = items.first(where: { $0.id == id }) {
                 CarriedItem(store: dragPoint) {
                     itemBody(item)
@@ -333,6 +379,8 @@ struct ScrapbookShelfView: View {
                 .zIndex(50)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: height)
         .coordinateSpace(name: "etagere")
         .background(
             GeometryReader { proxy in
@@ -342,26 +390,6 @@ struct ScrapbookShelfView: View {
         .onPreferenceChange(ShelfWidthKey.self) { shelfWidth = $0 }
     }
 
-    private func tierView(_ row: [ShelfItem]) -> some View {
-
-        VStack(spacing: 0) {
-
-            HStack(alignment: .bottom, spacing: ShelfMetrics.spacing) {
-                ForEach(row) { item in
-                    itemView(item)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, ShelfMetrics.inset)
-            .frame(height: ShelfMetrics.tierHeight, alignment: .bottom)
-
-            Outlined(radius: 3, fill: ScrapbookStyle.wood)
-                .frame(height: ShelfMetrics.plankHeight)
-        }
-    }
-
-    /// What an item looks like, with no gestures on it. Used both in the row
-    /// and for the floating copy that follows the finger.
     @ViewBuilder
     private func itemBody(_ item: ShelfItem) -> some View {
 
