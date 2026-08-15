@@ -61,6 +61,15 @@ struct ScrapbookShelfView: View {
     @State private var dragging: String?
     @State private var shelfWidth: CGFloat = 0
 
+    /// Where the finger is, in the bookcase's own coordinate space. The
+    /// lifted copy is drawn here so it tracks continuously instead of only
+    /// jumping when it changes slot.
+    @State private var dragPoint: CGPoint = .zero
+
+    /// The slot the row is currently opened at, so a drag that stays within
+    /// one slot doesn't rewrite the order on every frame.
+    @State private var lastIndex: Int?
+
     /// Where the dragged item sat when the drag began, so a drop that lands
     /// nowhere valid can put it back.
     @State private var dragOrigin: Double?
@@ -267,6 +276,18 @@ struct ScrapbookShelfView: View {
                     tierView(row)
                 }
             }
+
+            // The thing being carried, drawn on top and following the finger.
+            // Keeping it out of the row means the row is free to reflow
+            // underneath it and show where it will land.
+            if let id = dragging, let item = items.first(where: { $0.id == id }) {
+                itemBody(item)
+                    .scaleEffect(1.08, anchor: .center)
+                    .shadow(color: ScrapbookStyle.outline.opacity(0.4), radius: 14, y: 10)
+                    .position(dragPoint)
+                    .allowsHitTesting(false)
+                    .zIndex(50)
+            }
         }
         .coordinateSpace(name: "etagere")
         .background(
@@ -298,8 +319,10 @@ struct ScrapbookShelfView: View {
         }
     }
 
+    /// What an item looks like, with no gestures on it. Used both in the row
+    /// and for the floating copy that follows the finger.
     @ViewBuilder
-    private func itemView(_ item: ShelfItem) -> some View {
+    private func itemBody(_ item: ShelfItem) -> some View {
 
         switch item.kind {
 
@@ -309,18 +332,6 @@ struct ScrapbookShelfView: View {
                 isSelected: selection == .book(book.id),
                 isLifted: dragging == book.id
             )
-            .contentShape(Rectangle())
-            .zIndex(dragging == book.id ? 10 : 0)
-            .onTapGesture {
-                // Under Edit a tap picks the book to change, not to read —
-                // opening it there would fight the thing you came to do.
-                if editing {
-                    select(book)
-                } else {
-                    withAnimation(.easeInOut(duration: 0.3)) { openBook = book }
-                }
-            }
-            .gesture(dragGesture(for: item), isEnabled: editing)
 
         case .ornament(let placement):
             placement.ornament.view
@@ -328,9 +339,6 @@ struct ScrapbookShelfView: View {
                        height: ShelfMetrics.ornamentBox,
                        alignment: .bottom)
                 .scaleEffect(placement.clampedScale, anchor: .bottom)
-                // Declared before anything moves the view. Applied after an
-                // offset it leaves the tap target behind at the old spot.
-                .contentShape(Rectangle())
                 .overlay {
                     if selection == .ornament(placement.id) {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -338,20 +346,43 @@ struct ScrapbookShelfView: View {
                             .padding(-4)
                     }
                 }
-                .scaleEffect(dragging == placement.id ? 1.08 : 1, anchor: .bottom)
-                .shadow(
-                    color: ScrapbookStyle.outline.opacity(dragging == placement.id ? 0.35 : 0),
-                    radius: 12, y: 8
-                )
-                .zIndex(dragging == placement.id ? 10 : 0)
-                .animation(.spring(response: 0.28, dampingFraction: 0.7),
-                           value: dragging == placement.id)
-                .onTapGesture { if editing { select(ornament: placement) } }
-                .gesture(dragGesture(for: item), isEnabled: editing)
 
         case .addSlot:
             AddBookSlot(width: ShelfMetrics.addSlot) { showingNewBook = true }
         }
+    }
+
+    @ViewBuilder
+    private func itemView(_ item: ShelfItem) -> some View {
+
+        let isDragging = dragging == item.id
+
+        itemBody(item)
+            // While it's being carried, its place in the row is held open as
+            // a faint outline so you can see where it will land.
+            .opacity(isDragging ? 0.22 : 1)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                switch item.kind {
+                case .book(let book):
+                    // Under Edit a tap picks the book to change, not to read —
+                    // opening it there would fight the thing you came to do.
+                    if editing {
+                        select(book)
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.3)) { openBook = book }
+                    }
+                case .ornament(let placement):
+                    if editing { select(ornament: placement) }
+                case .addSlot:
+                    break
+                }
+            }
+            // High priority so the drag beats the surrounding ScrollView.
+            // With a plain `.gesture` the scroll view claimed every vertical
+            // pan before this recognised, which left dragging working
+            // sideways only.
+            .highPriorityGesture(dragGesture(for: item), isEnabled: editing && item.isMovable)
     }
 
     private var post: some View {
@@ -366,16 +397,24 @@ struct ScrapbookShelfView: View {
     /// around it, which is what opens the gap ahead of it.
     private func dragGesture(for item: ShelfItem) -> some Gesture {
 
-        DragGesture(minimumDistance: 8, coordinateSpace: .named("etagere"))
+        DragGesture(minimumDistance: 6, coordinateSpace: .named("etagere"))
             .onChanged { value in
 
                 if dragging != item.id {
                     dragging = item.id
                     dragOrigin = item.position
+                    lastIndex = nil
                     select(item)
                 }
 
-                guard let target = insertionIndex(at: value.location, moving: item.id) else { return }
+                // Tracked every frame — this is what makes it follow the
+                // finger rather than hop between slots.
+                dragPoint = value.location
+
+                guard let target = insertionIndex(at: value.location, moving: item.id),
+                      target != lastIndex else { return }
+
+                lastIndex = target
                 move(item.id, toIndex: target)
             }
             .onEnded { value in
@@ -386,9 +425,10 @@ struct ScrapbookShelfView: View {
                     commit(item.id, position: origin)
                 }
 
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) {
                     dragging = nil
                     dragOrigin = nil
+                    lastIndex = nil
                 }
             }
     }
