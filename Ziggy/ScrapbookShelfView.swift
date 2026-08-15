@@ -70,9 +70,9 @@ struct ScrapbookShelfView: View {
     /// one slot doesn't rewrite the order on every frame.
     @State private var lastIndex: Int?
 
-    /// Where the dragged item sat when the drag began, so a drop that lands
-    /// nowhere valid can put it back.
-    @State private var dragOrigin: Double?
+    /// The order being worked on during a drag, kept entirely locally until
+    /// the finger comes up.
+    @State private var dragOrder: [ShelfItem]?
 
     private var selectedBook: ScrapbookBook? {
         guard case .book(let id) = selection else { return nil }
@@ -84,12 +84,18 @@ struct ScrapbookShelfView: View {
         return manager.resolvedOrnaments.first { $0.id == id }
     }
 
-    /// Books and ornaments merged into the single order they're laid out in.
-    private var items: [ShelfItem] {
+    /// The saved order, as it stands in Firestore.
+    private var baseItems: [ShelfItem] {
         (manager.books.map(ShelfItem.init(book:))
          + manager.resolvedOrnaments.map(ShelfItem.init(ornament:)))
             .sorted { $0.position < $1.position }
     }
+
+    /// What's actually laid out. While a drag is running this is the local
+    /// working copy, so shuffling the row costs nothing but an array move —
+    /// no writes, no listener echo, and no republishing the whole shelf on
+    /// every frame of the drag.
+    private var items: [ShelfItem] { dragOrder ?? baseItems }
 
     /// The order broken into shelves by width, with the "New" slot last.
     ///
@@ -276,6 +282,10 @@ struct ScrapbookShelfView: View {
                     tierView(row)
                 }
             }
+            // Scoped to the rows on purpose. On the whole bookcase it also
+            // caught the floating copy below, which then sprang toward the
+            // finger on every reorder instead of tracking it — the lag.
+            .animation(.spring(response: 0.34, dampingFraction: 0.84), value: items.map(\.id))
 
             // The thing being carried, drawn on top and following the finger.
             // Keeping it out of the row means the row is free to reflow
@@ -285,6 +295,9 @@ struct ScrapbookShelfView: View {
                     .scaleEffect(1.08, anchor: .center)
                     .shadow(color: ScrapbookStyle.outline.opacity(0.4), radius: 14, y: 10)
                     .position(dragPoint)
+                    // Never animated: it should sit exactly under the finger,
+                    // and any inherited animation shows up as drag lag.
+                    .transaction { $0.animation = nil }
                     .allowsHitTesting(false)
                     .zIndex(50)
             }
@@ -296,9 +309,6 @@ struct ScrapbookShelfView: View {
             }
         )
         .onPreferenceChange(ShelfWidthKey.self) { shelfWidth = $0 }
-        // Driven by the order rather than by any one item, so a move animates
-        // every neighbour that shifts to make room, not just the thing moved.
-        .animation(.spring(response: 0.36, dampingFraction: 0.82), value: items.map(\.id))
     }
 
     private func tierView(_ row: [ShelfItem]) -> some View {
@@ -402,9 +412,12 @@ struct ScrapbookShelfView: View {
 
                 if dragging != item.id {
                     dragging = item.id
-                    dragOrigin = item.position
+                    dragOrder = baseItems
                     lastIndex = nil
-                    select(item)
+                    // The panel belongs to a tap. Picking something up should
+                    // clear the way, not put a sheet over the shelf you're
+                    // trying to drop onto.
+                    selection = nil
                 }
 
                 // Tracked every frame — this is what makes it follow the
@@ -412,25 +425,53 @@ struct ScrapbookShelfView: View {
                 dragPoint = value.location
 
                 guard let target = insertionIndex(at: value.location, moving: item.id),
-                      target != lastIndex else { return }
+                      target != lastIndex,
+                      var order = dragOrder,
+                      let from = order.firstIndex(where: { $0.id == item.id })
+                else { return }
 
                 lastIndex = target
-                move(item.id, toIndex: target)
+                let moved = order.remove(at: from)
+                order.insert(moved, at: min(max(target, 0), order.count))
+
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                    dragOrder = order
+                }
             }
             .onEnded { value in
 
-                // Dropped off the bookcase entirely — put it back where it
-                // came from rather than leaving it wherever it passed over.
-                if !dropIsOnShelf(value.location), let origin = dragOrigin {
-                    commit(item.id, position: origin)
+                // Dropped off the bookcase entirely — leave the saved order
+                // alone, so it springs back to where it came from.
+                if dropIsOnShelf(value.location),
+                   let order = dragOrder,
+                   let index = order.firstIndex(where: { $0.id == item.id }) {
+                    commit(item.id, position: position(for: item.id, at: index, in: order))
                 }
 
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) {
                     dragging = nil
-                    dragOrigin = nil
+                    dragOrder = nil
                     lastIndex = nil
                 }
             }
+    }
+
+    /// A position between the item's new neighbours — one write, and nothing
+    /// else on the shelf has to be renumbered.
+    private func position(for id: String, at index: Int, in order: [ShelfItem]) -> Double {
+
+        let others = order.filter { $0.id != id }
+        let target = min(max(index, 0), others.count)
+
+        let before = target > 0 ? others[target - 1].position : nil
+        let after = target < others.count ? others[target].position : nil
+
+        switch (before, after) {
+        case let (before?, after?): return (before + after) / 2
+        case let (before?, nil):    return before + 1_000
+        case let (nil, after?):     return after - 1_000
+        default:                    return 0
+        }
     }
 
     private func dropIsOnShelf(_ point: CGPoint) -> Bool {
@@ -465,30 +506,6 @@ struct ScrapbookShelfView: View {
         }
 
         return index
-    }
-
-    /// Puts an item at `index` by taking a position between its new
-    /// neighbours — one write, and no renumbering of anything else.
-    private func move(_ id: String, toIndex index: Int) {
-
-        let others = items.filter { $0.id != id }
-        let target = min(max(index, 0), others.count)
-
-        let before = target > 0 ? others[target - 1].position : nil
-        let after = target < others.count ? others[target].position : nil
-
-        let position: Double
-        switch (before, after) {
-        case let (before?, after?): position = (before + after) / 2
-        case let (before?, nil):    position = before + 1_000
-        case let (nil, after?):     position = after - 1_000
-        default:                    position = 0
-        }
-
-        guard let current = items.first(where: { $0.id == id }),
-              current.position != position else { return }
-
-        commit(id, position: position)
     }
 
     private func commit(_ id: String, position: Double) {
