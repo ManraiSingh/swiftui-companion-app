@@ -148,15 +148,23 @@ struct ScrapbookShelfView: View {
 
     private func flow(_ list: [ShelfItem]) -> [[ShelfItem]] {
 
+        // The "add an object" slot only exists while arranging, so the shelf
+        // stays uncluttered the rest of the time.
+
         let available = max(shelfWidth - ShelfMetrics.inset * 2, 1)
         var rows: [[ShelfItem]] = []
         var row: [ShelfItem] = []
         var used: CGFloat = 0
 
-        let slot = ShelfItem(addSlotWidth: ShelfMetrics.addSlot,
-                             height: ShelfMetrics.bookSlotHeight)
+        var trailing = [ShelfItem(addSlotWidth: ShelfMetrics.addSlot,
+                                  height: ShelfMetrics.bookSlotHeight)]
 
-        for item in list + [slot] {
+        if editing {
+            trailing.append(ShelfItem(addOrnamentWidth: ShelfMetrics.addSlot,
+                                      height: ShelfMetrics.bookSlotHeight))
+        }
+
+        for item in list + trailing {
 
             let needed = item.width + (row.isEmpty ? 0 : ShelfMetrics.spacing)
 
@@ -417,7 +425,39 @@ struct ScrapbookShelfView: View {
                 }
 
         case .addSlot:
-            AddBookSlot(width: ShelfMetrics.addSlot) { showingNewBook = true }
+            AddSlot(width: ShelfMetrics.addSlot,
+                    icon: "plus",
+                    label: "Book") { showingNewBook = true }
+
+        case .addOrnament:
+            AddSlot(width: ShelfMetrics.addSlot,
+                    icon: "leaf",
+                    label: "Object") { addOrnament() }
+        }
+    }
+
+    /// Puts another object at the end of the shelf.
+    ///
+    /// Picks a kind that isn't already out, so tapping twice gives two
+    /// different things rather than a matching pair.
+    private func addOrnament() {
+
+        var all = manager.resolvedOrnaments
+        let used = Set(all.map(\.kind))
+
+        let kind = ScrapbookOrnament.allCases.first { !used.contains($0.rawValue) }?.rawValue
+            ?? ScrapbookOrnament.allCases[all.count % ScrapbookOrnament.allCases.count].rawValue
+
+        all.append(
+            ScrapbookOrnamentPlacement(
+                id: UUID().uuidString,
+                position: (items.map(\.position).max() ?? 0) + 1_000,
+                kind: kind
+            )
+        )
+
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            manager.saveOrnaments(all)
         }
     }
 
@@ -443,7 +483,7 @@ struct ScrapbookShelfView: View {
                     }
                 case .ornament(let placement):
                     if editing { select(ornament: placement) }
-                case .addSlot:
+                case .addSlot, .addOrnament:
                     break
                 }
             }
@@ -590,9 +630,9 @@ struct ScrapbookShelfView: View {
 
     private func select(_ item: ShelfItem) {
         switch item.kind {
-        case .book(let book):          select(book)
-        case .ornament(let placement): select(ornament: placement)
-        case .addSlot:                 break
+        case .book(let book):              select(book)
+        case .ornament(let placement):     select(ornament: placement)
+        case .addSlot, .addOrnament:       break
         }
     }
 
@@ -769,18 +809,20 @@ private struct BookSpine: View {
 
 // MARK: - Empty slot
 
-private struct AddBookSlot: View {
+private struct AddSlot: View {
 
     let width: CGFloat
+    let icon: String
+    let label: String
     let action: () -> Void
 
     var body: some View {
 
         Button(action: action) {
             VStack(spacing: 7) {
-                Image(systemName: "plus")
+                Image(systemName: icon)
                     .font(.system(size: 19, weight: .bold))
-                Text("New")
+                Text(label)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
             }
             .foregroundStyle(ScrapbookStyle.outline.opacity(0.55))

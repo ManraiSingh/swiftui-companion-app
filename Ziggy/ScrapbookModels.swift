@@ -163,6 +163,7 @@ struct ShelfItem: Identifiable, Equatable {
         case book(ScrapbookBook)
         case ornament(ScrapbookOrnamentPlacement)
         case addSlot
+        case addOrnament
     }
 
     let id: String
@@ -174,9 +175,13 @@ struct ShelfItem: Identifiable, Equatable {
     /// aligned by a stack.
     let height: CGFloat
 
+    /// The two "add" slots ride along in the layout but aren't part of the
+    /// running order, so they're skipped when working out a drop index.
     var isMovable: Bool {
-        if case .addSlot = kind { return false }
-        return true
+        switch kind {
+        case .addSlot, .addOrnament: return false
+        case .book, .ornament:       return true
+        }
     }
 
     init(book: ScrapbookBook) {
@@ -200,6 +205,14 @@ struct ShelfItem: Identifiable, Equatable {
         kind = .addSlot
         position = .greatestFiniteMagnitude
         width = addSlotWidth
+        self.height = height
+    }
+
+    init(addOrnamentWidth: CGFloat, height: CGFloat) {
+        id = "__addOrnament__"
+        kind = .addOrnament
+        position = .greatestFiniteMagnitude
+        width = addOrnamentWidth
         self.height = height
     }
 }
