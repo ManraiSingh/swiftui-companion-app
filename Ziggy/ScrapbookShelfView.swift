@@ -11,6 +11,35 @@
 //
 
 import SwiftUI
+import Observation
+
+/// The finger's position during a drag.
+///
+/// Held in an observable box rather than in `@State` on the shelf. As plain
+/// view state, every frame of movement invalidated the whole bookcase and
+/// redrew every ornament's vector art — a plant is eight circles and eight
+/// curves, and there are several on screen. Now only the carried copy, which
+/// is the one view that reads this, redraws as the finger moves.
+@Observable
+final class ShelfDragPoint {
+    var value: CGPoint = .zero
+}
+
+/// The item in hand, drawn under the finger.
+private struct CarriedItem<Content: View>: View {
+
+    let store: ShelfDragPoint
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .position(store.value)
+            // Never animated: it should sit exactly under the finger, and any
+            // inherited animation shows up as drag lag.
+            .transaction { $0.animation = nil }
+            .allowsHitTesting(false)
+    }
+}
 
 enum ShelfSelection: Equatable {
     case book(String)
@@ -61,10 +90,9 @@ struct ScrapbookShelfView: View {
     @State private var dragging: String?
     @State private var shelfWidth: CGFloat = 0
 
-    /// Where the finger is, in the bookcase's own coordinate space. The
-    /// lifted copy is drawn here so it tracks continuously instead of only
-    /// jumping when it changes slot.
-    @State private var dragPoint: CGPoint = .zero
+    /// Where the finger is, in the bookcase's own coordinate space. Read only
+    /// by the carried copy, so moving it doesn't redraw the shelf.
+    @State private var dragPoint = ShelfDragPoint()
 
     /// The slot the row is currently opened at, so a drag that stays within
     /// one slot doesn't rewrite the order on every frame.
@@ -73,6 +101,10 @@ struct ScrapbookShelfView: View {
     /// The order being worked on during a drag, kept entirely locally until
     /// the finger comes up.
     @State private var dragOrder: [ShelfItem]?
+
+    /// The other items' arrangement, frozen for the duration of a drag so the
+    /// drop target can't move around underneath the finger.
+    @State private var dragLayout: [[ShelfItem]]?
 
     private var selectedBook: ScrapbookBook? {
         guard case .book(let id) = selection else { return nil }
@@ -103,14 +135,16 @@ struct ScrapbookShelfView: View {
     /// below. That's what makes dropping something into a full shelf push the
     /// last item down rather than overlap it, and it means there is always
     /// somewhere for a dragged item to land.
-    private var tiers: [[ShelfItem]] {
+    private var tiers: [[ShelfItem]] { flow(items) }
+
+    private func flow(_ list: [ShelfItem]) -> [[ShelfItem]] {
 
         let available = max(shelfWidth - ShelfMetrics.inset * 2, 1)
         var rows: [[ShelfItem]] = []
         var row: [ShelfItem] = []
         var used: CGFloat = 0
 
-        for item in items + [ShelfItem(addSlotWidth: ShelfMetrics.addSlot)] {
+        for item in list + [ShelfItem(addSlotWidth: ShelfMetrics.addSlot)] {
 
             let needed = item.width + (row.isEmpty ? 0 : ShelfMetrics.spacing)
 
@@ -291,15 +325,12 @@ struct ScrapbookShelfView: View {
             // Keeping it out of the row means the row is free to reflow
             // underneath it and show where it will land.
             if let id = dragging, let item = items.first(where: { $0.id == id }) {
-                itemBody(item)
-                    .scaleEffect(1.08, anchor: .center)
-                    .shadow(color: ScrapbookStyle.outline.opacity(0.4), radius: 14, y: 10)
-                    .position(dragPoint)
-                    // Never animated: it should sit exactly under the finger,
-                    // and any inherited animation shows up as drag lag.
-                    .transaction { $0.animation = nil }
-                    .allowsHitTesting(false)
-                    .zIndex(50)
+                CarriedItem(store: dragPoint) {
+                    itemBody(item)
+                        .scaleEffect(1.08, anchor: .center)
+                        .shadow(color: ScrapbookStyle.outline.opacity(0.4), radius: 14, y: 10)
+                }
+                .zIndex(50)
             }
         }
         .coordinateSpace(name: "etagere")
@@ -413,6 +444,7 @@ struct ScrapbookShelfView: View {
                 if dragging != item.id {
                     dragging = item.id
                     dragOrder = baseItems
+                    dragLayout = flow(baseItems.filter { $0.id != item.id })
                     lastIndex = nil
                     // The panel belongs to a tap. Picking something up should
                     // clear the way, not put a sheet over the shelf you're
@@ -422,9 +454,9 @@ struct ScrapbookShelfView: View {
 
                 // Tracked every frame — this is what makes it follow the
                 // finger rather than hop between slots.
-                dragPoint = value.location
+                dragPoint.value = value.location
 
-                guard let target = insertionIndex(at: value.location, moving: item.id),
+                guard let target = insertionIndex(at: value.location),
                       target != lastIndex,
                       var order = dragOrder,
                       let from = order.firstIndex(where: { $0.id == item.id })
@@ -451,6 +483,7 @@ struct ScrapbookShelfView: View {
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) {
                     dragging = nil
                     dragOrder = nil
+                    dragLayout = nil
                     lastIndex = nil
                 }
             }
@@ -484,13 +517,17 @@ struct ScrapbookShelfView: View {
 
     /// Which slot in the running order the finger is currently over.
     ///
-    /// Worked out by walking the rows that were just laid out, rather than by
-    /// measuring frames: the widths are already known here, so this is exact
-    /// and avoids feeding geometry back into the layout mid-drag.
-    private func insertionIndex(at point: CGPoint, moving id: String) -> Int? {
+    /// Measured against `dragLayout` — the arrangement of everything *except*
+    /// the item in hand, worked out once when the drag began and held still
+    /// for its duration.
+    ///
+    /// Reading the live layout here instead created a feedback loop: moving
+    /// the item reflowed the rows, which moved the slot under the finger,
+    /// which moved the item again. That oscillation is what made a drop jitter
+    /// and made the bottom shelf almost impossible to hit.
+    private func insertionIndex(at point: CGPoint) -> Int? {
 
-        let rows = tiers
-        guard !rows.isEmpty else { return nil }
+        guard let rows = dragLayout, !rows.isEmpty else { return nil }
 
         let tier = ShelfMetrics.tier(forY: point.y, count: rows.count)
 
