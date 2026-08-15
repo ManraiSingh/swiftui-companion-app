@@ -91,12 +91,11 @@ struct ScrapbookBook: Identifiable, Equatable {
 struct ScrapbookOrnamentPlacement: Identifiable, Equatable {
 
     var id: String
-    var tier: Int
 
-    /// Where along the shelf it stands, 0 at the left upright and 1 at the
-    /// right. Normalised rather than stored in points so the arrangement
-    /// survives being looked at on a different sized phone.
-    var x: Double
+    /// Ornaments share one running order with the books rather than having
+    /// their own shelf and column. That's what lets a book be dropped between
+    /// two plants, and a plant between two books.
+    var position: Double
 
     var kind: Int
     var scale: Double = 1
@@ -109,22 +108,66 @@ struct ScrapbookOrnamentPlacement: Identifiable, Equatable {
 
     var displayWidth: CGFloat { ornament.width * clampedScale }
 
-    /// What the shelf looks like before anyone rearranges it — two objects a
-    /// tier, spread through the set so no two shelves look alike.
-    static func defaults(tiers: Int) -> [ScrapbookOrnamentPlacement] {
+    /// The stock arrangement, sitting after whatever books already exist.
+    ///
+    /// The base is far past any plausible `timeIntervalSince1970`, which is
+    /// what books seed their position from, so a new shelf opens with the
+    /// books first and the ornaments trailing them.
+    static func defaults(count: Int = 6) -> [ScrapbookOrnamentPlacement] {
 
         let kinds = ScrapbookOrnament.allCases
 
-        return (0..<max(tiers, 1)).flatMap { tier -> [ScrapbookOrnamentPlacement] in
-            [0.62, 0.86].enumerated().map { slot, x in
-                ScrapbookOrnamentPlacement(
-                    id: "o\(tier)-\(slot)",
-                    tier: tier,
-                    x: x,
-                    kind: kinds[(tier * 3 + slot) % kinds.count].rawValue
-                )
-            }
+        return (0..<count).map { index in
+            ScrapbookOrnamentPlacement(
+                id: "o\(index)",
+                position: 4_000_000_000 + Double(index) * 1_000,
+                kind: kinds[(index * 3) % kinds.count].rawValue
+            )
         }
+    }
+}
+
+// MARK: - One thing standing on a shelf
+
+/// Books and ornaments unified, so the shelf can lay them out as a single
+/// flowing row and a drag can put either kind anywhere.
+struct ShelfItem: Identifiable, Equatable {
+
+    enum Kind: Equatable {
+        case book(ScrapbookBook)
+        case ornament(ScrapbookOrnamentPlacement)
+        case addSlot
+    }
+
+    let id: String
+    let kind: Kind
+    let position: Double
+    let width: CGFloat
+
+    var isMovable: Bool {
+        if case .addSlot = kind { return false }
+        return true
+    }
+
+    init(book: ScrapbookBook) {
+        id = book.id
+        kind = .book(book)
+        position = book.position
+        width = book.displayThickness
+    }
+
+    init(ornament: ScrapbookOrnamentPlacement) {
+        id = ornament.id
+        kind = .ornament(ornament)
+        position = ornament.position
+        width = ornament.displayWidth
+    }
+
+    init(addSlotWidth: CGFloat) {
+        id = "__add__"
+        kind = .addSlot
+        position = .greatestFiniteMagnitude
+        width = addSlotWidth
     }
 }
 

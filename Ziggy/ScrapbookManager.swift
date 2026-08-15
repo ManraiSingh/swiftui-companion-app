@@ -200,42 +200,22 @@ final class ScrapbookManager: ObservableObject {
         ])
     }
 
-    /// Slides a book along the running order, by one place or several.
+    /// Puts a book at a given point in the running order.
     ///
-    /// The book is lifted out and reinserted, then only the books between the
-    /// old and new spot are renumbered — they pass the existing position
-    /// values along the line rather than the shelf being renumbered from
-    /// scratch, so a move costs writes in proportion to how far it went.
-    ///
-    /// The local array is updated straight away as well. A drag crosses these
-    /// thresholds faster than Firestore answers, and without the optimistic
-    /// update every step after the first would be computed from stale indices.
-    func moveBook(_ bookID: String, by offset: Int) {
+    /// Positions are fractional, so dropping something between two neighbours
+    /// is one write to one document — no renumbering of the shelf, and two
+    /// people rearranging at once can't collide over a shared sequence.
+    func setBookPosition(_ bookID: String, to position: Double) {
 
-        guard let ref = shelfRef(),
-              let from = books.firstIndex(where: { $0.id == bookID }) else { return }
+        shelfRef()?.document(bookID).updateData(["position": position])
 
-        let to = min(max(from + offset, 0), books.count - 1)
-        guard to != from else { return }
-
-        var reordered = books
-        let moved = reordered.remove(at: from)
-        reordered.insert(moved, at: to)
-
-        let lower = min(from, to)
-        let upper = max(from, to)
-        let slots = books[lower...upper].map(\.position).sorted()
-
-        for (step, book) in reordered[lower...upper].enumerated() {
-
-            let slot = slots[step]
-            guard book.position != slot else { continue }
-
-            ref.document(book.id).updateData(["position": slot])
-            reordered[lower + step].position = slot
+        // Applied locally as well: a drag reorders faster than Firestore
+        // answers, and without this every step after the first would be
+        // computed from a stale order.
+        if let index = books.firstIndex(where: { $0.id == bookID }) {
+            books[index].position = position
+            books.sort { $0.position < $1.position }
         }
-
-        books = reordered.sorted { $0.position < $1.position }
     }
 
     // MARK: - Ornaments
@@ -259,16 +239,15 @@ final class ScrapbookManager: ObservableObject {
 
             self.ornaments = raw.compactMap { entry in
                 guard let id = entry["id"] as? String,
-                      let tier = entry["tier"] as? Int,
                       let kind = entry["kind"] as? Int else { return nil }
                 return ScrapbookOrnamentPlacement(
                     id: id,
-                    tier: tier,
-                    x: entry["x"] as? Double ?? 0.7,
+                    position: entry["position"] as? Double ?? 4_000_000_000,
                     kind: kind,
                     scale: entry["scale"] as? Double ?? 1
                 )
             }
+            .sorted { $0.position < $1.position }
           }
         }
     }
@@ -280,8 +259,8 @@ final class ScrapbookManager: ObservableObject {
 
     /// What's actually drawn: whatever the couple arranged, or the stock
     /// arrangement until one of them moves something.
-    func resolvedOrnaments(tiers: Int) -> [ScrapbookOrnamentPlacement] {
-        ornaments.isEmpty ? ScrapbookOrnamentPlacement.defaults(tiers: tiers) : ornaments
+    var resolvedOrnaments: [ScrapbookOrnamentPlacement] {
+        ornaments.isEmpty ? ScrapbookOrnamentPlacement.defaults() : ornaments
     }
 
     /// Writes the whole arrangement back. It's one small array, so replacing
@@ -292,7 +271,7 @@ final class ScrapbookManager: ObservableObject {
 
         shelfMetaRef()?.setData([
             "ornaments": placements.map {
-                ["id": $0.id, "tier": $0.tier, "x": $0.x,
+                ["id": $0.id, "position": $0.position,
                  "kind": $0.kind, "scale": $0.scale]
             }
         ], merge: true)

@@ -2,12 +2,12 @@
 //  ScrapbookShelfView.swift
 //  Ziggy
 //
-//  The bookcase: an enclosed étagère of planks and posts, books standing on
-//  it among the ornaments.
+//  The bookcase. Books and ornaments share one running order and flow across
+//  the shelves together, so anything can be dragged in beside anything else
+//  and the rest of the row makes room for it.
 //
-//  A tap opens a book. Holding one picks it up, which is the same state the
-//  Edit button turns on — and in that state everything is draggable: books
-//  shuffle along the row, ornaments go anywhere on any shelf.
+//  Rearranging only happens under the Edit button. Outside it a tap opens a
+//  book and nothing moves.
 //
 
 import SwiftUI
@@ -17,68 +17,28 @@ enum ShelfSelection: Equatable {
     case ornament(String)
 }
 
-/// Press and hold to pick something up, then drag it without lifting.
-///
-/// A long press sequenced before the drag is what keeps all three gestures
-/// apart: a quick tap is over long before the hold completes, so tapping still
-/// opens a book; and because the hold has already claimed the gesture by the
-/// time the finger moves, the surrounding ScrollView can't steal the drag.
-private struct HoldToDrag: ViewModifier {
-
-    let onHold: () -> Void
-    let onDrag: (CGSize) -> Void
-    let onRelease: () -> Void
-
-    func body(content: Content) -> some View {
-        content.gesture(
-            LongPressGesture(minimumDuration: 0.28)
-                .sequenced(before: DragGesture(minimumDistance: 0))
-                .onChanged { value in
-                    switch value {
-                    case .first(true):
-                        onHold()
-                    case .second(true, let drag):
-                        if let drag { onDrag(drag.translation) }
-                    default:
-                        break
-                    }
-                }
-                .onEnded { _ in onRelease() }
-        )
-    }
-}
-
-private extension View {
-    func holdToDrag(
-        onHold: @escaping () -> Void,
-        onDrag: @escaping (CGSize) -> Void,
-        onRelease: @escaping () -> Void
-    ) -> some View {
-        modifier(HoldToDrag(onHold: onHold, onDrag: onDrag, onRelease: onRelease))
-    }
-}
-
-// Geometry shared between the shelves and the ornament layer that floats over
-// them. Both have to agree on where a shelf floor is, or a dragged object
-// lands somewhere other than where it was dropped.
 private enum ShelfMetrics {
     static let topCap: CGFloat = 13
     static let tierHeight: CGFloat = 200
     static let plankHeight: CGFloat = 13
     static let inset: CGFloat = 26
+    static let spacing: CGFloat = 7
+    static let addSlot: CGFloat = 50
     static let ornamentBox: CGFloat = 134
 
     static var pitch: CGFloat { tierHeight + plankHeight }
 
-    /// The y of the shelf surface objects on `tier` stand on.
-    static func floorY(_ tier: Int) -> CGFloat {
-        topCap + CGFloat(tier) * pitch + tierHeight
-    }
-
-    /// Which tier a point belongs to, for a drop.
-    static func tier(forY y: CGFloat, tiers: Int) -> Int {
+    /// Which shelf a point falls on, for a drop.
+    static func tier(forY y: CGFloat, count: Int) -> Int {
         let raw = Int(((y - topCap) / pitch).rounded(.down))
-        return min(max(raw, 0), max(tiers - 1, 0))
+        return min(max(raw, 0), max(count - 1, 0))
+    }
+}
+
+private struct ShelfWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -92,21 +52,18 @@ struct ScrapbookShelfView: View {
     @State private var draftTitle = ""
     @State private var pendingDelete: ScrapbookBook?
 
-    // Edit mode
     @State private var editing = false
     @State private var selection: ShelfSelection?
     @State private var draftTilt: Double = 0
     @State private var draftSize: Double = 1
     @State private var draftOrnamentScale: Double = 1
 
-    // Live drag state
-    @State private var draggingOrnament: String?
-    @State private var ornamentDrag: CGSize = .zero
-    @State private var draggingBook: String?
-    @State private var bookDrag: CGSize = .zero
-    @State private var bookDragConsumed: CGSize = .zero
+    @State private var dragging: String?
+    @State private var shelfWidth: CGFloat = 0
 
-    private static let perShelf = 3
+    /// Where the dragged item sat when the drag began, so a drop that lands
+    /// nowhere valid can put it back.
+    @State private var dragOrigin: Double?
 
     private var selectedBook: ScrapbookBook? {
         guard case .book(let id) = selection else { return nil }
@@ -115,20 +72,47 @@ struct ScrapbookShelfView: View {
 
     private var selectedOrnament: ScrapbookOrnamentPlacement? {
         guard case .ornament(let id) = selection else { return nil }
-        return placements.first { $0.id == id }
+        return manager.resolvedOrnaments.first { $0.id == id }
     }
 
-    private var shelves: [[ScrapbookBook]] {
+    /// Books and ornaments merged into the single order they're laid out in.
+    private var items: [ShelfItem] {
+        (manager.books.map(ShelfItem.init(book:))
+         + manager.resolvedOrnaments.map(ShelfItem.init(ornament:)))
+            .sorted { $0.position < $1.position }
+    }
 
-        let filled = stride(from: 0, to: manager.books.count, by: Self.perShelf).map { start in
-            Array(manager.books.dropFirst(start).prefix(Self.perShelf))
+    /// The order broken into shelves by width, with the "New" slot last.
+    ///
+    /// Everything flows: when a row fills up, the next item starts the shelf
+    /// below. That's what makes dropping something into a full shelf push the
+    /// last item down rather than overlap it, and it means there is always
+    /// somewhere for a dragged item to land.
+    private var tiers: [[ShelfItem]] {
+
+        let available = max(shelfWidth - ShelfMetrics.inset * 2, 1)
+        var rows: [[ShelfItem]] = []
+        var row: [ShelfItem] = []
+        var used: CGFloat = 0
+
+        for item in items + [ShelfItem(addSlotWidth: ShelfMetrics.addSlot)] {
+
+            let needed = item.width + (row.isEmpty ? 0 : ShelfMetrics.spacing)
+
+            if used + needed > available, !row.isEmpty {
+                rows.append(row)
+                row = []
+                used = 0
+            }
+
+            used += item.width + (row.isEmpty ? 0 : ShelfMetrics.spacing)
+            row.append(item)
         }
 
-        return filled + Array(repeating: [], count: max(3 - filled.count, 0))
-    }
+        if !row.isEmpty { rows.append(row) }
 
-    private var placements: [ScrapbookOrnamentPlacement] {
-        manager.resolvedOrnaments(tiers: shelves.count)
+        // Always looks like a piece of furniture, never one lonely plank.
+        return rows + Array(repeating: [], count: max(3 - rows.count, 0))
     }
 
     var body: some View {
@@ -159,9 +143,9 @@ struct ScrapbookShelfView: View {
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
-            // Dragging an object and scrolling the shelf are both vertical, so
-            // the scroll view stands down while something is being moved.
-            .scrollDisabled(draggingOrnament != nil || draggingBook != nil)
+            // Dragging and scrolling are both vertical, so the scroll view
+            // stands down while something is being moved.
+            .scrollDisabled(dragging != nil)
             .blur(radius: openBook == nil ? 0 : 7)
             .allowsHitTesting(openBook == nil)
 
@@ -213,6 +197,298 @@ struct ScrapbookShelfView: View {
         }
     }
 
+    // MARK: Header
+
+    private var header: some View {
+
+        HStack(alignment: .firstTextBaseline) {
+
+            VStack(alignment: .leading, spacing: 3) {
+
+                Text("Scrapbook")
+                    .font(.system(size: 30, weight: .bold, design: .serif))
+                    .foregroundStyle(ScrapbookStyle.outline)
+
+                Text(subtitle)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(ScrapbookStyle.outline.opacity(0.6))
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                    editing.toggle()
+                    if !editing { selection = nil }
+                }
+            } label: {
+                Text(editing ? "Done" : "Edit")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(editing ? ScrapbookStyle.paperWhite : ScrapbookStyle.outline)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule()
+                            .fill(editing ? ScrapbookStyle.outline : ScrapbookStyle.cream)
+                            .overlay(Capsule().stroke(ScrapbookStyle.outline, lineWidth: 2))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 12)
+        .padding(.bottom, 18)
+    }
+
+    private var subtitle: String {
+        if editing { return "Drag anything anywhere. Tap to resize." }
+        if manager.books.isEmpty { return "Start a book. Fill it together." }
+        return "Tap a book to open it"
+    }
+
+    // MARK: The bookcase
+
+    private var etagere: some View {
+
+        ZStack(alignment: .topLeading) {
+
+            HStack {
+                post
+                Spacer(minLength: 0)
+                post
+            }
+
+            VStack(spacing: 0) {
+
+                Outlined(radius: 3, fill: ScrapbookStyle.woodLight)
+                    .frame(height: ShelfMetrics.topCap)
+
+                ForEach(Array(tiers.enumerated()), id: \.offset) { _, row in
+                    tierView(row)
+                }
+            }
+        }
+        .coordinateSpace(name: "etagere")
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ShelfWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(ShelfWidthKey.self) { shelfWidth = $0 }
+        // Driven by the order rather than by any one item, so a move animates
+        // every neighbour that shifts to make room, not just the thing moved.
+        .animation(.spring(response: 0.36, dampingFraction: 0.82), value: items.map(\.id))
+    }
+
+    private func tierView(_ row: [ShelfItem]) -> some View {
+
+        VStack(spacing: 0) {
+
+            HStack(alignment: .bottom, spacing: ShelfMetrics.spacing) {
+                ForEach(row) { item in
+                    itemView(item)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, ShelfMetrics.inset)
+            .frame(height: ShelfMetrics.tierHeight, alignment: .bottom)
+
+            Outlined(radius: 3, fill: ScrapbookStyle.wood)
+                .frame(height: ShelfMetrics.plankHeight)
+        }
+    }
+
+    @ViewBuilder
+    private func itemView(_ item: ShelfItem) -> some View {
+
+        switch item.kind {
+
+        case .book(let book):
+            BookSpine(
+                book: book,
+                isSelected: selection == .book(book.id),
+                isLifted: dragging == book.id
+            )
+            .contentShape(Rectangle())
+            .zIndex(dragging == book.id ? 10 : 0)
+            .onTapGesture {
+                // Under Edit a tap picks the book to change, not to read —
+                // opening it there would fight the thing you came to do.
+                if editing {
+                    select(book)
+                } else {
+                    withAnimation(.easeInOut(duration: 0.3)) { openBook = book }
+                }
+            }
+            .gesture(dragGesture(for: item), isEnabled: editing)
+
+        case .ornament(let placement):
+            placement.ornament.view
+                .frame(width: placement.displayWidth,
+                       height: ShelfMetrics.ornamentBox,
+                       alignment: .bottom)
+                .scaleEffect(placement.clampedScale, anchor: .bottom)
+                // Declared before anything moves the view. Applied after an
+                // offset it leaves the tap target behind at the old spot.
+                .contentShape(Rectangle())
+                .overlay {
+                    if selection == .ornament(placement.id) {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(ScrapbookStyle.blossom, lineWidth: 3)
+                            .padding(-4)
+                    }
+                }
+                .scaleEffect(dragging == placement.id ? 1.08 : 1, anchor: .bottom)
+                .shadow(
+                    color: ScrapbookStyle.outline.opacity(dragging == placement.id ? 0.35 : 0),
+                    radius: 12, y: 8
+                )
+                .zIndex(dragging == placement.id ? 10 : 0)
+                .animation(.spring(response: 0.28, dampingFraction: 0.7),
+                           value: dragging == placement.id)
+                .onTapGesture { if editing { select(ornament: placement) } }
+                .gesture(dragGesture(for: item), isEnabled: editing)
+
+        case .addSlot:
+            AddBookSlot(width: ShelfMetrics.addSlot) { showingNewBook = true }
+        }
+    }
+
+    private var post: some View {
+        Outlined(radius: 4, fill: ScrapbookStyle.woodDark)
+            .frame(width: 15)
+    }
+
+    // MARK: Dragging
+
+    /// Reordering happens live, while the finger is still down: the item moves
+    /// to whatever slot the finger is over and the rest of the row reflows
+    /// around it, which is what opens the gap ahead of it.
+    private func dragGesture(for item: ShelfItem) -> some Gesture {
+
+        DragGesture(minimumDistance: 8, coordinateSpace: .named("etagere"))
+            .onChanged { value in
+
+                if dragging != item.id {
+                    dragging = item.id
+                    dragOrigin = item.position
+                    select(item)
+                }
+
+                guard let target = insertionIndex(at: value.location, moving: item.id) else { return }
+                move(item.id, toIndex: target)
+            }
+            .onEnded { value in
+
+                // Dropped off the bookcase entirely — put it back where it
+                // came from rather than leaving it wherever it passed over.
+                if !dropIsOnShelf(value.location), let origin = dragOrigin {
+                    commit(item.id, position: origin)
+                }
+
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                    dragging = nil
+                    dragOrigin = nil
+                }
+            }
+    }
+
+    private func dropIsOnShelf(_ point: CGPoint) -> Bool {
+
+        let height = ShelfMetrics.topCap + CGFloat(tiers.count) * ShelfMetrics.pitch
+
+        return point.x >= 0 && point.x <= shelfWidth
+            && point.y >= 0 && point.y <= height
+    }
+
+    /// Which slot in the running order the finger is currently over.
+    ///
+    /// Worked out by walking the rows that were just laid out, rather than by
+    /// measuring frames: the widths are already known here, so this is exact
+    /// and avoids feeding geometry back into the layout mid-drag.
+    private func insertionIndex(at point: CGPoint, moving id: String) -> Int? {
+
+        let rows = tiers
+        guard !rows.isEmpty else { return nil }
+
+        let tier = ShelfMetrics.tier(forY: point.y, count: rows.count)
+
+        // Where this shelf starts in the overall order. The "New" slot isn't
+        // part of it, so it's filtered out of the count.
+        var index = rows[..<tier].reduce(0) { $0 + $1.filter(\.isMovable).count }
+        var x = ShelfMetrics.inset
+
+        for entry in rows[tier] where entry.isMovable {
+            if point.x < x + entry.width / 2 { break }
+            x += entry.width + ShelfMetrics.spacing
+            index += 1
+        }
+
+        return index
+    }
+
+    /// Puts an item at `index` by taking a position between its new
+    /// neighbours — one write, and no renumbering of anything else.
+    private func move(_ id: String, toIndex index: Int) {
+
+        let others = items.filter { $0.id != id }
+        let target = min(max(index, 0), others.count)
+
+        let before = target > 0 ? others[target - 1].position : nil
+        let after = target < others.count ? others[target].position : nil
+
+        let position: Double
+        switch (before, after) {
+        case let (before?, after?): position = (before + after) / 2
+        case let (before?, nil):    position = before + 1_000
+        case let (nil, after?):     position = after - 1_000
+        default:                    position = 0
+        }
+
+        guard let current = items.first(where: { $0.id == id }),
+              current.position != position else { return }
+
+        commit(id, position: position)
+    }
+
+    private func commit(_ id: String, position: Double) {
+
+        if manager.books.contains(where: { $0.id == id }) {
+            manager.setBookPosition(id, to: position)
+            return
+        }
+
+        var all = manager.resolvedOrnaments
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        all[index].position = position
+        manager.saveOrnaments(all.sorted { $0.position < $1.position })
+    }
+
+    // MARK: Selection
+
+    private func select(_ item: ShelfItem) {
+        switch item.kind {
+        case .book(let book):          select(book)
+        case .ornament(let placement): select(ornament: placement)
+        case .addSlot:                 break
+        }
+    }
+
+    private func select(_ book: ScrapbookBook) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+            selection = .book(book.id)
+            draftTilt = book.tilt
+            draftSize = book.sizeScale
+        }
+    }
+
+    private func select(ornament placement: ScrapbookOrnamentPlacement) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+            selection = .ornament(placement.id)
+            draftOrnamentScale = placement.scale
+        }
+    }
+
     // MARK: Panel
 
     @ViewBuilder
@@ -258,287 +534,24 @@ struct ScrapbookShelfView: View {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) { selection = nil }
     }
 
-    // MARK: Header
-
-    private var header: some View {
-
-        HStack(alignment: .firstTextBaseline) {
-
-            VStack(alignment: .leading, spacing: 3) {
-
-                Text("Scrapbook")
-                    .font(.system(size: 30, weight: .bold, design: .serif))
-                    .foregroundStyle(ScrapbookStyle.outline)
-
-                Text(subtitle)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(ScrapbookStyle.outline.opacity(0.6))
-            }
-
-            Spacer()
-
-            Button {
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
-                    editing.toggle()
-                    if !editing { selection = nil }
-                }
-            } label: {
-                Text(editing ? "Done" : "Edit")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(editing ? ScrapbookStyle.paperWhite : ScrapbookStyle.outline)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 9)
-                    .background(
-                        Capsule()
-                            .fill(editing ? ScrapbookStyle.outline : ScrapbookStyle.cream)
-                            .overlay(Capsule().stroke(ScrapbookStyle.outline, lineWidth: 2))
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 12)
-        .padding(.bottom, 18)
-    }
-
-    private var subtitle: String {
-        if editing { return "Hold anything to pick it up and move it" }
-        if manager.books.isEmpty { return "Start a book. Fill it together." }
-        return "Tap a book to open it · hold to rearrange"
-    }
-
-    // MARK: The bookcase
-
-    private var etagere: some View {
-
-        ZStack(alignment: .topLeading) {
-
-            HStack {
-                post
-                Spacer(minLength: 0)
-                post
-            }
-
-            VStack(spacing: 0) {
-
-                Outlined(radius: 3, fill: ScrapbookStyle.woodLight)
-                    .frame(height: ShelfMetrics.topCap)
-
-                ForEach(Array(shelves.enumerated()), id: \.offset) { index, row in
-                    ShelfTier(
-                        books: row,
-                        showsAddSlot: index == manager.books.count / Self.perShelf,
-                        editing: editing,
-                        selection: selection,
-                        draggingBook: draggingBook,
-                        bookDrag: bookDrag,
-                        onOpenBook: { book in
-                            withAnimation(.easeInOut(duration: 0.3)) { openBook = book }
-                        },
-                        onSelectBook: { select($0) },
-                        onDragBook: { book, translation in dragBook(book, by: translation) },
-                        onDropBook: { endBookDrag() },
-                        onAdd: { showingNewBook = true }
-                    )
-                }
-            }
-
-            // Ornaments float over the whole case rather than living inside a
-            // shelf, which is what lets one be dragged from any shelf to any
-            // other in a single movement.
-            ornamentLayer
-        }
-    }
-
-    private var ornamentLayer: some View {
-
-        GeometryReader { proxy in
-
-            ZStack(alignment: .topLeading) {
-
-                ForEach(placements) { placement in
-
-                    let isDragging = draggingOrnament == placement.id
-                    let width = placement.displayWidth
-                    let span = max(proxy.size.width - ShelfMetrics.inset * 2 - width, 1)
-
-                    placement.ornament.view
-                        .frame(width: width, height: ShelfMetrics.ornamentBox, alignment: .bottom)
-                        .scaleEffect(placement.clampedScale, anchor: .bottom)
-                        // The tap target is declared here, before anything
-                        // moves the view. Applying it after the offsets left
-                        // the hit region behind at the unoffset position, so
-                        // ornaments drew in one place and answered in another
-                        // — which is why they could not be selected at all.
-                        .contentShape(Rectangle())
-                        .overlay {
-                            if selection == .ornament(placement.id) {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(ScrapbookStyle.blossom, lineWidth: 3)
-                                    .padding(-4)
-                            }
-                        }
-                        .scaleEffect(isDragging ? 1.08 : 1)
-                        .shadow(
-                            color: ScrapbookStyle.outline.opacity(isDragging ? 0.35 : 0),
-                            radius: 12, y: 8
-                        )
-                        .offset(
-                            x: ShelfMetrics.inset + CGFloat(placement.x) * span,
-                            y: ShelfMetrics.floorY(placement.tier) - ShelfMetrics.ornamentBox
-                        )
-                        .offset(isDragging ? ornamentDrag : .zero)
-                        .zIndex(isDragging ? 10 : 0)
-                        .onTapGesture { select(ornament: placement) }
-                        .holdToDrag(
-                            onHold: { select(ornament: placement) },
-                            onDrag: { translation in
-                                if draggingOrnament != placement.id {
-                                    draggingOrnament = placement.id
-                                }
-                                ornamentDrag = translation
-                            },
-                            onRelease: { dropOrnament(placement, span: span) }
-                        )
-                        .animation(
-                            .spring(response: 0.34, dampingFraction: 0.8),
-                            value: isDragging ? -1 : placement.x
-                        )
-                }
-            }
-        }
-        .allowsHitTesting(openBook == nil)
-    }
-
-    private func dropOrnament(_ placement: ScrapbookOrnamentPlacement, span: CGFloat) {
-
-        guard draggingOrnament == placement.id else { return }
-
-        let translation = ornamentDrag
-        var moved = placement
-
-        let newX = CGFloat(placement.x) + translation.width / span
-        moved.x = Double(min(max(newX, 0), 1))
-
-        // Dropped against the shelf it was standing on, plus however far it
-        // travelled — so a drag straight down lands it one shelf lower.
-        let droppedY = ShelfMetrics.floorY(placement.tier) + translation.height
-        moved.tier = ShelfMetrics.tier(forY: droppedY - 1, tiers: shelves.count)
-
-        draggingOrnament = nil
-        ornamentDrag = .zero
-
-        var all = placements
-        guard let index = all.firstIndex(where: { $0.id == placement.id }) else { return }
-        all[index] = moved
-
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-            manager.saveOrnaments(all)
-        }
-    }
-
-    private var post: some View {
-        Outlined(radius: 4, fill: ScrapbookStyle.woodDark)
-            .frame(width: 15)
-    }
-
-    // MARK: Books
-
-    /// Reordering while the finger is still down.
-    ///
-    /// Each time the drag passes one book's width, the book trades places with
-    /// its neighbour and that distance is subtracted from the visible offset,
-    /// so the spine keeps following the finger instead of snapping back.
-    private func dragBook(_ book: ScrapbookBook, by translation: CGSize) {
-
-        if draggingBook != book.id {
-            draggingBook = book.id
-            bookDragConsumed = .zero
-        }
-
-        let stepX = book.displayThickness + 7
-        var net = CGSize(
-            width: translation.width - bookDragConsumed.width,
-            height: translation.height - bookDragConsumed.height
-        )
-
-        // Dragging down a shelf moves the book a whole row along the order,
-        // which is what puts it on the next shelf. Handled before the sideways
-        // steps so a diagonal drag settles on the row first.
-        let rowStep = ShelfMetrics.pitch
-
-        while net.height > rowStep {
-            manager.moveBook(book.id, by: Self.perShelf)
-            bookDragConsumed.height += rowStep
-            net.height -= rowStep
-        }
-
-        while net.height < -rowStep {
-            manager.moveBook(book.id, by: -Self.perShelf)
-            bookDragConsumed.height -= rowStep
-            net.height += rowStep
-        }
-
-        while net.width > stepX {
-            manager.moveBook(book.id, by: 1)
-            bookDragConsumed.width += stepX
-            net.width -= stepX
-        }
-
-        while net.width < -stepX {
-            manager.moveBook(book.id, by: -1)
-            bookDragConsumed.width -= stepX
-            net.width += stepX
-        }
-
-        bookDrag = net
-    }
-
-    private func endBookDrag() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            draggingBook = nil
-            bookDrag = .zero
-            bookDragConsumed = .zero
-        }
-    }
-
-    // MARK: Selection
-
-    private func select(_ book: ScrapbookBook) {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-            editing = true
-            selection = .book(book.id)
-            draftTilt = book.tilt
-            draftSize = book.sizeScale
-        }
-    }
-
-    private func select(ornament placement: ScrapbookOrnamentPlacement) {
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-            editing = true
-            selection = .ornament(placement.id)
-            draftOrnamentScale = placement.scale
-        }
-    }
-
     // MARK: Ornament edits
 
     private func setKind(_ placement: ScrapbookOrnamentPlacement, to kind: Int) {
-        var all = placements
+        var all = manager.resolvedOrnaments
         guard let index = all.firstIndex(where: { $0.id == placement.id }) else { return }
         all[index].kind = kind
         manager.saveOrnaments(all)
     }
 
     private func setScale(_ placement: ScrapbookOrnamentPlacement, to scale: Double) {
-        var all = placements
+        var all = manager.resolvedOrnaments
         guard let index = all.firstIndex(where: { $0.id == placement.id }) else { return }
         all[index].scale = scale
         manager.saveOrnaments(all)
     }
 
     private func remove(_ placement: ScrapbookOrnamentPlacement) {
-        let all = placements.filter { $0.id != placement.id }
+        let all = manager.resolvedOrnaments.filter { $0.id != placement.id }
         selection = nil
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             manager.saveOrnaments(all)
@@ -564,77 +577,13 @@ struct ScrapbookShelfView: View {
     }
 }
 
-// MARK: - One tier
-
-private struct ShelfTier: View {
-
-    let books: [ScrapbookBook]
-    let showsAddSlot: Bool
-    let editing: Bool
-    let selection: ShelfSelection?
-    let draggingBook: String?
-    let bookDrag: CGSize
-
-    let onOpenBook: (ScrapbookBook) -> Void
-    let onSelectBook: (ScrapbookBook) -> Void
-    let onDragBook: (ScrapbookBook, CGSize) -> Void
-    let onDropBook: () -> Void
-    let onAdd: () -> Void
-
-    var body: some View {
-
-        VStack(spacing: 0) {
-
-            HStack(alignment: .bottom, spacing: 7) {
-
-                ForEach(books) { book in
-
-                    let isDragging = draggingBook == book.id
-
-                    BookSpine(
-                        book: book,
-                        isSelected: selection == .book(book.id),
-                        isDragging: isDragging
-                    )
-                    .contentShape(Rectangle())
-                    .offset(isDragging ? bookDrag : .zero)
-                    .zIndex(isDragging ? 10 : 0)
-                    // A tap opens the book; holding picks it up to rearrange.
-                    // Both live at this one level — an inner press-animation
-                    // gesture used to recognise on touch-down and swallow the
-                    // pair, so a book could not be opened or moved at all.
-                    .onTapGesture { onOpenBook(book) }
-                    .holdToDrag(
-                        onHold: { onSelectBook(book) },
-                        onDrag: { onDragBook(book, $0) },
-                        onRelease: onDropBook
-                    )
-                }
-
-                if showsAddSlot {
-                    AddBookSlot(width: 50, action: onAdd)
-                }
-
-                Spacer(minLength: 0)
-            }
-            // Clears the uprights. A book leaning at the edge swings wider
-            // than its own frame, so the inset has to be more than the post.
-            .padding(.horizontal, ShelfMetrics.inset)
-            .frame(height: ShelfMetrics.tierHeight, alignment: .bottom)
-
-            Outlined(radius: 3, fill: ScrapbookStyle.wood)
-                .frame(height: ShelfMetrics.plankHeight)
-        }
-    }
-}
-
 // MARK: - A book standing up
 
 private struct BookSpine: View {
 
     let book: ScrapbookBook
     let isSelected: Bool
-    let isDragging: Bool
+    let isLifted: Bool
 
     private var cover: ScrapbookStyle.Cover { ScrapbookStyle.cover(book.coverIndex) }
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 3, style: .continuous) }
@@ -676,17 +625,17 @@ private struct BookSpine: View {
             }
         }
         // A lifted book stands straight and rides above its neighbours.
-        .rotationEffect(.degrees(isDragging ? 0 : book.tilt), anchor: .bottom)
-        .scaleEffect(isDragging ? 1.06 : 1, anchor: .bottom)
+        .rotationEffect(.degrees(isLifted ? 0 : book.tilt), anchor: .bottom)
+        .scaleEffect(isLifted ? 1.06 : 1, anchor: .bottom)
         .shadow(
-            color: ScrapbookStyle.outline.opacity(isDragging ? 0.4 : 0.22),
-            radius: isDragging ? 12 : 4,
-            x: isDragging ? 0 : 2,
-            y: isDragging ? 8 : 2
+            color: ScrapbookStyle.outline.opacity(isLifted ? 0.4 : 0.22),
+            radius: isLifted ? 12 : 4,
+            x: isLifted ? 0 : 2,
+            y: isLifted ? 8 : 2
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: book.tilt)
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: book.sizeScale)
-        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isDragging)
+        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isLifted)
     }
 
     private var bandLine: some View {
@@ -821,7 +770,7 @@ private struct BookEditPanel: View {
 
     var body: some View {
 
-        PanelShell(title: book.title, hint: "Hold and drag to move it", onClose: onClose) {
+        PanelShell(title: book.title, hint: "Drag it anywhere on the shelves", onClose: onClose) {
 
             PanelSlider(label: "Size", systemImage: "arrow.up.left.and.arrow.down.right",
                         value: $size, range: 0.78...1.22, onCommit: onCommit)
@@ -889,7 +838,7 @@ private struct OrnamentEditPanel: View {
     var body: some View {
 
         PanelShell(title: placement.ornament.label,
-                   hint: "Hold and drag it anywhere",
+                   hint: "Drag it anywhere on the shelves",
                    onClose: onClose) {
 
             PanelSlider(label: "Size", systemImage: "arrow.up.left.and.arrow.down.right",
