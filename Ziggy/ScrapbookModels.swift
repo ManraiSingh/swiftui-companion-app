@@ -274,6 +274,10 @@ struct ScrapbookElement: Identifiable, Equatable {
     /// Photos carry their own aspect so the frame doesn't letterbox them
     /// before the image has finished decoding.
     var aspect: Double = 1.0
+
+    /// Pinned to the page. A locked element ignores drags, pinches and turns
+    /// so it can't be knocked out of place while you work around it.
+    var locked: Bool = false
 }
 
 // MARK: - Stroke encoding

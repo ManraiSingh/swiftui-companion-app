@@ -452,7 +452,8 @@ final class ScrapbookManager: ObservableObject {
                         fontIndex: data["fontIndex"] as? Int ?? 0,
                         widthValue: data["widthValue"] as? Double ?? 6,
                         createdBy: data["createdBy"] as? String ?? "",
-                        aspect: data["aspect"] as? Double ?? 1
+                        aspect: data["aspect"] as? Double ?? 1,
+                        locked: data["locked"] as? Bool ?? false
                     )
                 }
               }
@@ -524,7 +525,8 @@ final class ScrapbookManager: ObservableObject {
             "fontIndex": element.fontIndex,
             "widthValue": element.widthValue,
             "createdBy": element.createdBy.isEmpty ? author : element.createdBy,
-            "aspect": element.aspect
+            "aspect": element.aspect,
+            "locked": element.locked
         ]
     }
 

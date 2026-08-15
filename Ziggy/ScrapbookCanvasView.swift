@@ -52,6 +52,10 @@ struct ScrapbookCanvasView: View {
     @State private var paperIndex: Int
     @State private var photoPickerOpen = false
 
+    /// Set while the picker is open to swap one element's picture rather than
+    /// place a new one.
+    @State private var replacingID: String?
+
     init(book: ScrapbookBook, page: ScrapbookPage) {
         self.book = book
         self.page = page
@@ -72,13 +76,17 @@ struct ScrapbookCanvasView: View {
                 canvas(size: proxy.size)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            // Trimmed right back — the page is the point of this screen, so
+            // it gets everything the toolbars don't need.
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
 
             if let element = selected, tool == .select {
                 SelectedElementBar(
                     element: element,
                     onFrame: { cycleFrame(element) },
+                    onReplace: { replacePhoto(element) },
+                    onLock: { toggleLock(element) },
                     onForward: { bringForward(element) },
                     onDuplicate: { duplicate(element) },
                     onDelete: { deleteSelected(element) }
@@ -129,12 +137,11 @@ struct ScrapbookCanvasView: View {
         HStack {
 
             Button { dismiss() } label: {
-                Text("Done")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color(red: 0.16, green: 0.14, blue: 0.22))
-                    .padding(.horizontal, 17)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(.white))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(.white))
             }
 
             Spacer()
@@ -154,9 +161,9 @@ struct ScrapbookCanvasView: View {
                     .background(Circle().fill(.white.opacity(0.15)))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
     }
 
     // MARK: Canvas
@@ -225,7 +232,7 @@ struct ScrapbookCanvasView: View {
     /// The element with any in-flight gesture applied on top.
     private func live(_ element: ScrapbookElement) -> ScrapbookElement {
 
-        guard element.id == selectedID, tool == .select else { return element }
+        guard element.id == selectedID, tool == .select, !element.locked else { return element }
 
         var copy = element
         copy.x += Double(dragOffset.width)
@@ -239,16 +246,25 @@ struct ScrapbookCanvasView: View {
 
     private func transformGesture(for element: ScrapbookElement, canvasSize: CGSize) -> some Gesture {
 
+        // Whichever element the fingers land on becomes the live one. Before
+        // this, a pinch or a turn did nothing until you had tapped the element
+        // first, which made two-finger rotating look like it wasn't working.
+        func engage() -> Bool {
+            guard tool == .select, !element.locked else { return false }
+            if selectedID != element.id { selectedID = element.id }
+            return true
+        }
+
         let drag = DragGesture()
             .onChanged { value in
-                guard tool == .select, selectedID == element.id else { return }
+                guard engage() else { return }
                 dragOffset = CGSize(
                     width: value.translation.width / canvasSize.width,
                     height: value.translation.height / canvasSize.height
                 )
             }
             .onEnded { _ in
-                guard tool == .select, selectedID == element.id else { return }
+                guard tool == .select, selectedID == element.id, !element.locked else { return }
                 var moved = element
                 moved.x = min(max(element.x + Double(dragOffset.width), 0.02), 0.98)
                 moved.y = min(max(element.y + Double(dragOffset.height), 0.02), 0.98)
@@ -258,11 +274,11 @@ struct ScrapbookCanvasView: View {
 
         let pinch = MagnifyGesture()
             .onChanged { value in
-                guard tool == .select, selectedID == element.id else { return }
+                guard engage() else { return }
                 pinchScale = value.magnification
             }
             .onEnded { _ in
-                guard tool == .select, selectedID == element.id else { return }
+                guard tool == .select, selectedID == element.id, !element.locked else { return }
                 var scaled = element
                 scaled.scale = min(max(element.scale * pinchScale, 0.2), 4)
                 pinchScale = 1
@@ -271,18 +287,20 @@ struct ScrapbookCanvasView: View {
 
         let spin = RotateGesture()
             .onChanged { value in
-                guard tool == .select, selectedID == element.id else { return }
+                guard engage() else { return }
                 spinAngle = value.rotation.degrees
             }
             .onEnded { _ in
-                guard tool == .select, selectedID == element.id else { return }
+                guard tool == .select, selectedID == element.id, !element.locked else { return }
                 var turned = element
                 turned.rotation = element.rotation + spinAngle
                 spinAngle = 0
                 manager.move(turned, bookID: book.id, pageID: page.id)
             }
 
-        return drag.simultaneously(with: pinch).simultaneously(with: spin)
+        // Pinch and turn are paired first so two fingers can do both at once,
+        // with the drag riding alongside.
+        return drag.simultaneously(with: pinch.simultaneously(with: spin))
     }
 
     /// Drawing, and tapping empty paper to deselect.
@@ -358,6 +376,18 @@ struct ScrapbookCanvasView: View {
 
         guard let base64 = image.scrapbookBase64() else { return }
 
+        // Replacing rather than adding: keep everything about the element
+        // except the picture itself.
+        if let id = replacingID, var existing = manager.elements.first(where: { $0.id == id }) {
+            existing.payload = base64
+            existing.aspect = Double(image.size.width / max(image.size.height, 1))
+            manager.update(existing, bookID: book.id, pageID: page.id)
+            ScrapbookImageCache.shared.forget(id)
+            replacingID = nil
+            showingCamera = false
+            return
+        }
+
         var element = ScrapbookElement(id: UUID().uuidString, kind: .photo)
         element.payload = base64
         element.aspect = Double(image.size.width / max(image.size.height, 1))
@@ -410,6 +440,20 @@ struct ScrapbookCanvasView: View {
     }
 
     // MARK: Selected element actions
+
+    /// Swaps the picture inside an element, keeping its place, frame, size
+    /// and angle — so replacing a photo doesn't undo the arranging.
+    private func replacePhoto(_ element: ScrapbookElement) {
+        guard element.kind == .photo else { return }
+        replacingID = element.id
+        photoPickerOpen = true
+    }
+
+    private func toggleLock(_ element: ScrapbookElement) {
+        var updated = element
+        updated.locked.toggle()
+        manager.update(updated, bookID: book.id, pageID: page.id)
+    }
 
     private func cycleFrame(_ element: ScrapbookElement) {
         guard element.kind == .photo else { return }
@@ -469,9 +513,9 @@ struct ScrapbookCanvasView: View {
                 withAnimation { tool = tool == .eraser ? .select : .eraser; selectedID = nil }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
         .background(Color(red: 0.10, green: 0.09, blue: 0.13))
     }
 
@@ -507,23 +551,36 @@ private struct SelectedElementBar: View {
 
     let element: ScrapbookElement
     let onFrame: () -> Void
+    let onReplace: () -> Void
+    let onLock: () -> Void
     let onForward: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
 
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
 
             if element.kind == .photo {
                 action("Frame", "square.on.square", onFrame)
+                action("Replace", "arrow.triangle.2.circlepath", onReplace)
             }
+
+            action(
+                element.locked ? "Locked" : "Unlocked",
+                element.locked ? "lock.fill" : "lock.open",
+                onLock,
+                tint: element.locked
+                    ? Color(red: 1.0, green: 0.82, blue: 0.42)
+                    : .white
+            )
 
             action("Front", "square.3.layers.3d.top.filled", onForward)
             action("Copy", "plus.square.on.square", onDuplicate)
-            action("Delete", "trash", onDelete, tint: Color(red: 1.0, green: 0.45, blue: 0.45))
+            action("Delete", "trash", onDelete,
+                   tint: Color(red: 1.0, green: 0.45, blue: 0.45))
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
     }
 
@@ -538,6 +595,7 @@ private struct SelectedElementBar: View {
             VStack(spacing: 3) {
                 Image(systemName: icon).font(.system(size: 15, weight: .semibold))
                 Text(label).font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
             }
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)

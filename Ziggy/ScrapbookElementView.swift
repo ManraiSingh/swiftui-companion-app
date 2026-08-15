@@ -24,6 +24,12 @@ final class ScrapbookImageCache {
         cache.countLimit = 60
     }
 
+    /// Drops a cached decode, for when an element's picture is swapped out
+    /// under the same id.
+    func forget(_ key: String) {
+        cache.removeObject(forKey: key as NSString)
+    }
+
     func image(for key: String, base64: String) -> UIImage? {
 
         if let hit = cache.object(forKey: key as NSString) { return hit }
