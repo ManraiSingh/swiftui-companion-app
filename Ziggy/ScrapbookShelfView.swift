@@ -17,6 +17,47 @@ enum ShelfSelection: Equatable {
     case ornament(String)
 }
 
+/// Press and hold to pick something up, then drag it without lifting.
+///
+/// A long press sequenced before the drag is what keeps all three gestures
+/// apart: a quick tap is over long before the hold completes, so tapping still
+/// opens a book; and because the hold has already claimed the gesture by the
+/// time the finger moves, the surrounding ScrollView can't steal the drag.
+private struct HoldToDrag: ViewModifier {
+
+    let onHold: () -> Void
+    let onDrag: (CGSize) -> Void
+    let onRelease: () -> Void
+
+    func body(content: Content) -> some View {
+        content.gesture(
+            LongPressGesture(minimumDuration: 0.28)
+                .sequenced(before: DragGesture(minimumDistance: 0))
+                .onChanged { value in
+                    switch value {
+                    case .first(true):
+                        onHold()
+                    case .second(true, let drag):
+                        if let drag { onDrag(drag.translation) }
+                    default:
+                        break
+                    }
+                }
+                .onEnded { _ in onRelease() }
+        )
+    }
+}
+
+private extension View {
+    func holdToDrag(
+        onHold: @escaping () -> Void,
+        onDrag: @escaping (CGSize) -> Void,
+        onRelease: @escaping () -> Void
+    ) -> some View {
+        modifier(HoldToDrag(onHold: onHold, onDrag: onDrag, onRelease: onRelease))
+    }
+}
+
 // Geometry shared between the shelves and the ornament layer that floats over
 // them. Both have to agree on where a shelf floor is, or a dragged object
 // lands somewhere other than where it was dropped.
@@ -62,8 +103,8 @@ struct ScrapbookShelfView: View {
     @State private var draggingOrnament: String?
     @State private var ornamentDrag: CGSize = .zero
     @State private var draggingBook: String?
-    @State private var bookDrag: CGFloat = 0
-    @State private var bookDragConsumed: CGFloat = 0
+    @State private var bookDrag: CGSize = .zero
+    @State private var bookDragConsumed: CGSize = .zero
 
     private static let perShelf = 3
 
@@ -261,9 +302,9 @@ struct ScrapbookShelfView: View {
     }
 
     private var subtitle: String {
-        if editing { return "Drag anything to move it. Tap to resize." }
+        if editing { return "Hold anything to pick it up and move it" }
         if manager.books.isEmpty { return "Start a book. Fill it together." }
-        return "\(manager.books.count) book\(manager.books.count == 1 ? "" : "s") on the shelf"
+        return "Tap a book to open it · hold to rearrange"
     }
 
     // MARK: The bookcase
@@ -324,6 +365,12 @@ struct ScrapbookShelfView: View {
                     placement.ornament.view
                         .frame(width: width, height: ShelfMetrics.ornamentBox, alignment: .bottom)
                         .scaleEffect(placement.clampedScale, anchor: .bottom)
+                        // The tap target is declared here, before anything
+                        // moves the view. Applying it after the offsets left
+                        // the hit region behind at the unoffset position, so
+                        // ornaments drew in one place and answered in another
+                        // — which is why they could not be selected at all.
+                        .contentShape(Rectangle())
                         .overlay {
                             if selection == .ornament(placement.id) {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -341,11 +388,18 @@ struct ScrapbookShelfView: View {
                             y: ShelfMetrics.floorY(placement.tier) - ShelfMetrics.ornamentBox
                         )
                         .offset(isDragging ? ornamentDrag : .zero)
-                        .contentShape(Rectangle())
                         .zIndex(isDragging ? 10 : 0)
                         .onTapGesture { select(ornament: placement) }
-                        .onLongPressGesture(minimumDuration: 0.3) { select(ornament: placement) }
-                        .gesture(ornamentGesture(placement, span: span), isEnabled: editing)
+                        .holdToDrag(
+                            onHold: { select(ornament: placement) },
+                            onDrag: { translation in
+                                if draggingOrnament != placement.id {
+                                    draggingOrnament = placement.id
+                                }
+                                ornamentDrag = translation
+                            },
+                            onRelease: { dropOrnament(placement, span: span) }
+                        )
                         .animation(
                             .spring(response: 0.34, dampingFraction: 0.8),
                             value: isDragging ? -1 : placement.x
@@ -356,40 +410,31 @@ struct ScrapbookShelfView: View {
         .allowsHitTesting(openBook == nil)
     }
 
-    private func ornamentGesture(
-        _ placement: ScrapbookOrnamentPlacement,
-        span: CGFloat
-    ) -> some Gesture {
+    private func dropOrnament(_ placement: ScrapbookOrnamentPlacement, span: CGFloat) {
 
-        DragGesture(minimumDistance: 8)
-            .onChanged { value in
-                if draggingOrnament != placement.id {
-                    draggingOrnament = placement.id
-                    select(ornament: placement)
-                }
-                ornamentDrag = value.translation
-            }
-            .onEnded { value in
+        guard draggingOrnament == placement.id else { return }
 
-                var moved = placement
+        let translation = ornamentDrag
+        var moved = placement
 
-                let newX = CGFloat(placement.x) + value.translation.width / span
-                moved.x = Double(min(max(newX, 0), 1))
+        let newX = CGFloat(placement.x) + translation.width / span
+        moved.x = Double(min(max(newX, 0), 1))
 
-                let droppedY = ShelfMetrics.floorY(placement.tier) + value.translation.height
-                moved.tier = ShelfMetrics.tier(forY: droppedY - 1, tiers: shelves.count)
+        // Dropped against the shelf it was standing on, plus however far it
+        // travelled — so a drag straight down lands it one shelf lower.
+        let droppedY = ShelfMetrics.floorY(placement.tier) + translation.height
+        moved.tier = ShelfMetrics.tier(forY: droppedY - 1, tiers: shelves.count)
 
-                draggingOrnament = nil
-                ornamentDrag = .zero
+        draggingOrnament = nil
+        ornamentDrag = .zero
 
-                var all = placements
-                if let index = all.firstIndex(where: { $0.id == placement.id }) {
-                    all[index] = moved
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
-                        manager.saveOrnaments(all)
-                    }
-                }
-            }
+        var all = placements
+        guard let index = all.firstIndex(where: { $0.id == placement.id }) else { return }
+        all[index] = moved
+
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+            manager.saveOrnaments(all)
+        }
     }
 
     private var post: some View {
@@ -404,27 +449,46 @@ struct ScrapbookShelfView: View {
     /// Each time the drag passes one book's width, the book trades places with
     /// its neighbour and that distance is subtracted from the visible offset,
     /// so the spine keeps following the finger instead of snapping back.
-    private func dragBook(_ book: ScrapbookBook, by translation: CGFloat) {
+    private func dragBook(_ book: ScrapbookBook, by translation: CGSize) {
 
         if draggingBook != book.id {
             draggingBook = book.id
-            bookDragConsumed = 0
-            select(book)
+            bookDragConsumed = .zero
         }
 
-        let step = book.displayThickness + 7
-        var net = translation - bookDragConsumed
+        let stepX = book.displayThickness + 7
+        var net = CGSize(
+            width: translation.width - bookDragConsumed.width,
+            height: translation.height - bookDragConsumed.height
+        )
 
-        while net > step {
+        // Dragging down a shelf moves the book a whole row along the order,
+        // which is what puts it on the next shelf. Handled before the sideways
+        // steps so a diagonal drag settles on the row first.
+        let rowStep = ShelfMetrics.pitch
+
+        while net.height > rowStep {
+            manager.moveBook(book.id, by: Self.perShelf)
+            bookDragConsumed.height += rowStep
+            net.height -= rowStep
+        }
+
+        while net.height < -rowStep {
+            manager.moveBook(book.id, by: -Self.perShelf)
+            bookDragConsumed.height -= rowStep
+            net.height += rowStep
+        }
+
+        while net.width > stepX {
             manager.moveBook(book.id, by: 1)
-            bookDragConsumed += step
-            net -= step
+            bookDragConsumed.width += stepX
+            net.width -= stepX
         }
 
-        while net < -step {
+        while net.width < -stepX {
             manager.moveBook(book.id, by: -1)
-            bookDragConsumed -= step
-            net += step
+            bookDragConsumed.width -= stepX
+            net.width += stepX
         }
 
         bookDrag = net
@@ -433,8 +497,8 @@ struct ScrapbookShelfView: View {
     private func endBookDrag() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             draggingBook = nil
-            bookDrag = 0
-            bookDragConsumed = 0
+            bookDrag = .zero
+            bookDragConsumed = .zero
         }
     }
 
@@ -509,11 +573,11 @@ private struct ShelfTier: View {
     let editing: Bool
     let selection: ShelfSelection?
     let draggingBook: String?
-    let bookDrag: CGFloat
+    let bookDrag: CGSize
 
     let onOpenBook: (ScrapbookBook) -> Void
     let onSelectBook: (ScrapbookBook) -> Void
-    let onDragBook: (ScrapbookBook, CGFloat) -> Void
+    let onDragBook: (ScrapbookBook, CGSize) -> Void
     let onDropBook: () -> Void
     let onAdd: () -> Void
 
@@ -532,20 +596,18 @@ private struct ShelfTier: View {
                         isSelected: selection == .book(book.id),
                         isDragging: isDragging
                     )
-                    .offset(x: isDragging ? bookDrag : 0)
-                    .zIndex(isDragging ? 10 : 0)
                     .contentShape(Rectangle())
-                    // One gesture set, at one level. An inner press-animation
-                    // gesture used to recognise on touch-down and swallow both
-                    // the tap and the long press, so a book could not be
-                    // opened or picked up at all.
-                    .onTapGesture { editing ? onSelectBook(book) : onOpenBook(book) }
-                    .onLongPressGesture(minimumDuration: 0.3) { onSelectBook(book) }
-                    .gesture(
-                        DragGesture(minimumDistance: 10)
-                            .onChanged { onDragBook(book, $0.translation.width) }
-                            .onEnded { _ in onDropBook() },
-                        isEnabled: editing
+                    .offset(isDragging ? bookDrag : .zero)
+                    .zIndex(isDragging ? 10 : 0)
+                    // A tap opens the book; holding picks it up to rearrange.
+                    // Both live at this one level — an inner press-animation
+                    // gesture used to recognise on touch-down and swallow the
+                    // pair, so a book could not be opened or moved at all.
+                    .onTapGesture { onOpenBook(book) }
+                    .holdToDrag(
+                        onHold: { onSelectBook(book) },
+                        onDrag: { onDragBook(book, $0) },
+                        onRelease: onDropBook
                     )
                 }
 
@@ -759,7 +821,7 @@ private struct BookEditPanel: View {
 
     var body: some View {
 
-        PanelShell(title: book.title, hint: "Drag the book to move it", onClose: onClose) {
+        PanelShell(title: book.title, hint: "Hold and drag to move it", onClose: onClose) {
 
             PanelSlider(label: "Size", systemImage: "arrow.up.left.and.arrow.down.right",
                         value: $size, range: 0.78...1.22, onCommit: onCommit)
@@ -827,7 +889,7 @@ private struct OrnamentEditPanel: View {
     var body: some View {
 
         PanelShell(title: placement.ornament.label,
-                   hint: "Drag it anywhere on the shelves",
+                   hint: "Hold and drag it anywhere",
                    onClose: onClose) {
 
             PanelSlider(label: "Size", systemImage: "arrow.up.left.and.arrow.down.right",

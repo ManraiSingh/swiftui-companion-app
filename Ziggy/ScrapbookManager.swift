@@ -200,27 +200,42 @@ final class ScrapbookManager: ObservableObject {
         ])
     }
 
-    /// Slides a book one place along the running order.
+    /// Slides a book along the running order, by one place or several.
     ///
-    /// Works by trading positions with the neighbour rather than renumbering
-    /// the shelf, so a move is two small writes however many books there are,
-    /// and two people rearranging at once can't leave gaps in the sequence.
+    /// The book is lifted out and reinserted, then only the books between the
+    /// old and new spot are renumbered — they pass the existing position
+    /// values along the line rather than the shelf being renumbered from
+    /// scratch, so a move costs writes in proportion to how far it went.
+    ///
+    /// The local array is updated straight away as well. A drag crosses these
+    /// thresholds faster than Firestore answers, and without the optimistic
+    /// update every step after the first would be computed from stale indices.
     func moveBook(_ bookID: String, by offset: Int) {
 
         guard let ref = shelfRef(),
               let from = books.firstIndex(where: { $0.id == bookID }) else { return }
 
-        let to = from + offset
-        guard books.indices.contains(to) else { return }
+        let to = min(max(from + offset, 0), books.count - 1)
+        guard to != from else { return }
 
-        // Equal positions would make the order ambiguous, so give the pair a
-        // definite gap before swapping them.
-        var here = books[from].position
-        var there = books[to].position
-        if here == there { here -= 0.5; there += 0.5 }
+        var reordered = books
+        let moved = reordered.remove(at: from)
+        reordered.insert(moved, at: to)
 
-        ref.document(books[from].id).updateData(["position": there])
-        ref.document(books[to].id).updateData(["position": here])
+        let lower = min(from, to)
+        let upper = max(from, to)
+        let slots = books[lower...upper].map(\.position).sorted()
+
+        for (step, book) in reordered[lower...upper].enumerated() {
+
+            let slot = slots[step]
+            guard book.position != slot else { continue }
+
+            ref.document(book.id).updateData(["position": slot])
+            reordered[lower + step].position = slot
+        }
+
+        books = reordered.sorted { $0.position < $1.position }
     }
 
     // MARK: - Ornaments
