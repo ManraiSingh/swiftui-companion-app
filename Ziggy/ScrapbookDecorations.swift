@@ -629,6 +629,11 @@ struct ScrapbookLetterSticker: View {
 
     let character: String
 
+    /// Built at its final size rather than magnified afterwards. The glyph is
+    /// rasterised at whatever point size it is given, so scaling the finished
+    /// view blows up those pixels and the letter goes soft.
+    var zoom: CGFloat = 1
+
     private var style: (paper: Color, ink: Color) {
         ScrapbookLetter.style(for: character)
     }
@@ -641,13 +646,13 @@ struct ScrapbookLetterSticker: View {
         ZStack {
             CutPaper(seed: seed)
                 .fill(style.paper)
-                .shadow(color: .black.opacity(0.22), radius: 2, x: 1, y: 1)
+                .shadow(color: .black.opacity(0.22), radius: 2 * zoom, x: zoom, y: zoom)
 
             Text(character)
-                .font(.system(size: 30, weight: .black, design: .serif))
+                .font(.system(size: 30 * zoom, weight: .black, design: .serif))
                 .foregroundStyle(style.ink)
         }
-        .frame(width: 48, height: 52)
+        .frame(width: 48 * zoom, height: 52 * zoom)
         // A slight lean, again from the character, so a row of them sits like
         // it was stuck down by hand.
         .rotationEffect(.degrees(Double(seed % 9) - 4))

@@ -167,15 +167,23 @@ struct ScrapbookElementView: View {
             )
     }
 
-    /// Photos size themselves rather than being magnified afterwards.
+    /// Only strokes are magnified after the fact.
     ///
     /// `scaleEffect` is a render-time transform: it blows up the layer that
-    /// has already been drawn, so an enlarged photo was a small bitmap
-    /// stretched, and went soft. Building the frame at the final size instead
-    /// makes the image resample at that size and stay sharp. Everything else
-    /// is vector or text and scales cleanly either way.
+    /// has already been drawn. That softens anything made of glyphs — a photo,
+    /// but equally text, an emoji or a cut-out letter, since a glyph is
+    /// rasterised at the point size it was given. Everything but a stroke now
+    /// builds itself at its final size so it is drawn sharp to begin with.
+    ///
+    /// A stroke is a path across the whole page rather than a box with a size,
+    /// so scaling its geometry is the transform's job and stays crisp.
     private var renderScale: Double {
-        element.kind == .photo ? 1 : element.scale
+        element.kind == .stroke ? element.scale : 1
+    }
+
+    /// The element's size multiplier, bounded the way the gesture bounds it.
+    private var zoom: CGFloat {
+        CGFloat(min(max(element.scale, 0.2), 4))
     }
 
     @ViewBuilder
@@ -188,27 +196,31 @@ struct ScrapbookElementView: View {
 
         case .text:
             Text(element.payload)
-                .font(ScrapbookStyle.font(element.fontIndex, size: element.widthValue * 3))
+                .font(ScrapbookStyle.font(element.fontIndex,
+                                          size: element.widthValue * 3 * zoom))
                 .foregroundStyle(Color(scrapbookHex: element.colorHex))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: canvasSize.width * 0.8)
-                .padding(6)
+                // The wrap width grows with the type, otherwise enlarging a
+                // caption just breaks it onto more and more lines.
+                .frame(maxWidth: canvasSize.width * 0.8 * zoom)
+                .padding(6 * zoom)
                 .overlay(selectionRing)
 
         case .sticker:
             // A sticker is either an emoji or one of the drawn paper bits,
             // told apart by the "#" the decoration tokens carry.
             if let character = ScrapbookLetter.character(from: element.payload) {
-                ScrapbookLetterSticker(character: character)
+                ScrapbookLetterSticker(character: character, zoom: zoom)
                     .overlay(selectionRing)
             } else if let decoration = ScrapbookDecoration.from(payload: element.payload) {
                 decoration.view(tint: Color(scrapbookHex: element.colorHex))
-                    .frame(width: decoration.size.width, height: decoration.size.height)
+                    .frame(width: decoration.size.width * zoom,
+                           height: decoration.size.height * zoom)
                     .overlay(selectionRing)
             } else {
                 Text(element.payload)
-                    .font(.system(size: element.widthValue * 6))
+                    .font(.system(size: element.widthValue * 6 * zoom))
                     .overlay(selectionRing)
             }
 
@@ -222,7 +234,6 @@ struct ScrapbookElementView: View {
     private var photo: some View {
 
         let frame = ScrapbookStyle.frame(element.frameIndex)
-        let zoom = CGFloat(min(max(element.scale, 0.2), 4))
         let width = canvasSize.width * 0.42 * zoom
         // The round frames crop to a square, otherwise the "circle" comes out
         // an ellipse shaped by whatever the photo happened to be.
