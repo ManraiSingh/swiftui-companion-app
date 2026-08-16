@@ -163,6 +163,7 @@ struct ScrapbookCanvasView: View {
                 onLabel: labelling(element),
                 onInlay: filling(element),
                 onTint: tinting(element),
+                onInk: inking(element),
                 onFont: fonting(element),
                 onLock: { toggleLock(element) },
                 onForward: { bringForward(element) },
@@ -803,17 +804,40 @@ struct ScrapbookCanvasView: View {
     }
 
     /// The colour to change while something is selected: a piece of text's ink,
-    /// or the paper a drawn sticker is cut from.
-    ///
-    /// Emoji and cut-out letters bring their own colours, so there is nothing
-    /// to change on those.
+    /// the paper a drawn sticker is cut from, or the scrap a cut-out letter is
+    /// snipped from. Only an emoji has nothing to change.
     private func tinting(_ element: ScrapbookElement) -> ((String) -> Void)? {
 
-        guard element.kind == .text || decoration(of: element) != nil else { return nil }
+        let isLetter = element.kind == .sticker
+            && ScrapbookLetter.character(from: element.payload) != nil
+
+        guard element.kind == .text || decoration(of: element) != nil || isLetter
+        else { return nil }
 
         return { hex in
             var updated = element
-            updated.colorHex = hex
+            // A letter's paper is its own field: `colorHex` on a letter has
+            // always been the ink default nobody set, and reading it as paper
+            // would turn every letter already on a page dark.
+            if isLetter {
+                updated.paperColorHex = hex
+            } else {
+                updated.colorHex = hex
+            }
+            manager.update(updated, bookID: book.id, pageID: page.id)
+        }
+    }
+
+    /// The letter's own ink, alongside the scrap it is cut from.
+    private func inking(_ element: ScrapbookElement) -> ((String) -> Void)? {
+
+        guard element.kind == .sticker,
+              ScrapbookLetter.character(from: element.payload) != nil
+        else { return nil }
+
+        return { hex in
+            var updated = element
+            updated.captionColorHex = hex
             manager.update(updated, bookID: book.id, pageID: page.id)
         }
     }
@@ -986,9 +1010,12 @@ private struct SelectedElementBar: View {
     /// Present only for the stickers a picture can go inside.
     let onInlay: (() -> Void)?
 
-    /// Present for text, whose ink it changes, and for the drawn stickers,
-    /// whose paper it changes.
+    /// Present for text, whose ink it changes, and for the stickers cut from
+    /// paper, whose paper it changes.
     let onTint: ((String) -> Void)?
+
+    /// Present for cut-out letters, which have a paper *and* a letter on it.
+    let onInk: ((String) -> Void)?
 
     /// Present for anything with words on it.
     let onFont: ((Int) -> Void)?
@@ -1019,7 +1046,21 @@ private struct SelectedElementBar: View {
 
             if showingFonts, let onFont { lettering(onFont) }
 
-            if let onTint { tints(onTint) }
+            if let onTint {
+                swatches(tintTitle,
+                         palette: isLetter
+                            ? ScrapbookStyle.framePalette
+                            : ScrapbookStyle.inkPalette,
+                         chosen: isLetter ? element.paperColorHex : element.colorHex,
+                         pick: onTint)
+            }
+
+            if let onInk {
+                swatches("Letter",
+                         palette: ScrapbookStyle.inkPalette,
+                         chosen: element.captionColorHex,
+                         pick: onInk)
+            }
 
             actions
         }
@@ -1055,24 +1096,49 @@ private struct SelectedElementBar: View {
         }
     }
 
-    /// Text's ink, or a sticker's own paper colour, changed in place.
-    private func tints(_ pick: @escaping (String) -> Void) -> some View {
+    private var isLetter: Bool {
+        element.kind == .sticker
+            && ScrapbookLetter.character(from: element.payload) != nil
+    }
 
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(ScrapbookStyle.inkPalette, id: \.self) { hex in
-                    Circle()
-                        .fill(Color(scrapbookHex: hex))
-                        .frame(width: 24, height: 24)
-                        .overlay(
-                            Circle().strokeBorder(.white,
-                                                  lineWidth: element.colorHex == hex ? 3 : 1)
-                        )
-                        .onTapGesture { pick(hex) }
+    /// A cut-out letter carries two strips at once, so each says what it is.
+    private var tintTitle: String {
+        if element.kind == .text { return "Colour" }
+        return "Paper"
+    }
+
+    /// One row of colours, applied to the selection as it is tapped.
+    private func swatches(
+        _ title: String,
+        palette: [String],
+        chosen: String,
+        pick: @escaping (String) -> Void
+    ) -> some View {
+
+        HStack(spacing: 10) {
+
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(width: 40, alignment: .leading)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(palette, id: \.self) { hex in
+                        Circle()
+                            .fill(Color(scrapbookHex: hex))
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle().strokeBorder(.white,
+                                                      lineWidth: chosen == hex ? 3 : 1)
+                            )
+                            .onTapGesture { pick(hex) }
+                    }
                 }
+                .padding(.trailing, 16)
             }
-            .padding(.horizontal, 16)
         }
+        .padding(.leading, 16)
     }
 
     /// "Write" only where there is nothing written yet.

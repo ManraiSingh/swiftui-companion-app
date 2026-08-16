@@ -816,8 +816,15 @@ struct ScrapbookLetterSticker: View {
     /// view blows up those pixels and the letter goes soft.
     var zoom: CGFloat = 1
 
+    /// Chosen colours, where somebody has chosen them. Left off, the letter
+    /// picks its own from the character — which is what gives a title spelled
+    /// out one scrap at a time its variety without anyone having to.
+    var paper: Color?
+    var ink: Color?
+
     private var style: (paper: Color, ink: Color) {
-        ScrapbookLetter.style(for: character)
+        let automatic = ScrapbookLetter.style(for: character)
+        return (paper ?? automatic.paper, ink ?? automatic.ink)
     }
 
     private var seed: Int {

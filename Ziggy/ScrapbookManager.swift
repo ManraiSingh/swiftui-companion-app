@@ -493,7 +493,8 @@ final class ScrapbookManager: ObservableObject {
             frameColorHex: data["frameColorHex"] as? String ?? "#FDFAF5",
             caption: data["caption"] as? String ?? "",
             captionColorHex: data["captionColorHex"] as? String ?? "",
-            imagePayload: data["imagePayload"] as? String ?? ""
+            imagePayload: data["imagePayload"] as? String ?? "",
+            paperColorHex: data["paperColorHex"] as? String ?? ""
         )
     }
 
@@ -593,7 +594,8 @@ final class ScrapbookManager: ObservableObject {
             "frameColorHex": element.frameColorHex,
             "caption": element.caption,
             "captionColorHex": element.captionColorHex,
-            "imagePayload": element.imagePayload
+            "imagePayload": element.imagePayload,
+            "paperColorHex": element.paperColorHex
         ]
     }
 

@@ -305,6 +305,11 @@ struct ScrapbookElement: Identifiable, Equatable {
     /// from it because for a sticker `payload` is already the token naming the
     /// piece of paper.
     var imagePayload: String = ""
+
+    /// The scrap a cut-out letter is snipped from. Empty means the colour the
+    /// character picks for itself, which is what a freshly placed letter does;
+    /// setting it is the swatch under the letter taking over.
+    var paperColorHex: String = ""
 }
 
 // MARK: - Stroke encoding

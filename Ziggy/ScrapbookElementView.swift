@@ -337,8 +337,15 @@ struct ScrapbookElementView: View {
             // A sticker is either an emoji or one of the drawn paper bits,
             // told apart by the "#" the decoration tokens carry.
             if let character = ScrapbookLetter.character(from: element.payload) {
-                ScrapbookLetterSticker(character: character, zoom: zoom * unit)
-                    .overlay(selectionRing)
+                ScrapbookLetterSticker(
+                    character: character,
+                    zoom: zoom * unit,
+                    paper: element.paperColorHex.isEmpty
+                        ? nil : Color(scrapbookHex: element.paperColorHex),
+                    ink: element.captionColorHex.isEmpty
+                        ? nil : Color(scrapbookHex: element.captionColorHex)
+                )
+                .overlay(selectionRing)
             } else if let decoration = ScrapbookDecoration.from(payload: element.payload) {
 
                 let box = CGSize(width: onPage(decoration.size.width),
