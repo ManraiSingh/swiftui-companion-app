@@ -58,7 +58,7 @@ struct ScrapbookPaper: View {
             // A faint vignette gives the paper a bit of body; a flat fill
             // reads as a coloured rectangle rather than a sheet.
             GeometryReader { proxy in
-                let unit = proxy.size.width / ScrapbookStyle.pageReferenceWidth
+                let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
                 RadialGradient(
                     colors: [.clear, paper.tint.opacity(0.55)],
                     center: .center,
@@ -73,7 +73,7 @@ struct ScrapbookPaper: View {
                     // Ruling is spaced against the page, like everything else
                     // on it — at a fixed pitch the same sheet came out with
                     // twice as many lines on a book leaf as in the editor.
-                    let unit = proxy.size.width / ScrapbookStyle.pageReferenceWidth
+                    let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
 
                     Path { path in
                         var y = 34 * unit
@@ -90,8 +90,8 @@ struct ScrapbookPaper: View {
             if paper.grid {
                 GeometryReader { proxy in
 
-                    let unit = proxy.size.width / ScrapbookStyle.pageReferenceWidth
-                    let pitch = 26 * unit
+                    let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
+                    let pitch = max(26 * unit, 2)
 
                     Path { path in
                         var x: CGFloat = 0
@@ -138,7 +138,7 @@ struct ScrapbookStrokeView: View {
 
         // The stroke's shape is already in page proportions; its thickness
         // was not, so a line drawn in the editor came out heavy in the book.
-        let unit = canvasSize.width / ScrapbookStyle.pageReferenceWidth
+        let unit = max(canvasSize.width, 1) / ScrapbookStyle.pageReferenceWidth
         let thickness = width * brush.widthScale * unit
 
         ZStack {
@@ -209,7 +209,7 @@ struct ScrapbookElementView: View {
     /// the same in the book as it did in the editor, rather than everything
     /// but the photos appearing blown up on the smaller leaf.
     private var unit: CGFloat {
-        canvasSize.width / ScrapbookStyle.pageReferenceWidth
+        max(canvasSize.width, 1) / ScrapbookStyle.pageReferenceWidth
     }
 
     /// A point measurement, taken relative to the page.
@@ -449,11 +449,21 @@ private struct PhotoFrameModifier: ViewModifier {
         }
     }
 
+    /// How many sprocket holes fit.
+    ///
+    /// Counted off the unscaled width so the holes get bigger with the frame
+    /// rather than multiplying into a dotted line — but guarded, because a
+    /// page is briefly laid out at zero width, which made this divide by zero
+    /// and then trap converting an infinite Double to Int.
+    private var sprocketCount: Int {
+        let raw = width / max(zoom, 0.0001) / 14
+        guard raw.isFinite else { return 3 }
+        return min(max(Int(raw), 3), 40)
+    }
+
     private var sprockets: some View {
-        // Counted off the unscaled width so the holes get bigger with the
-        // frame rather than multiplying into a dotted line.
         HStack(spacing: scaled(5)) {
-            ForEach(0..<Int(max(width / zoom / 14, 3)), id: \.self) { _ in
+            ForEach(0..<sprocketCount, id: \.self) { _ in
                 RoundedRectangle(cornerRadius: scaled(1.5))
                     .fill(detail)
                     .frame(width: scaled(6), height: scaled(5))
