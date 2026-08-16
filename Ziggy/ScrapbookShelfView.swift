@@ -54,7 +54,9 @@ enum ShelfSelection: Equatable {
 /// on an SE and 10.7% on a Pro Max — same book, noticeably different picture.
 private struct ShelfMetrics {
 
-    static let referenceWidth: CGFloat = 360
+    /// Raised from 360 to bring the whole bookcase down about 15% — at the
+    /// old figure the shelves ate the screen and only two fitted at a time.
+    static let referenceWidth: CGFloat = 430
 
     let unit: CGFloat
 

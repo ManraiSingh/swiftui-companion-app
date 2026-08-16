@@ -520,6 +520,83 @@ private struct ArchShape: Shape {
     }
 }
 
+// MARK: - A frame, shown on its own
+
+/// One frame drawn around a neutral sample rather than a real photograph.
+///
+/// The picker used to preview each frame on the actual picture, which sounded
+/// helpful and looked poor — nine copies of the same photo competing with the
+/// thing you were trying to compare. A plain sample lets the frame be the
+/// only thing that changes between tiles.
+struct ScrapbookFrameSample: View {
+
+    let frame: ScrapbookStyle.Frame
+    let paperHex: String
+    var width: CGFloat = 108
+
+    var body: some View {
+
+        // Round frames crop square; the rest keep a portrait photo's shape.
+        let height = frame == .tornCircle ? width : width * 1.2
+
+        sample
+            .frame(width: width, height: height)
+            .modifier(
+                PhotoFrameModifier(
+                    frame: frame,
+                    width: width,
+                    paper: Color(scrapbookHex: paperHex),
+                    onDarkPaper: ScrapbookStyle.isDark(hex: paperHex),
+                    // A page draws a photo about 160pt wide, which is what the
+                    // frame's trim is proportioned for.
+                    zoom: width / 160
+                )
+            )
+    }
+
+    /// A stand-in picture: sky, hill, sun. Enough to read as a photograph
+    /// without being anyone's.
+    private var sample: some View {
+
+        GeometryReader { proxy in
+
+            let w = proxy.size.width
+            let h = proxy.size.height
+
+            ZStack(alignment: .bottom) {
+
+                LinearGradient(
+                    colors: [Color(red: 0.62, green: 0.78, blue: 0.90),
+                             Color(red: 0.80, green: 0.88, blue: 0.94)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                Circle()
+                    .fill(Color(red: 0.99, green: 0.87, blue: 0.62))
+                    .frame(width: w * 0.20, height: w * 0.20)
+                    .position(x: w * 0.72, y: h * 0.24)
+
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: h))
+                    path.addLine(to: CGPoint(x: w * 0.34, y: h * 0.52))
+                    path.addLine(to: CGPoint(x: w * 0.66, y: h))
+                    path.closeSubpath()
+                }
+                .fill(Color(red: 0.55, green: 0.68, blue: 0.55))
+
+                Path { path in
+                    path.move(to: CGPoint(x: w * 0.42, y: h))
+                    path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.62))
+                    path.addLine(to: CGPoint(x: w * 1.05, y: h))
+                    path.closeSubpath()
+                }
+                .fill(Color(red: 0.44, green: 0.58, blue: 0.47))
+            }
+        }
+    }
+}
+
 // MARK: - A whole page, read only
 
 /// The page as it appears when browsing the book. No gestures — tapping

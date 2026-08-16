@@ -1235,41 +1235,30 @@ private struct FramePicker: View {
         }
     }
 
-    /// Each option drawn with this element's own picture, so the choice is
-    /// made against the real thing rather than a stand-in.
+    /// Each option drawn on a neutral sample, so the frame is the only thing
+    /// that differs between tiles.
     private func tile(_ frame: ScrapbookStyle.Frame) -> some View {
-
-        var preview = element
-        preview.frameIndex = frame.rawValue
-        preview.rotation = 0
-        // Sized to fill the tile. A page draws a photo at 42% of its width,
-        // so at 1 the preview sat small in the middle of the tile with most of
-        // the space showing nothing.
-        preview.scale = 1.25
-        preview.x = 0.5
-        preview.y = 0.5
 
         let chosen = element.frameIndex == frame.rawValue
 
-        return VStack(spacing: 6) {
+        return VStack(spacing: 8) {
 
-            GeometryReader { proxy in
-                ScrapbookElementView(
-                    element: preview,
-                    canvasSize: proxy.size,
-                    isSelected: false
-                )
-            }
-            .frame(height: 150)
+            ScrapbookFrameSample(frame: frame, paperHex: element.frameColorHex)
+                .frame(height: 152)
 
             Text(frame.label)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundStyle(chosen ? .primary : .secondary)
         }
-        .frame(height: 182)
+        .frame(maxWidth: .infinity)
+        .frame(height: 190)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.secondary.opacity(chosen ? 0.20 : 0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(chosen ? Color.accentColor : .clear, lineWidth: 2)
+                )
         )
         .contentShape(Rectangle())
         .onTapGesture { onFrame(frame) }
