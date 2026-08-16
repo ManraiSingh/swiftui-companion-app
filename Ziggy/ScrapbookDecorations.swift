@@ -764,6 +764,40 @@ struct TornCircle: Shape {
     }
 }
 
+// MARK: - Ziggy
+
+/// The pet, as a sticker for the page.
+///
+/// The app's own artwork rather than something drawn again here — a scrapbook
+/// about the two of you should have the same Ziggy in it that the home screen
+/// does, in the moods you already know him in.
+enum ScrapbookPet {
+
+    static let prefix = "#Z:"
+
+    static func token(_ pose: String) -> String { prefix + pose }
+
+    static func pose(from payload: String) -> String? {
+        guard payload.hasPrefix(prefix) else { return nil }
+        let rest = String(payload.dropFirst(prefix.count))
+        return rest.isEmpty ? nil : rest
+    }
+
+    /// Asset name and what to call it. Kept to the moods that suit a page —
+    /// the angry ones are for the pet screen, not for a memory.
+    static let poses: [(asset: String, label: String)] = [
+        ("ziggy_happie",   "Happy"),
+        ("ziggy_loveeyes", "Smitten"),
+        ("ziggy_sleep",    "Sleepy"),
+        ("ziggy_tears",    "Teary"),
+        ("ziggu_cry",      "Sad"),
+        ("ziggy_angrywithhands", "Huffy")
+    ]
+
+    /// Drawn at this size for a sticker of scale 1.
+    static let size: CGFloat = 88
+}
+
 // MARK: - Cut-out letters
 
 /// The ransom-note alphabet: each character on its own scrap of coloured

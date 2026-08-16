@@ -65,10 +65,16 @@ struct ScrapbookPaper: View {
 
             context.fill(Path(whole), with: .color(paper.base))
 
+            // The transparent end is the paper's own colour at zero alpha, not
+            // `.clear`. They look identical on screen, but `.clear` is black
+            // with the alpha taken off — and a gradient that interpolates in
+            // straight RGBA, which is what a PDF context does, runs from the
+            // tint through grey to black. Printed pages came out with a dark
+            // cloud across the middle of every one.
             context.fill(
                 Path(whole),
                 with: .radialGradient(
-                    Gradient(colors: [.clear, paper.tint.opacity(0.55)]),
+                    Gradient(colors: [paper.tint.opacity(0), paper.tint.opacity(0.55)]),
                     center: CGPoint(x: size.width / 2, y: size.height / 2),
                     startRadius: 60 * unit,
                     endRadius: 420 * unit
@@ -346,6 +352,15 @@ struct ScrapbookElementView: View {
                         ? nil : Color(scrapbookHex: element.captionColorHex)
                 )
                 .overlay(selectionRing)
+            } else if let pose = ScrapbookPet.pose(from: element.payload) {
+
+                Image(pose)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: onPage(ScrapbookPet.size),
+                           height: onPage(ScrapbookPet.size))
+                    .overlay(selectionRing)
+
             } else if let decoration = ScrapbookDecoration.from(payload: element.payload) {
 
                 let box = CGSize(width: onPage(decoration.size.width),

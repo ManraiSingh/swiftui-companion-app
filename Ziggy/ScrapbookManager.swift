@@ -464,6 +464,42 @@ final class ScrapbookManager: ObservableObject {
         pageElements = [:]
     }
 
+    /// Every page of a book at once, read once and handed back.
+    ///
+    /// Exporting needs the whole book, and the listeners deliberately only
+    /// cover the spread you can see plus its neighbours — putting a listener
+    /// on every page to print one would leave the book paying for all of them
+    /// afterwards.
+    func fetchEveryPage(
+        bookID: String,
+        pageIDs: [String],
+        completion: @escaping ([String: [ScrapbookElement]]) -> Void
+    ) {
+
+        guard !pageIDs.isEmpty else { completion([:]); return }
+
+        var collected: [String: [ScrapbookElement]] = [:]
+        let group = DispatchGroup()
+
+        for id in pageIDs {
+
+            guard let ref = elementsRef(bookID, id) else { continue }
+
+            group.enter()
+            ref.order(by: "z").getDocuments { snapshot, _ in
+                MainActor.assumeIsolated {
+                    collected[id] = (snapshot?.documents ?? [])
+                        .compactMap(Self.element(from:))
+                    group.leave()
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            MainActor.assumeIsolated { completion(collected) }
+        }
+    }
+
     /// One document to one element. Shared so the page a book shows and the
     /// page its editor opens can never read the same record differently.
     private static func element(from document: QueryDocumentSnapshot) -> ScrapbookElement? {

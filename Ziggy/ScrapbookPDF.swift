@@ -1,0 +1,131 @@
+//
+//  ScrapbookPDF.swift
+//  Ziggy
+//
+//  Printing a book out.
+//
+//  Each page is rendered through the very same view the book shows, so what
+//  comes out is what you made rather than a second drawing of it that could
+//  drift away from the first.
+//
+
+import SwiftUI
+import UIKit
+
+enum ScrapbookPDF {
+
+    /// A page, in points. The proportion is the scrapbook's own 0.74, not A4's
+    /// — a page laid out to one shape and printed to another would either
+    /// letterbox or crop, and cropping a scrapbook loses the corners where the
+    /// tape and the dates live.
+    static let pageSize = CGSize(width: 612, height: 612 / 0.74)
+
+    /// Renders the whole book and writes it to a file, returning where it went.
+    ///
+    /// The elements come in as a dictionary rather than being fetched here, so
+    /// this stays a pure "draw what you are given" step and the caller decides
+    /// how much of the book to print.
+    @MainActor
+    static func write(
+        book: ScrapbookBook,
+        pages: [ScrapbookPage],
+        elements: [String: [ScrapbookElement]]
+    ) -> URL? {
+
+        guard !pages.isEmpty else { return nil }
+
+        let bounds = CGRect(origin: .zero, size: pageSize)
+
+        let format = UIGraphicsPDFRendererFormat()
+        format.documentInfo = [
+            kCGPDFContextTitle as String: book.title,
+            kCGPDFContextCreator as String: "Ziggy"
+        ]
+
+        let data = UIGraphicsPDFRenderer(bounds: bounds, format: format)
+            .pdfData { context in
+
+                for page in pages {
+
+                    context.beginPage()
+
+                    let leaf = ScrapbookPagePreview(
+                        page: page,
+                        elements: elements[page.id] ?? []
+                    )
+                    .frame(width: pageSize.width, height: pageSize.height)
+
+                    let renderer = ImageRenderer(content: leaf)
+                    renderer.proposedSize = ProposedViewSize(pageSize)
+
+                    // `render` hands back a closure that draws into a CGContext,
+                    // so shapes and type go into the PDF as shapes and type.
+                    // Going via `uiImage` would flatten every page to a bitmap
+                    // and the words would print soft.
+                    //
+                    // The flip is not optional. A PDF context counts upwards
+                    // from the bottom-left and `UIGraphicsPDFRenderer` has
+                    // already turned it the UIKit way up; the renderer's
+                    // closure then draws top-down as well, and two flips is
+                    // one too many — every page came out mirrored, with the
+                    // writing back to front.
+                    let cg = context.cgContext
+                    cg.saveGState()
+                    cg.translateBy(x: 0, y: pageSize.height)
+                    cg.scaleBy(x: 1, y: -1)
+                    renderer.render { _, draw in draw(cg) }
+                    cg.restoreGState()
+                }
+            }
+
+        let name = filename(for: book)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+
+        do {
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    /// A filename that reads like the book, with anything a file system would
+    /// object to taken out.
+    private static func filename(for book: ScrapbookBook) -> String {
+
+        let allowed = CharacterSet.alphanumerics.union(.whitespaces)
+
+        let cleaned = book.title.unicodeScalars
+            .map { allowed.contains($0) ? Character($0) : " " }
+            .reduce(into: "") { $0.append($1) }
+            .split(separator: " ")
+            .joined(separator: "-")
+
+        return (cleaned.isEmpty ? "Scrapbook" : cleaned) + ".pdf"
+    }
+}
+
+/// A finished file, ready to present. A plain `URL` can't drive `sheet(item:)`
+/// — it isn't `Identifiable`, and making it so everywhere to suit one screen
+/// would be a heavy way to get an id.
+struct ScrapbookExportFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+// MARK: - Share sheet
+
+/// The system share sheet, for handing the finished file on.
+///
+/// `ShareLink` would do this in one line, but it wants the file to exist before
+/// the view is built — and the book is only rendered once you ask for it.
+struct ScrapbookShareSheet: UIViewControllerRepresentable {
+
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}

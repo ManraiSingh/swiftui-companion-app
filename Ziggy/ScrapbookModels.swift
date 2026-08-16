@@ -120,7 +120,7 @@ struct ScrapbookOrnamentPlacement: Identifiable, Equatable {
     /// saved arrangement, that wins.
     static func defaults(spanning bookPositions: [Double]) -> [ScrapbookOrnamentPlacement] {
 
-        let kinds = ScrapbookOrnament.allCases
+        let kinds = ScrapbookOrnament.defaultKinds
 
         guard let first = bookPositions.min(),
               let last = bookPositions.max(),

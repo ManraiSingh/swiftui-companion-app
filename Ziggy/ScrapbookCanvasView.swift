@@ -119,7 +119,8 @@ struct ScrapbookCanvasView: View {
             StickerPicker(
                 onEmoji: { addSticker($0) },
                 onDecoration: { addDecoration($0) },
-                onLetter: { addLetter($0) }
+                onLetter: { addLetter($0) },
+                onPet: { addPet($0) }
             )
             .presentationDetents([.large])
         }
@@ -664,6 +665,21 @@ struct ScrapbookCanvasView: View {
         element.rotation = Double.random(in: -7...7)
         element.x = Double.random(in: 0.30...0.70)
         element.y = Double.random(in: 0.30...0.70)
+
+        manager.add(element, bookID: book.id, pageID: page.id)
+        place(element)
+    }
+
+    /// Drops Ziggy on the page, in one of his moods.
+    private func addPet(_ asset: String) {
+
+        var element = ScrapbookElement(id: UUID().uuidString, kind: .sticker)
+        element.payload = ScrapbookPet.token(asset)
+        element.widthValue = 7
+        element.z = manager.nextZ
+        element.rotation = Double.random(in: -8...8)
+        element.x = Double.random(in: 0.35...0.65)
+        element.y = Double.random(in: 0.35...0.65)
 
         manager.add(element, bookID: book.id, pageID: page.id)
         place(element)
@@ -1422,12 +1438,14 @@ private struct StickerPicker: View {
     let onEmoji: (String) -> Void
     let onDecoration: (ScrapbookDecoration) -> Void
     let onLetter: (String) -> Void
+    let onPet: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
     private let emojiColumns = [GridItem(.adaptive(minimum: 52), spacing: 10)]
     private let paperColumns = [GridItem(.adaptive(minimum: 84), spacing: 12)]
     private let letterColumns = [GridItem(.adaptive(minimum: 54), spacing: 8)]
+    private let petColumns = [GridItem(.adaptive(minimum: 82), spacing: 10)]
 
     var body: some View {
 
@@ -1439,6 +1457,7 @@ private struct StickerPicker: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 18)
 
+                petSection
                 paperSection
                 letterSection
                 emojiSections
@@ -1447,7 +1466,45 @@ private struct StickerPicker: View {
         }
     }
 
-    /// The paper bits come first — they're what makes a page look made rather
+    /// Ziggy first — he's the one thing here that's yours rather than everyone's.
+    private var petSection: some View {
+
+        VStack(alignment: .leading, spacing: 10) {
+
+            Text("Ziggy")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: petColumns, spacing: 10) {
+                ForEach(ScrapbookPet.poses, id: \.asset) { pose in
+                    VStack(spacing: 4) {
+
+                        Image(pose.asset)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 62, height: 62)
+
+                        Text(pose.label)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 82, height: 88)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.secondary.opacity(0.10))
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onPet(pose.asset)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    /// The paper bits come next — they're what makes a page look made rather
     /// than typed.
     private var paperSection: some View {
 

@@ -34,6 +34,10 @@ struct ScrapbookBookView: View {
     @State private var turnAmount: CGFloat = 0
     @State private var spreadWidth: CGFloat = 1
 
+    /// The finished PDF, waiting to be handed on.
+    @State private var exportedPDF: ScrapbookExportFile?
+    @State private var exporting = false
+
     private var cover: ScrapbookStyle.Cover { ScrapbookStyle.cover(book.coverIndex) }
 
     private var currentPage: ScrapbookPage? {
@@ -87,6 +91,9 @@ struct ScrapbookBookView: View {
         .onChange(of: pageIndex) { _, _ in loadVisiblePages() }
         .fullScreenCover(item: $editingPage) { page in
             ScrapbookCanvasView(book: book, page: page)
+        }
+        .sheet(item: $exportedPDF) { file in
+            ScrapbookShareSheet(url: file.url)
         }
         .sheet(isPresented: $showingPaper) {
             PaperPicker(selected: currentPage?.paperIndex ?? 0) { index in
@@ -444,6 +451,14 @@ struct ScrapbookBookView: View {
 
             Spacer()
 
+            if exporting {
+                ProgressView()
+                    .tint(ScrapbookStyle.paperWhite)
+                    .frame(width: 38, height: 38)
+            } else {
+                circleButton("square.and.arrow.up") { exportPDF() }
+            }
+
             circleButton("doc.plaintext") { showingPaper = true }
         }
         .padding(.horizontal, 18)
@@ -489,6 +504,27 @@ struct ScrapbookBookView: View {
         .padding(.horizontal, 18)
         .padding(.bottom, 16)
         .padding(.top, 8)
+    }
+
+    /// Renders every page of the book to a PDF and offers it up.
+    ///
+    /// The elements are fetched afresh rather than taken from what's on screen:
+    /// the book only keeps the spread you can see and its neighbours loaded, so
+    /// printing from that would give a document with most of its pages blank.
+    private func exportPDF() {
+
+        guard !exporting, !manager.pages.isEmpty else { return }
+
+        exporting = true
+        let pages = manager.pages
+
+        manager.fetchEveryPage(bookID: book.id, pageIDs: pages.map(\.id)) { elements in
+
+            let url = ScrapbookPDF.write(book: book, pages: pages, elements: elements)
+
+            exporting = false
+            if let url { exportedPDF = ScrapbookExportFile(url: url) }
+        }
     }
 
     private var spreadLabel: String {
