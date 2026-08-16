@@ -1371,9 +1371,17 @@ private extension UIImage {
     /// Scrapbook photos are kept rather than glanced at, so they get more
     /// budget than an instant does — but still well inside Firestore's 1 MB
     /// document ceiling once base64 has added its third.
-    func scrapbookBase64(maxBytes: Int = 420_000) -> String? {
+    ///
+    /// 1600px on the long side because a photo can be blown up to four times
+    /// its resting size on the page. At the old 1200 the picture ran out of
+    /// pixels before the zoom ran out of room, so it went soft at the top of
+    /// the range no matter how it was drawn.
+    ///
+    /// 500 KB encodes to about 667 KB of base64, which leaves comfortable
+    /// headroom under the 1,048,576-byte limit for the rest of the document.
+    func scrapbookBase64(maxBytes: Int = 500_000) -> String? {
 
-        for maxSide in [1200, 1000, 820, 640] as [CGFloat] {
+        for maxSide in [1600, 1300, 1000, 760] as [CGFloat] {
 
             let resized = scaled(maxSide: maxSide)
             var quality: CGFloat = 0.72

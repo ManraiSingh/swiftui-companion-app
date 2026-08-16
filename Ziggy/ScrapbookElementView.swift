@@ -160,11 +160,22 @@ struct ScrapbookElementView: View {
 
         content
             .rotationEffect(.degrees(element.rotation))
-            .scaleEffect(element.scale)
+            .scaleEffect(renderScale)
             .position(
                 x: element.x * canvasSize.width,
                 y: element.y * canvasSize.height
             )
+    }
+
+    /// Photos size themselves rather than being magnified afterwards.
+    ///
+    /// `scaleEffect` is a render-time transform: it blows up the layer that
+    /// has already been drawn, so an enlarged photo was a small bitmap
+    /// stretched, and went soft. Building the frame at the final size instead
+    /// makes the image resample at that size and stay sharp. Everything else
+    /// is vector or text and scales cleanly either way.
+    private var renderScale: Double {
+        element.kind == .photo ? 1 : element.scale
     }
 
     @ViewBuilder
@@ -211,7 +222,8 @@ struct ScrapbookElementView: View {
     private var photo: some View {
 
         let frame = ScrapbookStyle.frame(element.frameIndex)
-        let width = canvasSize.width * 0.42
+        let zoom = CGFloat(min(max(element.scale, 0.2), 4))
+        let width = canvasSize.width * 0.42 * zoom
         // The round frames crop to a square, otherwise the "circle" comes out
         // an ellipse shaped by whatever the photo happened to be.
         let height = frame == .tornCircle ? width : width / max(element.aspect, 0.2)
@@ -235,7 +247,8 @@ struct ScrapbookElementView: View {
                 frame: frame,
                 width: width,
                 paper: Color(scrapbookHex: element.frameColorHex),
-                onDarkPaper: ScrapbookStyle.isDark(hex: element.frameColorHex)
+                onDarkPaper: ScrapbookStyle.isDark(hex: element.frameColorHex),
+                zoom: zoom
             )
         )
         .overlay(selectionRing)
@@ -289,6 +302,13 @@ private struct PhotoFrameModifier: ViewModifier {
     /// been changed to.
     let onDarkPaper: Bool
 
+    /// The photo's size multiplier. Every measurement in here is scaled by it,
+    /// so a frame keeps its proportions as the picture grows instead of the
+    /// border staying a fixed few points and thinning away to nothing.
+    let zoom: CGFloat
+
+    private func scaled(_ value: CGFloat) -> CGFloat { value * zoom }
+
     private var detail: Color {
         onDarkPaper ? .white.opacity(0.85) : .black.opacity(0.55)
     }
@@ -308,43 +328,43 @@ private struct PhotoFrameModifier: ViewModifier {
             // past the photo it is supposed to sit under.
             VStack(spacing: 0) {
                 content
-                Color.clear.frame(width: width, height: 26)
+                Color.clear.frame(width: width, height: scaled(26))
             }
-            .padding(.top, 9)
-            .padding(.horizontal, 9)
+            .padding(.top, scaled(9))
+            .padding(.horizontal, scaled(9))
             .background(paper)
             .shadow(color: .black.opacity(0.26), radius: 6, y: 3)
 
         case .white:
             content
-                .padding(7)
+                .padding(scaled(7))
                 .background(paper)
                 .shadow(color: .black.opacity(0.22), radius: 5, y: 3)
 
         case .tape:
             content
-                .padding(5)
+                .padding(scaled(5))
                 .background(paper)
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color(red: 0.96, green: 0.87, blue: 0.55).opacity(0.75))
-                        .frame(width: 54, height: 20)
+                        .frame(width: scaled(54), height: scaled(20))
                         .rotationEffect(.degrees(-8))
-                        .offset(y: -9)
+                        .offset(y: scaled(-9))
                 }
                 .overlay(alignment: .bottomTrailing) {
                     Rectangle()
                         .fill(Color(red: 0.96, green: 0.87, blue: 0.55).opacity(0.75))
-                        .frame(width: 48, height: 18)
+                        .frame(width: scaled(48), height: scaled(18))
                         .rotationEffect(.degrees(12))
-                        .offset(x: 10, y: 8)
+                        .offset(x: scaled(10), y: scaled(8))
                 }
                 .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
         case .film:
             content
-                .padding(.vertical, 13)
-                .padding(.horizontal, 6)
+                .padding(.vertical, scaled(13))
+                .padding(.horizontal, scaled(6))
                 .background(paper)
                 .overlay(alignment: .top) { sprockets }
                 .overlay(alignment: .bottom) { sprockets }
@@ -352,10 +372,10 @@ private struct PhotoFrameModifier: ViewModifier {
 
         case .rounded:
             content
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: scaled(14), style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(paper, lineWidth: 3)
+                    RoundedRectangle(cornerRadius: scaled(14), style: .continuous)
+                        .strokeBorder(paper, lineWidth: scaled(3))
                 )
                 .shadow(color: .black.opacity(0.24), radius: 6, y: 3)
 
@@ -364,40 +384,42 @@ private struct PhotoFrameModifier: ViewModifier {
             // slightly larger scrap of paper, which is what gives the ripped
             // white border its depth.
             content
-                .clipShape(TornRect(seed: 3, depth: 5))
-                .padding(9)
+                .clipShape(TornRect(seed: 3, depth: scaled(5)))
+                .padding(scaled(9))
                 .background(
-                    TornRect(seed: 11, depth: 7).fill(paper)
+                    TornRect(seed: 11, depth: scaled(7)).fill(paper)
                 )
                 .shadow(color: .black.opacity(0.24), radius: 5, y: 3)
 
         case .tornCircle:
             content
-                .clipShape(TornCircle(seed: 5, depth: 5))
-                .padding(11)
+                .clipShape(TornCircle(seed: 5, depth: scaled(5)))
+                .padding(scaled(11))
                 .background(
-                    TornCircle(seed: 17, depth: 8).fill(paper)
+                    TornCircle(seed: 17, depth: scaled(8)).fill(paper)
                 )
                 .shadow(color: .black.opacity(0.26), radius: 7, y: 4)
 
         case .arch:
             content
                 .clipShape(ArchShape())
-                .padding(8)
+                .padding(scaled(8))
                 .background(ArchShape().fill(paper))
                 .shadow(color: .black.opacity(0.22), radius: 5, y: 3)
         }
     }
 
     private var sprockets: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<Int(max(width / 14, 3)), id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 1.5)
+        // Counted off the unscaled width so the holes get bigger with the
+        // frame rather than multiplying into a dotted line.
+        HStack(spacing: scaled(5)) {
+            ForEach(0..<Int(max(width / zoom / 14, 3)), id: \.self) { _ in
+                RoundedRectangle(cornerRadius: scaled(1.5))
                     .fill(detail)
-                    .frame(width: 6, height: 5)
+                    .frame(width: scaled(6), height: scaled(5))
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, scaled(4))
     }
 }
 
