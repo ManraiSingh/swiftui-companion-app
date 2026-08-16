@@ -141,7 +141,10 @@ struct ScrapbookElementView: View {
         case .sticker:
             // A sticker is either an emoji or one of the drawn paper bits,
             // told apart by the "#" the decoration tokens carry.
-            if let decoration = ScrapbookDecoration.from(payload: element.payload) {
+            if let character = ScrapbookLetter.character(from: element.payload) {
+                ScrapbookLetterSticker(character: character)
+                    .overlay(selectionRing)
+            } else if let decoration = ScrapbookDecoration.from(payload: element.payload) {
                 decoration.view(tint: Color(scrapbookHex: element.colorHex))
                     .frame(width: decoration.size.width, height: decoration.size.height)
                     .overlay(selectionRing)
@@ -162,7 +165,9 @@ struct ScrapbookElementView: View {
 
         let frame = ScrapbookStyle.frame(element.frameIndex)
         let width = canvasSize.width * 0.42
-        let height = width / max(element.aspect, 0.2)
+        // The round frames crop to a square, otherwise the "circle" comes out
+        // an ellipse shaped by whatever the photo happened to be.
+        let height = frame == .tornCircle ? width : width / max(element.aspect, 0.2)
 
         return Group {
             if let image = ScrapbookImageCache.shared.image(for: element.id, base64: element.payload) {
@@ -311,6 +316,36 @@ private struct PhotoFrameModifier: ViewModifier {
                         .strokeBorder(Color.white.opacity(0.9), lineWidth: 3)
                 )
                 .shadow(color: .black.opacity(0.24), radius: 6, y: 3)
+
+        case .torn:
+            // Two tears, not one: the photo's own ragged edge sitting on a
+            // slightly larger scrap of paper, which is what gives the ripped
+            // white border its depth.
+            content
+                .clipShape(TornRect(seed: 3, depth: 5))
+                .padding(9)
+                .background(
+                    TornRect(seed: 11, depth: 7)
+                        .fill(Color(red: 0.99, green: 0.98, blue: 0.96))
+                )
+                .shadow(color: .black.opacity(0.24), radius: 5, y: 3)
+
+        case .tornCircle:
+            content
+                .clipShape(TornCircle(seed: 5, depth: 5))
+                .padding(11)
+                .background(
+                    TornCircle(seed: 17, depth: 8)
+                        .fill(Color(red: 0.99, green: 0.98, blue: 0.96))
+                )
+                .shadow(color: .black.opacity(0.26), radius: 7, y: 4)
+
+        case .arch:
+            content
+                .clipShape(ArchShape())
+                .padding(8)
+                .background(ArchShape().fill(Color(red: 0.99, green: 0.98, blue: 0.95)))
+                .shadow(color: .black.opacity(0.22), radius: 5, y: 3)
         }
     }
 
@@ -323,6 +358,30 @@ private struct PhotoFrameModifier: ViewModifier {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// A rounded arch — a rectangle with a domed top.
+private struct ArchShape: Shape {
+
+    func path(in rect: CGRect) -> Path {
+
+        var path = Path()
+        let dome = min(rect.width / 2, rect.height * 0.42)
+
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + dome))
+        path.addArc(
+            center: CGPoint(x: rect.midX, y: rect.minY + dome),
+            radius: dome,
+            startAngle: .degrees(180),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+
+        return path
     }
 }
 

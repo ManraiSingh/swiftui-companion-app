@@ -104,7 +104,8 @@ struct ScrapbookCanvasView: View {
         .sheet(isPresented: $showingStickers) {
             StickerPicker(
                 onEmoji: { addSticker($0) },
-                onDecoration: { addDecoration($0) }
+                onDecoration: { addDecoration($0) },
+                onLetter: { addLetter($0) }
             )
             .presentationDetents([.large])
         }
@@ -526,6 +527,25 @@ struct ScrapbookCanvasView: View {
         element.rotation = Double.random(in: -8...8)
         element.x = Double.random(in: 0.35...0.65)
         element.y = Double.random(in: 0.35...0.65)
+
+        manager.add(element, bookID: book.id, pageID: page.id)
+        selectedID = element.id
+    }
+
+    /// Drops a single cut-out letter on the page.
+    ///
+    /// Each is its own sticker rather than a word being one element, which is
+    /// what lets a title be arranged letter by letter — turned, resized and
+    /// nudged apart the way a real ransom-note heading is.
+    private func addLetter(_ character: String) {
+
+        var element = ScrapbookElement(id: UUID().uuidString, kind: .sticker)
+        element.payload = ScrapbookLetter.token(character)
+        element.widthValue = 7
+        element.z = manager.nextZ
+        element.rotation = Double.random(in: -7...7)
+        element.x = Double.random(in: 0.30...0.70)
+        element.y = Double.random(in: 0.30...0.70)
 
         manager.add(element, bookID: book.id, pageID: page.id)
         selectedID = element.id
@@ -981,11 +1001,13 @@ private struct StickerPicker: View {
 
     let onEmoji: (String) -> Void
     let onDecoration: (ScrapbookDecoration) -> Void
+    let onLetter: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
     private let emojiColumns = [GridItem(.adaptive(minimum: 52), spacing: 10)]
     private let paperColumns = [GridItem(.adaptive(minimum: 84), spacing: 12)]
+    private let letterColumns = [GridItem(.adaptive(minimum: 54), spacing: 8)]
 
     var body: some View {
 
@@ -998,6 +1020,7 @@ private struct StickerPicker: View {
                     .padding(.top, 18)
 
                 paperSection
+                letterSection
                 emojiSections
             }
             .padding(.bottom, 24)
@@ -1050,6 +1073,31 @@ private struct StickerPicker: View {
             onDecoration(decoration)
             dismiss()
         }
+    }
+
+    /// The cut-out alphabet. Tapping the same letter twice gives two of them,
+    /// so a title gets spelled out one scrap at a time.
+    private var letterSection: some View {
+
+        VStack(alignment: .leading, spacing: 10) {
+
+            Text("Cut-out letters")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: letterColumns, spacing: 8) {
+                ForEach(ScrapbookLetter.characters, id: \.self) { character in
+                    ScrapbookLetterSticker(character: character)
+                        .frame(width: 54, height: 58)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onLetter(character)
+                            dismiss()
+                        }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
     }
 
     private var emojiSections: some View {

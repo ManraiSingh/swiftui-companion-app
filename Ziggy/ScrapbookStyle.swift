@@ -136,7 +136,7 @@ enum ScrapbookStyle {
     // MARK: Photo frames
 
     enum Frame: Int, CaseIterable, Identifiable {
-        case none, polaroid, white, tape, film, rounded
+        case none, polaroid, white, tape, film, rounded, torn, tornCircle, arch
 
         var id: Int { rawValue }
 
@@ -148,6 +148,9 @@ enum ScrapbookStyle {
             case .tape:     return "Taped"
             case .film:     return "Film"
             case .rounded:  return "Rounded"
+            case .torn:     return "Torn"
+            case .tornCircle: return "Circle"
+            case .arch:     return "Arch"
             }
         }
 
@@ -159,6 +162,9 @@ enum ScrapbookStyle {
             case .tape:     return "bandage"
             case .film:     return "film"
             case .rounded:  return "square.dashed"
+            case .torn:     return "doc.plaintext"
+            case .tornCircle: return "circle.dashed"
+            case .arch:     return "arrowtriangle.up.square"
             }
         }
     }

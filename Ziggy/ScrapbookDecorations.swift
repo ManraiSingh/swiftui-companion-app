@@ -495,3 +495,188 @@ private struct DashedBox: View {
             .stroke(tint, style: StrokeStyle(lineWidth: 3, dash: [9, 7]))
     }
 }
+
+// MARK: - Torn edges
+
+/// A rectangle with all four edges torn.
+///
+/// The ragged offsets come from a seeded generator rather than `random()`, so
+/// a given photo's tear is the same every time it's drawn — otherwise the edge
+/// would crawl on every redraw, and worse, look different on each partner's
+/// phone.
+struct TornRect: Shape {
+
+    var seed: Int = 1
+    var depth: CGFloat = 6
+    var teeth: Int = 16
+
+    func path(in rect: CGRect) -> Path {
+
+        var state = UInt64(abs(seed) &* 2_654_435_761 &+ 1)
+
+        func jitter() -> CGFloat {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return CGFloat((state >> 33) % 1_000) / 1_000 * depth
+        }
+
+        var points: [CGPoint] = []
+        let across = max(teeth, 4)
+        let down = max(Int(CGFloat(across) * rect.height / max(rect.width, 1)), 4)
+
+        for step in 0...across {
+            let t = CGFloat(step) / CGFloat(across)
+            points.append(CGPoint(x: rect.minX + t * rect.width, y: rect.minY + jitter()))
+        }
+        for step in 1...down {
+            let t = CGFloat(step) / CGFloat(down)
+            points.append(CGPoint(x: rect.maxX - jitter(), y: rect.minY + t * rect.height))
+        }
+        for step in 1...across {
+            let t = CGFloat(step) / CGFloat(across)
+            points.append(CGPoint(x: rect.maxX - t * rect.width, y: rect.maxY - jitter()))
+        }
+        for step in 1..<down {
+            let t = CGFloat(step) / CGFloat(down)
+            points.append(CGPoint(x: rect.minX + jitter(), y: rect.maxY - t * rect.height))
+        }
+
+        var path = Path()
+        path.addLines(points)
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// The same idea round a circle, for the torn vignette.
+struct TornCircle: Shape {
+
+    var seed: Int = 1
+    var depth: CGFloat = 7
+    var segments: Int = 64
+
+    func path(in rect: CGRect) -> Path {
+
+        var state = UInt64(abs(seed) &* 40_503 &+ 7)
+
+        func jitter() -> CGFloat {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return CGFloat((state >> 33) % 1_000) / 1_000 * depth
+        }
+
+        let centre = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+
+        var points: [CGPoint] = []
+
+        for step in 0..<segments {
+            let angle = CGFloat(step) / CGFloat(segments) * 2 * .pi
+            let reach = radius - jitter()
+            points.append(CGPoint(x: centre.x + cos(angle) * reach,
+                                  y: centre.y + sin(angle) * reach))
+        }
+
+        var path = Path()
+        path.addLines(points)
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Cut-out letters
+
+/// The ransom-note alphabet: each character on its own scrap of coloured
+/// paper, cut slightly crooked.
+enum ScrapbookLetter {
+
+    static let prefix = "#L:"
+
+    static func token(_ character: String) -> String { prefix + character }
+
+    static func character(from payload: String) -> String? {
+        guard payload.hasPrefix(prefix) else { return nil }
+        let rest = String(payload.dropFirst(prefix.count))
+        return rest.isEmpty ? nil : rest
+    }
+
+    // Built in steps: the three-way concatenation of mapped strings in one
+    // expression is more than the type checker will infer quickly.
+    private static let letters: [String] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".map(String.init)
+    private static let digits: [String] = "0123456789".map(String.init)
+    private static let marks: [String] = ["!", "?", "&", "+", "♥"]
+
+    static let characters: [String] = letters + digits + marks
+
+    /// Paper and ink, paired for contrast.
+    static let palette: [(paper: Color, ink: Color)] = [
+        (Color(red: 0.16, green: 0.20, blue: 0.75), Color(red: 0.93, green: 0.95, blue: 0.42)),
+        (Color(red: 0.93, green: 0.95, blue: 0.42), Color(red: 0.16, green: 0.20, blue: 0.75)),
+        (Color(red: 0.95, green: 0.76, blue: 0.85), Color(red: 0.16, green: 0.20, blue: 0.75)),
+        (Color(red: 0.99, green: 0.91, blue: 0.78), Color(red: 0.18, green: 0.18, blue: 0.20)),
+        (Color(red: 0.20, green: 0.22, blue: 0.28), Color(red: 0.99, green: 0.95, blue: 0.88)),
+        (Color(red: 0.90, green: 0.35, blue: 0.36), Color(red: 0.99, green: 0.95, blue: 0.88)),
+        (Color(red: 0.55, green: 0.78, blue: 0.90), Color(red: 0.16, green: 0.20, blue: 0.75))
+    ]
+
+    /// Chosen from the character itself, so a word laid out letter by letter
+    /// comes out varied without anyone having to pick colours for each one.
+    static func style(for character: String) -> (paper: Color, ink: Color) {
+        let seed = character.unicodeScalars.first.map { Int($0.value) } ?? 0
+        return palette[seed % palette.count]
+    }
+}
+
+struct ScrapbookLetterSticker: View {
+
+    let character: String
+
+    private var style: (paper: Color, ink: Color) {
+        ScrapbookLetter.style(for: character)
+    }
+
+    private var seed: Int {
+        character.unicodeScalars.first.map { Int($0.value) } ?? 1
+    }
+
+    var body: some View {
+        ZStack {
+            CutPaper(seed: seed)
+                .fill(style.paper)
+                .shadow(color: .black.opacity(0.22), radius: 2, x: 1, y: 1)
+
+            Text(character)
+                .font(.system(size: 30, weight: .black, design: .serif))
+                .foregroundStyle(style.ink)
+        }
+        .frame(width: 48, height: 52)
+        // A slight lean, again from the character, so a row of them sits like
+        // it was stuck down by hand.
+        .rotationEffect(.degrees(Double(seed % 9) - 4))
+    }
+}
+
+/// A quadrilateral cut a bit crooked, like a letter snipped from a magazine.
+private struct CutPaper: Shape {
+
+    let seed: Int
+
+    func path(in rect: CGRect) -> Path {
+
+        var state = UInt64(abs(seed) &* 7_919 &+ 13)
+
+        func jitter(_ span: CGFloat) -> CGFloat {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return CGFloat((state >> 33) % 1_000) / 1_000 * span
+        }
+
+        var path = Path()
+        let bite = min(rect.width, rect.height) * 0.16
+
+        path.move(to: CGPoint(x: jitter(bite), y: jitter(bite)))
+        path.addLine(to: CGPoint(x: rect.maxX - jitter(bite), y: jitter(bite) * 0.6))
+        path.addLine(to: CGPoint(x: rect.maxX - jitter(bite) * 0.5, y: rect.maxY - jitter(bite)))
+        path.addLine(to: CGPoint(x: jitter(bite) * 0.7, y: rect.maxY - jitter(bite) * 0.6))
+        path.closeSubpath()
+
+        return path
+    }
+}
