@@ -21,6 +21,7 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
     case washiTape, tornStrip, star, sparkle
     case arrow, banner, paperClip, stamp
     case filmStrip, speechBubble, heart, dashedBox
+    case heartOutline, doubleHeart, loopArrow
 
     var id: String { rawValue }
 
@@ -47,6 +48,23 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .speechBubble: return "Bubble"
         case .heart:        return "Heart"
         case .dashedBox:    return "Frame"
+        case .heartOutline: return "Outline"
+        case .doubleHeart:  return "Hearts"
+        case .loopArrow:    return "Loop"
+        }
+    }
+
+    /// Whether words can be written on it.
+    ///
+    /// Only the pieces that are actually paper — tape, a torn strip, a banner
+    /// — plus the two that exist to hold something. A star with a date across
+    /// it would just look wrong.
+    var holdsText: Bool {
+        switch self {
+        case .washiTape, .tornStrip, .banner, .speechBubble, .stamp, .dashedBox:
+            return true
+        default:
+            return false
         }
     }
 
@@ -66,6 +84,9 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .speechBubble: return CGSize(width: 108, height: 74)
         case .heart:        return CGSize(width: 60, height: 54)
         case .dashedBox:    return CGSize(width: 104, height: 84)
+        case .heartOutline: return CGSize(width: 62, height: 56)
+        case .doubleHeart:  return CGSize(width: 96, height: 70)
+        case .loopArrow:    return CGSize(width: 120, height: 62)
         }
     }
 
@@ -84,6 +105,9 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .speechBubble: SpeechBubble(tint: tint)
         case .heart:        HeartDoodle(tint: tint)
         case .dashedBox:    DashedBox(tint: tint)
+        case .heartOutline: OutlineHeart(tint: tint)
+        case .doubleHeart:  DoubleHeart(tint: tint)
+        case .loopArrow:    LoopArrow(tint: tint)
         }
     }
 }
@@ -451,7 +475,7 @@ private struct HeartDoodle: View {
     }
 }
 
-private struct DoodleHeart: Shape {
+struct DoodleHeart: Shape {
 
     func path(in rect: CGRect) -> Path {
 
@@ -481,6 +505,100 @@ private struct DoodleHeart: Shape {
         path.closeSubpath()
 
         return path
+    }
+}
+
+// MARK: - Drawn by hand
+
+/// A heart sketched rather than filled.
+private struct OutlineHeart: View {
+
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            DoodleHeart()
+                .stroke(tint, style: StrokeStyle(lineWidth: max(proxy.size.width * 0.055, 2),
+                                                 lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+/// Two of them, one tucked behind the other.
+private struct DoubleHeart: View {
+
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+
+            let w = proxy.size.width
+            let h = proxy.size.height
+            let line = max(w * 0.036, 2)
+
+            ZStack {
+                DoodleHeart()
+                    .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+                    .frame(width: w * 0.56, height: h * 0.68)
+                    .position(x: w * 0.32, y: h * 0.38)
+
+                DoodleHeart()
+                    .stroke(tint.opacity(0.85),
+                            style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+                    .frame(width: w * 0.46, height: h * 0.56)
+                    .position(x: w * 0.70, y: h * 0.66)
+            }
+        }
+    }
+}
+
+/// The looping arrow from a marker pen — a curl, then a long sweep to a head.
+private struct LoopArrow: View {
+
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+
+            let w = proxy.size.width
+            let h = proxy.size.height
+            let line = max(w * 0.045, 2.5)
+
+            ZStack {
+
+                Path { path in
+
+                    path.move(to: CGPoint(x: w * 0.04, y: h * 0.30))
+
+                    // The loop.
+                    path.addCurve(
+                        to: CGPoint(x: w * 0.34, y: h * 0.66),
+                        control1: CGPoint(x: w * 0.20, y: h * 0.16),
+                        control2: CGPoint(x: w * 0.40, y: h * 0.24)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: w * 0.30, y: h * 0.34),
+                        control1: CGPoint(x: w * 0.26, y: h * 0.92),
+                        control2: CGPoint(x: w * 0.10, y: h * 0.52)
+                    )
+
+                    // Away to the right.
+                    path.addCurve(
+                        to: CGPoint(x: w * 0.90, y: h * 0.52),
+                        control1: CGPoint(x: w * 0.52, y: h * 0.14),
+                        control2: CGPoint(x: w * 0.74, y: h * 0.28)
+                    )
+                }
+                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+
+                Path { path in
+                    path.move(to: CGPoint(x: w * 0.70, y: h * 0.30))
+                    path.addLine(to: CGPoint(x: w * 0.94, y: h * 0.53))
+                    path.addLine(to: CGPoint(x: w * 0.66, y: h * 0.72))
+                }
+                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+            }
+        }
     }
 }
 

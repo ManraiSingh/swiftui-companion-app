@@ -490,7 +490,8 @@ final class ScrapbookManager: ObservableObject {
             aspect: data["aspect"] as? Double ?? 1,
             locked: data["locked"] as? Bool ?? false,
             brushIndex: data["brushIndex"] as? Int ?? 0,
-            frameColorHex: data["frameColorHex"] as? String ?? "#FDFAF5"
+            frameColorHex: data["frameColorHex"] as? String ?? "#FDFAF5",
+            caption: data["caption"] as? String ?? ""
         )
     }
 
@@ -587,7 +588,8 @@ final class ScrapbookManager: ObservableObject {
             "aspect": element.aspect,
             "locked": element.locked,
             "brushIndex": element.brushIndex,
-            "frameColorHex": element.frameColorHex
+            "frameColorHex": element.frameColorHex,
+            "caption": element.caption
         ]
     }
 

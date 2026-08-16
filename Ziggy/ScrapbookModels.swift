@@ -289,6 +289,11 @@ struct ScrapbookElement: Identifiable, Equatable {
     /// border, the film body. Separate from `colorHex`, which is the element's
     /// own ink, so recolouring a frame can't disturb anything else.
     var frameColorHex: String = "#FDFAF5"
+
+    /// Words written on a paper sticker — a date on a strip of tape, a title
+    /// on a banner. Kept apart from `payload`, which for a sticker is the
+    /// thing itself, so a label can be changed without disturbing it.
+    var caption: String = ""
 }
 
 // MARK: - Stroke encoding

@@ -147,6 +147,7 @@ struct ScrapbookCanvasView: View {
                 onScaleCommit: { commitScale(element) },
                 onFrame: { showingFrames = true },
                 onReplace: { replacePhoto(element) },
+                onLabel: labelling(element),
                 onLock: { toggleLock(element) },
                 onForward: { bringForward(element) },
                 onDuplicate: { duplicate(element) },
@@ -232,9 +233,10 @@ struct ScrapbookCanvasView: View {
                     canvasSize: canvasSize,
                     isSelected: element.id == selectedID && tool == .select
                 )
-                // The one being typed into is drawn by the field instead, so
-                // the words don't appear twice.
-                .opacity(element.id == typingID ? 0 : 1)
+                // Whatever is being typed into is drawn by the field instead,
+                // so the words don't appear twice. A sticker keeps its paper —
+                // only its caption is held back.
+                .opacity(element.id == typingID && element.kind == .text ? 0 : 1)
                 .allowsHitTesting(tool == .select)
                 .onTapGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -303,6 +305,12 @@ struct ScrapbookCanvasView: View {
 
     /// The element with any in-flight gesture applied on top.
     private func live(_ element: ScrapbookElement) -> ScrapbookElement {
+
+        if element.id == typingID, element.kind == .sticker {
+            var hidden = element
+            hidden.caption = ""
+            return hidden
+        }
 
         guard element.id == selectedID, tool == .select, !element.locked else { return element }
 
@@ -626,6 +634,18 @@ struct ScrapbookCanvasView: View {
 
         let clean = typedText.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // A sticker keeps its shape whether or not there are words on it, so
+        // clearing a label empties the caption rather than removing the paper.
+        if element.kind == .sticker {
+            element.caption = clean
+            element.fontIndex = textFontIndex
+            manager.update(element, bookID: book.id, pageID: page.id)
+            typingID = nil
+            typedText = ""
+            typingFocused = false
+            return
+        }
+
         if clean.isEmpty {
             manager.delete(id, bookID: book.id, pageID: page.id)
         } else {
@@ -655,6 +675,26 @@ struct ScrapbookCanvasView: View {
         var updated = element
         updated.scale = draftScale
         manager.move(updated, bookID: book.id, pageID: page.id)
+    }
+
+    /// The action for writing on a paper sticker, or nothing for anything else.
+    private func labelling(_ element: ScrapbookElement) -> (() -> Void)? {
+
+        guard element.kind == .sticker,
+              let decoration = ScrapbookDecoration.from(payload: element.payload),
+              decoration.holdsText
+        else { return nil }
+
+        return { startLabelling(element) }
+    }
+
+    /// Types straight onto the sticker, the same way text goes on the page.
+    private func startLabelling(_ element: ScrapbookElement) {
+        typedText = element.caption
+        typingID = element.id
+        selectedID = nil
+        tool = .select
+        typingFocused = true
     }
 
     private func toggleLock(_ element: ScrapbookElement) {
@@ -769,6 +809,10 @@ private struct SelectedElementBar: View {
     let onScaleCommit: () -> Void
     let onFrame: () -> Void
     let onReplace: () -> Void
+
+    /// Present only for paper stickers, which are the ones words look right on.
+    let onLabel: (() -> Void)?
+
     let onLock: () -> Void
     let onForward: () -> Void
     let onDuplicate: () -> Void
@@ -801,6 +845,11 @@ private struct SelectedElementBar: View {
             if element.kind == .photo {
                 action("Frame", "square.on.square", onFrame)
                 action("Replace", "arrow.triangle.2.circlepath", onReplace)
+            }
+
+            if let onLabel {
+                action(element.caption.isEmpty ? "Write" : "Edit",
+                       "character.cursor.ibeam", onLabel)
             }
 
             action(

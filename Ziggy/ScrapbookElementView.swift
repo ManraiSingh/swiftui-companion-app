@@ -343,6 +343,7 @@ struct ScrapbookElementView: View {
                 decoration.view(tint: Color(scrapbookHex: element.colorHex))
                     .frame(width: onPage(decoration.size.width),
                            height: onPage(decoration.size.height))
+                    .overlay { caption(on: decoration) }
                     .overlay(selectionRing)
             } else {
                 Text(element.payload)
@@ -352,6 +353,34 @@ struct ScrapbookElementView: View {
 
         case .stroke:
             strokeShape
+        }
+    }
+
+    /// Words written on a paper sticker.
+    ///
+    /// The ink is picked against the paper's own colour rather than fixed, so
+    /// a date on dark tape stays readable without anyone choosing a colour for
+    /// it.
+    @ViewBuilder
+    private func caption(on decoration: ScrapbookDecoration) -> some View {
+
+        if decoration.holdsText, !element.caption.isEmpty {
+
+            let paperIsDark = ScrapbookStyle.isDark(hex: element.colorHex)
+
+            Text(element.caption)
+                .font(ScrapbookStyle.font(element.fontIndex,
+                                          size: onPage(decoration.size.height * 0.40)))
+                .foregroundStyle(paperIsDark
+                                 ? Color(red: 0.98, green: 0.97, blue: 0.94)
+                                 : Color(red: 0.20, green: 0.17, blue: 0.14))
+                .lineLimit(2)
+                .minimumScaleFactor(0.4)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, onPage(decoration.size.width * 0.08))
+                // The bubble's tail hangs below, so its words sit higher.
+                .padding(.bottom, decoration == .speechBubble
+                         ? onPage(decoration.size.height * 0.18) : 0)
         }
     }
 
