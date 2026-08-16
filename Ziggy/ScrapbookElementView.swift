@@ -52,88 +52,162 @@ struct ScrapbookPaper: View {
 
         let paper = ScrapbookStyle.paper(paperIndex)
 
-        ZStack {
-            paper.base
+        // One Canvas rather than a stack of GeometryReaders and Paths.
+        //
+        // Every pattern used to be its own GeometryReader with its own Path,
+        // and a page is drawn six times over in an open book — the ruling
+        // alone was hundreds of line segments re-laid out on each pass. A
+        // Canvas draws straight into one layer and never lays anything out.
+        Canvas(rendersAsynchronously: false) { context, size in
 
-            // A faint vignette gives the paper a bit of body; a flat fill
-            // reads as a coloured rectangle rather than a sheet.
-            GeometryReader { proxy in
-                let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
-                RadialGradient(
-                    colors: [.clear, paper.tint.opacity(0.55)],
-                    center: .center,
+            let unit = max(size.width, 1) / ScrapbookStyle.pageReferenceWidth
+            let whole = CGRect(origin: .zero, size: size)
+
+            context.fill(Path(whole), with: .color(paper.base))
+
+            context.fill(
+                Path(whole),
+                with: .radialGradient(
+                    Gradient(colors: [.clear, paper.tint.opacity(0.55)]),
+                    center: CGPoint(x: size.width / 2, y: size.height / 2),
                     startRadius: 60 * unit,
                     endRadius: 420 * unit
                 )
+            )
+
+            if paper.ruled { rule(&context, size, unit, paper) }
+            if paper.grid { grid(&context, size, unit, paper) }
+            if paper.dots { dots(&context, size, unit, paper) }
+            if paper.news { news(&context, size, unit, paper) }
+            if paper.aged { age(&context, size, unit, paper) }
+        }
+    }
+
+    private func rule(_ context: inout GraphicsContext, _ size: CGSize,
+                      _ unit: CGFloat, _ paper: ScrapbookStyle.Paper) {
+
+        var path = Path()
+        var y = 34 * unit
+        while y < size.height {
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+            y += 30 * unit
+        }
+        context.stroke(path, with: .color(paper.tint.opacity(0.75)),
+                       lineWidth: max(unit, 0.5))
+    }
+
+    private func grid(_ context: inout GraphicsContext, _ size: CGSize,
+                      _ unit: CGFloat, _ paper: ScrapbookStyle.Paper) {
+
+        let pitch = max(26 * unit, 2)
+        var path = Path()
+
+        var x: CGFloat = 0
+        while x < size.width {
+            path.move(to: CGPoint(x: x, y: 0))
+            path.addLine(to: CGPoint(x: x, y: size.height))
+            x += pitch
+        }
+        var y: CGFloat = 0
+        while y < size.height {
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+            y += pitch
+        }
+        context.stroke(path, with: .color(paper.tint.opacity(0.6)),
+                       lineWidth: max(0.75 * unit, 0.4))
+    }
+
+    private func dots(_ context: inout GraphicsContext, _ size: CGSize,
+                      _ unit: CGFloat, _ paper: ScrapbookStyle.Paper) {
+
+        let pitch = max(30 * unit, 3)
+        let dot = max(2.4 * unit, 0.6)
+        var path = Path()
+
+        var y = pitch / 2
+        while y < size.height {
+            var x = pitch / 2
+            while x < size.width {
+                path.addEllipse(in: CGRect(x: x - dot / 2, y: y - dot / 2,
+                                           width: dot, height: dot))
+                x += pitch
             }
+            y += pitch
+        }
+        context.fill(path, with: .color(paper.tint.opacity(0.85)))
+    }
 
-            if paper.ruled {
-                GeometryReader { proxy in
+    /// Newsprint: two columns of type with a rule between them, and a
+    /// heavier line standing in for a headline.
+    private func news(_ context: inout GraphicsContext, _ size: CGSize,
+                      _ unit: CGFloat, _ paper: ScrapbookStyle.Paper) {
 
-                    // Ruling is spaced against the page, like everything else
-                    // on it — at a fixed pitch the same sheet came out with
-                    // twice as many lines on a book leaf as in the editor.
-                    let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
+        let margin = 22 * unit
+        let gutter = 14 * unit
+        let column = (size.width - margin * 2 - gutter) / 2
+        let line = 5.5 * unit
+        let ink = paper.tint.opacity(0.5)
 
-                    Path { path in
-                        var y = 34 * unit
-                        while y < proxy.size.height {
-                            path.move(to: CGPoint(x: 0, y: y))
-                            path.addLine(to: CGPoint(x: proxy.size.width, y: y))
-                            y += 30 * unit
-                        }
-                    }
-                    .stroke(paper.tint.opacity(0.75), lineWidth: max(unit, 0.5))
-                }
-            }
+        // The masthead.
+        context.fill(
+            Path(CGRect(x: margin, y: 24 * unit, width: size.width - margin * 2, height: 9 * unit)),
+            with: .color(paper.tint.opacity(0.75))
+        )
 
-            if paper.dots {
-                GeometryReader { proxy in
+        var text = Path()
 
-                    let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
-                    let pitch = max(30 * unit, 3)
-                    let dot = max(2.4 * unit, 0.6)
+        for side in 0..<2 {
 
-                    Path { path in
-                        var y = pitch / 2
-                        while y < proxy.size.height {
-                            var x = pitch / 2
-                            while x < proxy.size.width {
-                                path.addEllipse(in: CGRect(x: x - dot / 2, y: y - dot / 2,
-                                                           width: dot, height: dot))
-                                x += pitch
-                            }
-                            y += pitch
-                        }
-                    }
-                    .fill(paper.tint.opacity(0.85))
-                }
-            }
+            let left = margin + CGFloat(side) * (column + gutter)
+            var y = 48 * unit
+            var row = side * 7
 
-            if paper.grid {
-                GeometryReader { proxy in
+            while y < size.height - 20 * unit {
 
-                    let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
-                    let pitch = max(26 * unit, 2)
+                // Ragged right, so it reads as set type rather than bars.
+                let fill = [1.0, 0.94, 0.88, 0.98, 0.72, 0.91][row % 6]
+                text.addRect(CGRect(x: left, y: y, width: column * fill, height: line * 0.42))
 
-                    Path { path in
-                        var x: CGFloat = 0
-                        while x < proxy.size.width {
-                            path.move(to: CGPoint(x: x, y: 0))
-                            path.addLine(to: CGPoint(x: x, y: proxy.size.height))
-                            x += pitch
-                        }
-                        var y: CGFloat = 0
-                        while y < proxy.size.height {
-                            path.move(to: CGPoint(x: 0, y: y))
-                            path.addLine(to: CGPoint(x: proxy.size.width, y: y))
-                            y += pitch
-                        }
-                    }
-                    .stroke(paper.tint.opacity(0.6), lineWidth: max(0.75 * unit, 0.4))
-                }
+                y += line
+                row += 1
             }
         }
+
+        context.fill(text, with: .color(ink))
+
+        var rule = Path()
+        rule.move(to: CGPoint(x: size.width / 2, y: 44 * unit))
+        rule.addLine(to: CGPoint(x: size.width / 2, y: size.height - 20 * unit))
+        context.stroke(rule, with: .color(paper.tint.opacity(0.4)), lineWidth: max(unit, 0.5))
+    }
+
+    /// Aged paper: soft blotches and a darkened edge.
+    private func age(_ context: inout GraphicsContext, _ size: CGSize,
+                     _ unit: CGFloat, _ paper: ScrapbookStyle.Paper) {
+
+        // Fixed positions rather than random, so a page does not mottle
+        // differently every time it is drawn.
+        let blots: [(CGFloat, CGFloat, CGFloat)] = [
+            (0.12, 0.18, 0.22), (0.78, 0.11, 0.17), (0.62, 0.44, 0.26),
+            (0.22, 0.68, 0.20), (0.86, 0.74, 0.24), (0.44, 0.90, 0.18)
+        ]
+
+        for blot in blots {
+            let radius = blot.2 * size.width
+            let rect = CGRect(x: blot.0 * size.width - radius / 2,
+                              y: blot.1 * size.height - radius / 2,
+                              width: radius, height: radius)
+            context.fill(Path(ellipseIn: rect), with: .color(paper.tint.opacity(0.16)))
+        }
+
+        context.stroke(
+            Path(CGRect(origin: .zero, size: size).insetBy(dx: -size.width * 0.12,
+                                                           dy: -size.height * 0.12)),
+            with: .color(paper.tint.opacity(0.5)),
+            lineWidth: size.width * 0.22
+        )
     }
 }
 
@@ -289,7 +363,9 @@ struct ScrapbookElementView: View {
         let width = canvasSize.width * 0.42 * zoom
         // The round frames crop to a square, otherwise the "circle" comes out
         // an ellipse shaped by whatever the photo happened to be.
-        let height = frame == .tornCircle ? width : width / max(element.aspect, 0.2)
+        let height = (frame == .tornCircle || frame == .heart)
+            ? width
+            : width / max(element.aspect, 0.2)
 
         return Group {
             if let image = ScrapbookImageCache.shared.image(for: element.id, base64: element.payload) {
@@ -463,6 +539,74 @@ private struct PhotoFrameModifier: ViewModifier {
                 )
                 .shadow(color: .black.opacity(0.26), radius: 7, y: 4)
 
+        case .camera:
+            // The picture is the camera's screen: body around it, a lens and
+            // a shutter above, dials down the side.
+            content
+                .padding(scaled(9))
+                .padding(.top, scaled(30))
+                .padding(.trailing, scaled(30))
+                .background(
+                    RoundedRectangle(cornerRadius: scaled(14), style: .continuous)
+                        .fill(paper)
+                )
+                .overlay(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: scaled(4), style: .continuous)
+                        .fill(detail.opacity(0.85))
+                        .frame(width: scaled(34), height: scaled(13))
+                        .padding(.leading, scaled(12))
+                        .padding(.top, scaled(9))
+                }
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .fill(detail.opacity(0.9))
+                        .frame(width: scaled(11), height: scaled(11))
+                        .padding(.trailing, scaled(11))
+                        .padding(.top, scaled(10))
+                }
+                .overlay(alignment: .trailing) {
+                    VStack(spacing: scaled(7)) {
+                        Circle()
+                            .fill(detail.opacity(0.85))
+                            .frame(width: scaled(17), height: scaled(17))
+                        RoundedRectangle(cornerRadius: scaled(2))
+                            .fill(detail.opacity(0.6))
+                            .frame(width: scaled(13), height: scaled(6))
+                        RoundedRectangle(cornerRadius: scaled(2))
+                            .fill(detail.opacity(0.6))
+                            .frame(width: scaled(13), height: scaled(6))
+                    }
+                    .padding(.trailing, scaled(7))
+                    .padding(.top, scaled(26))
+                }
+                .shadow(color: .black.opacity(0.28), radius: scaled(6), y: scaled(3))
+
+        case .heart:
+            content
+                .clipShape(FrameHeart())
+                .padding(scaled(7))
+                .background(FrameHeart().fill(paper))
+                .shadow(color: .black.opacity(0.24), radius: scaled(5), y: scaled(3))
+
+        case .reel:
+            // A length of movie tape: perforations top and bottom, and the
+            // strip running past the picture on both sides.
+            content
+                .padding(.vertical, scaled(16))
+                .padding(.horizontal, scaled(18))
+                .background(paper)
+                .overlay(alignment: .top) { perforations }
+                .overlay(alignment: .bottom) { perforations }
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(detail.opacity(0.25)).frame(width: scaled(1.5))
+                        .padding(.leading, scaled(14))
+                }
+                .overlay(alignment: .trailing) {
+                    Rectangle().fill(detail.opacity(0.25)).frame(width: scaled(1.5))
+                        .padding(.trailing, scaled(14))
+                }
+                .shadow(color: .black.opacity(0.3), radius: scaled(5), y: scaled(3))
+
         case .arch:
             content
                 .clipShape(ArchShape())
@@ -484,6 +628,18 @@ private struct PhotoFrameModifier: ViewModifier {
         return min(max(Int(raw), 3), 40)
     }
 
+    /// Squared perforations, closer together than the film frame's.
+    private var perforations: some View {
+        HStack(spacing: scaled(4)) {
+            ForEach(0..<min(max(Int(width / max(zoom, 0.0001) / 11), 4), 40), id: \.self) { _ in
+                RoundedRectangle(cornerRadius: scaled(1))
+                    .fill(detail)
+                    .frame(width: scaled(5), height: scaled(7))
+            }
+        }
+        .padding(.vertical, scaled(4))
+    }
+
     private var sprockets: some View {
         HStack(spacing: scaled(5)) {
             ForEach(0..<sprocketCount, id: \.self) { _ in
@@ -493,6 +649,40 @@ private struct PhotoFrameModifier: ViewModifier {
             }
         }
         .padding(.vertical, scaled(4))
+    }
+}
+
+/// A heart to crop a photo into.
+private struct FrameHeart: Shape {
+
+    func path(in rect: CGRect) -> Path {
+
+        var path = Path()
+
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: rect.minX, y: rect.height * 0.30),
+            control1: CGPoint(x: rect.width * 0.16, y: rect.height * 0.80),
+            control2: CGPoint(x: rect.minX, y: rect.height * 0.56)
+        )
+        path.addArc(
+            center: CGPoint(x: rect.width * 0.25, y: rect.height * 0.30),
+            radius: rect.width * 0.25,
+            startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false
+        )
+        path.addArc(
+            center: CGPoint(x: rect.width * 0.75, y: rect.height * 0.30),
+            radius: rect.width * 0.25,
+            startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.midX, y: rect.maxY),
+            control1: CGPoint(x: rect.maxX, y: rect.height * 0.56),
+            control2: CGPoint(x: rect.width * 0.84, y: rect.height * 0.80)
+        )
+        path.closeSubpath()
+
+        return path
     }
 }
 

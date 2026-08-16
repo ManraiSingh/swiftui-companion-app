@@ -302,20 +302,44 @@ struct ScrapbookElement: Identifiable, Equatable {
 /// people drawing at once don't clobber each other.
 enum ScrapbookStroke {
 
+    // Bounded so a long book can't hold on to every stroke it has ever shown.
+    private static let cacheLimit = 400
+
+
     static func encode(_ points: [CGPoint]) -> String {
         points
             .map { "\(round($0.x * 1000) / 1000),\(round($0.y * 1000) / 1000)" }
             .joined(separator: " ")
     }
 
+    /// Points already parsed, keyed by the string they came from.
+    ///
+    /// Decoding is pure text work and the result never changes, but it used to
+    /// run inside `body` — so every stroke on every visible page was re-parsed
+    /// on every render pass, sixty times a second through a page turn. Holding
+    /// the result costs a few kilobytes and removes all of it.
+    private static let cache: NSCache<NSString, NSArray> = {
+        let store = NSCache<NSString, NSArray>()
+        store.countLimit = cacheLimit
+        return store
+    }()
+
     static func decode(_ raw: String) -> [CGPoint] {
-        raw.split(separator: " ").compactMap { pair in
+
+        let key = raw as NSString
+
+        if let hit = cache.object(forKey: key) as? [CGPoint] { return hit }
+
+        let points: [CGPoint] = raw.split(separator: " ").compactMap { pair in
             let parts = pair.split(separator: ",")
             guard parts.count == 2,
                   let x = Double(parts[0]),
                   let y = Double(parts[1]) else { return nil }
             return CGPoint(x: x, y: y)
         }
+
+        cache.setObject(points as NSArray, forKey: key)
+        return points
     }
 
     /// Smooths the polyline into a curve so a finger-drawn line doesn't look

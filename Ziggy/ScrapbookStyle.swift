@@ -104,6 +104,10 @@ enum ScrapbookStyle {
         var ruled: Bool = false
         var grid: Bool = false
         var dots: Bool = false
+        /// Columns of type, like a page torn from a newspaper.
+        var news: Bool = false
+        /// Blotches and a darkened edge, like paper that has sat in a drawer.
+        var aged: Bool = false
     }
 
     static let papers: [Paper] = [
@@ -160,7 +164,13 @@ enum ScrapbookStyle {
               tint: Color(red: 0.38, green: 0.40, blue: 0.45)),
 
         Paper(name: "Cocoa",  base: Color(red: 0.36, green: 0.27, blue: 0.22),
-              tint: Color(red: 0.46, green: 0.35, blue: 0.28), dots: true)
+              tint: Color(red: 0.46, green: 0.35, blue: 0.28), dots: true),
+
+        Paper(name: "News",   base: Color(red: 0.93, green: 0.91, blue: 0.86),
+              tint: Color(red: 0.45, green: 0.43, blue: 0.40), news: true),
+
+        Paper(name: "Aged",   base: Color(red: 0.91, green: 0.85, blue: 0.72),
+              tint: Color(red: 0.68, green: 0.57, blue: 0.40), aged: true)
     ]
 
     static func paper(_ index: Int) -> Paper {
@@ -188,6 +198,7 @@ enum ScrapbookStyle {
 
     enum Frame: Int, CaseIterable, Identifiable {
         case none, polaroid, white, tape, film, rounded, torn, tornCircle, arch
+        case camera, heart, reel
 
         var id: Int { rawValue }
 
@@ -202,6 +213,9 @@ enum ScrapbookStyle {
             case .torn:     return "Torn"
             case .tornCircle: return "Circle"
             case .arch:     return "Arch"
+            case .camera:   return "Camera"
+            case .heart:    return "Heart"
+            case .reel:     return "Reel"
             }
         }
 
@@ -216,6 +230,9 @@ enum ScrapbookStyle {
             case .torn:     return "doc.plaintext"
             case .tornCircle: return "circle.dashed"
             case .arch:     return "arrowtriangle.up.square"
+            case .camera:   return "camera.fill"
+            case .heart:    return "heart.fill"
+            case .reel:     return "film.stack"
             }
         }
     }
