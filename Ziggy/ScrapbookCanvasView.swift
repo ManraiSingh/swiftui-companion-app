@@ -307,11 +307,15 @@ struct ScrapbookCanvasView: View {
         let zoom = CGFloat(min(max(element.scale, 0.2), 4)) * unit
         let decoration = ScrapbookDecoration.from(payload: element.payload)
 
+        // Sized through the element's own scale as well as the page's, so
+        // picking an enlarged caption back up shows it at the size it already
+        // is rather than at its resting size and then jumping on Done.
         let size: CGFloat = decoration.map { $0.captionSize(widthValue: textSize) * zoom }
-            ?? CGFloat(textSize) * 3 * unit
+            ?? CGFloat(textSize) * 3 * zoom
 
         let width: CGFloat = decoration.map { $0.size.width * zoom * 0.86 }
-            ?? canvasSize.width * 0.82
+            ?? min(canvasSize.width * 0.80 * CGFloat(element.scale),
+                   canvasSize.width * 0.94)
 
         return TextField("Type…", text: $typedText, axis: .vertical)
             .font(ScrapbookStyle.font(textFontIndex, size: size))
@@ -321,6 +325,20 @@ struct ScrapbookCanvasView: View {
             .focused($typingFocused)
             .submitLabel(.done)
             .onSubmit { finishTyping() }
+            // Return finishes the words rather than starting another line.
+            //
+            // A field that grows downwards is what lets you see a long caption
+            // wrap as it will sit on the page, but iOS gives such a field a
+            // return key that only ever inserts a newline — `onSubmit` is
+            // never called. Catching the newline here keeps the wrapping and
+            // makes the key do what it says.
+            .onChange(of: typedText) { _, value in
+                guard value.contains("\n") else { return }
+                typedText = value
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespaces)
+                finishTyping()
+            }
             .frame(width: width)
             // Turned with the paper it is being written on, so the words lie
             // along a tilted strip rather than across it.
@@ -733,13 +751,41 @@ struct ScrapbookCanvasView: View {
         manager.move(updated, bookID: book.id, pageID: page.id)
     }
 
-    /// The action for writing on a paper sticker, or nothing for anything else.
+    /// The action for writing words: on a piece of text already on the page, or
+    /// on a paper sticker. Nothing for anything else.
     private func labelling(_ element: ScrapbookElement) -> (() -> Void)? {
+
+        if element.kind == .text {
+            return { startEditing(element) }
+        }
 
         guard let decoration = decoration(of: element), decoration.holdsText
         else { return nil }
 
         return { startLabelling(element) }
+    }
+
+    /// Picks a finished piece of text back up.
+    ///
+    /// The words go back in the field and the bar opens on the font, colour and
+    /// size they were written with, so changing any of them shows on the page
+    /// as you choose rather than only once you are done. Before this, text was
+    /// settled the moment you tapped Done — selecting it again offered no way
+    /// to restyle it at all.
+    private func startEditing(_ element: ScrapbookElement) {
+
+        // Any line break already in there is flattened on the way in, so
+        // re-opening old text doesn't trip the return-key handling below and
+        // finish the moment it opens.
+        typedText = element.payload.replacingOccurrences(of: "\n", with: " ")
+        textFontIndex = element.fontIndex
+        textColor = element.colorHex
+        textSize = min(max(element.widthValue, 3), 20)
+
+        typingID = element.id
+        selectedID = nil
+        tool = .select
+        typingFocused = true
     }
 
     /// The action for putting a picture inside a sticker, for the ones that are
@@ -780,7 +826,7 @@ struct ScrapbookCanvasView: View {
     /// doesn't resize or recolour it the moment you touch anything.
     private func startLabelling(_ element: ScrapbookElement) {
 
-        typedText = element.caption
+        typedText = element.caption.replacingOccurrences(of: "\n", with: " ")
         textFontIndex = element.fontIndex
         textSize = min(max(element.widthValue, 3), 20)
 
@@ -970,6 +1016,12 @@ private struct SelectedElementBar: View {
         }
     }
 
+    /// "Write" only where there is nothing written yet.
+    private var labelTitle: String {
+        if element.kind == .text { return "Edit" }
+        return element.caption.isEmpty ? "Write" : "Edit"
+    }
+
     private var actions: some View {
 
         HStack(spacing: 8) {
@@ -985,8 +1037,7 @@ private struct SelectedElementBar: View {
             }
 
             if let onLabel {
-                action(element.caption.isEmpty ? "Write" : "Edit",
-                       "character.cursor.ibeam", onLabel)
+                action(labelTitle, "character.cursor.ibeam", onLabel)
             }
 
             action(
@@ -1456,7 +1507,13 @@ private struct FramePicker: View {
                 )
         )
         .contentShape(Rectangle())
-        .onTapGesture { onFrame(frame) }
+        // Choosing the frame is the last thing you do here, so the sheet gets
+        // out of the way by itself. The colour swatches below don't close it —
+        // those you try against each other before settling on one.
+        .onTapGesture {
+            onFrame(frame)
+            dismiss()
+        }
     }
 }
 
