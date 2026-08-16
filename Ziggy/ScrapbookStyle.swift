@@ -34,6 +34,15 @@ enum ScrapbookStyle {
     static let wallTop     = Color(red: 0.93, green: 0.91, blue: 0.97)
     static let wallBottom  = Color(red: 0.99, green: 0.95, blue: 0.89)
 
+    /// The page width every measurement on a page is quoted against.
+    ///
+    /// Text, strokes and stickers carry sizes in points, but a page is drawn
+    /// at very different widths — nearly 400 in the editor, about 160 as one
+    /// leaf of a spread. Taken literally, the same caption came out two and a
+    /// half times too big in the book. Scaling by the page's width against
+    /// this reference keeps a page looking the same wherever it is shown.
+    static let pageReferenceWidth: CGFloat = 400
+
     // MARK: Paper
 
     static let ink         = Color(red: 0.18, green: 0.16, blue: 0.15)

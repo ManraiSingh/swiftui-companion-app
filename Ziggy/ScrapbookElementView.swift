@@ -57,44 +57,57 @@ struct ScrapbookPaper: View {
 
             // A faint vignette gives the paper a bit of body; a flat fill
             // reads as a coloured rectangle rather than a sheet.
-            RadialGradient(
-                colors: [.clear, paper.tint.opacity(0.55)],
-                center: .center,
-                startRadius: 60,
-                endRadius: 420
-            )
+            GeometryReader { proxy in
+                let unit = proxy.size.width / ScrapbookStyle.pageReferenceWidth
+                RadialGradient(
+                    colors: [.clear, paper.tint.opacity(0.55)],
+                    center: .center,
+                    startRadius: 60 * unit,
+                    endRadius: 420 * unit
+                )
+            }
 
             if paper.ruled {
                 GeometryReader { proxy in
+
+                    // Ruling is spaced against the page, like everything else
+                    // on it — at a fixed pitch the same sheet came out with
+                    // twice as many lines on a book leaf as in the editor.
+                    let unit = proxy.size.width / ScrapbookStyle.pageReferenceWidth
+
                     Path { path in
-                        var y: CGFloat = 34
+                        var y = 34 * unit
                         while y < proxy.size.height {
                             path.move(to: CGPoint(x: 0, y: y))
                             path.addLine(to: CGPoint(x: proxy.size.width, y: y))
-                            y += 30
+                            y += 30 * unit
                         }
                     }
-                    .stroke(paper.tint.opacity(0.75), lineWidth: 1)
+                    .stroke(paper.tint.opacity(0.75), lineWidth: max(unit, 0.5))
                 }
             }
 
             if paper.grid {
                 GeometryReader { proxy in
+
+                    let unit = proxy.size.width / ScrapbookStyle.pageReferenceWidth
+                    let pitch = 26 * unit
+
                     Path { path in
                         var x: CGFloat = 0
                         while x < proxy.size.width {
                             path.move(to: CGPoint(x: x, y: 0))
                             path.addLine(to: CGPoint(x: x, y: proxy.size.height))
-                            x += 26
+                            x += pitch
                         }
                         var y: CGFloat = 0
                         while y < proxy.size.height {
                             path.move(to: CGPoint(x: 0, y: y))
                             path.addLine(to: CGPoint(x: proxy.size.width, y: y))
-                            y += 26
+                            y += pitch
                         }
                     }
-                    .stroke(paper.tint.opacity(0.6), lineWidth: 0.75)
+                    .stroke(paper.tint.opacity(0.6), lineWidth: max(0.75 * unit, 0.4))
                 }
             }
         }
@@ -123,12 +136,16 @@ struct ScrapbookStrokeView: View {
         let ink = Color(scrapbookHex: colorHex)
         let cap: CGLineCap = brush.flatCap ? .butt : .round
 
+        // The stroke's shape is already in page proportions; its thickness
+        // was not, so a line drawn in the editor came out heavy in the book.
+        let unit = canvasSize.width / ScrapbookStyle.pageReferenceWidth
+        let thickness = width * brush.widthScale * unit
+
         ZStack {
 
             path.stroke(
                 ink.opacity(brush.opacity),
-                style: StrokeStyle(lineWidth: width * brush.widthScale,
-                                   lineCap: cap, lineJoin: .round)
+                style: StrokeStyle(lineWidth: thickness, lineCap: cap, lineJoin: .round)
             )
 
             // A second, thinner pass nudged off the first gives the broken
@@ -139,10 +156,10 @@ struct ScrapbookStrokeView: View {
                 path
                     .stroke(
                         ink.opacity(brush.opacity * 0.45),
-                        style: StrokeStyle(lineWidth: width * brush.widthScale * 0.55,
+                        style: StrokeStyle(lineWidth: thickness * 0.55,
                                            lineCap: cap, lineJoin: .round)
                     )
-                    .offset(x: 1.2, y: 1.2)
+                    .offset(x: 1.2 * unit, y: 1.2 * unit)
             }
         }
     }
@@ -186,6 +203,18 @@ struct ScrapbookElementView: View {
         CGFloat(min(max(element.scale, 0.2), 4))
     }
 
+    /// How big this page is drawn, against the width sizes are quoted at.
+    ///
+    /// Multiplying every point measurement by this is what makes a page look
+    /// the same in the book as it did in the editor, rather than everything
+    /// but the photos appearing blown up on the smaller leaf.
+    private var unit: CGFloat {
+        canvasSize.width / ScrapbookStyle.pageReferenceWidth
+    }
+
+    /// A point measurement, taken relative to the page.
+    private func onPage(_ value: CGFloat) -> CGFloat { value * zoom * unit }
+
     @ViewBuilder
     private var content: some View {
 
@@ -197,30 +226,30 @@ struct ScrapbookElementView: View {
         case .text:
             Text(element.payload)
                 .font(ScrapbookStyle.font(element.fontIndex,
-                                          size: element.widthValue * 3 * zoom))
+                                          size: onPage(element.widthValue * 3)))
                 .foregroundStyle(Color(scrapbookHex: element.colorHex))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 // The wrap width grows with the type, otherwise enlarging a
                 // caption just breaks it onto more and more lines.
                 .frame(maxWidth: canvasSize.width * 0.8 * zoom)
-                .padding(6 * zoom)
+                .padding(onPage(6))
                 .overlay(selectionRing)
 
         case .sticker:
             // A sticker is either an emoji or one of the drawn paper bits,
             // told apart by the "#" the decoration tokens carry.
             if let character = ScrapbookLetter.character(from: element.payload) {
-                ScrapbookLetterSticker(character: character, zoom: zoom)
+                ScrapbookLetterSticker(character: character, zoom: zoom * unit)
                     .overlay(selectionRing)
             } else if let decoration = ScrapbookDecoration.from(payload: element.payload) {
                 decoration.view(tint: Color(scrapbookHex: element.colorHex))
-                    .frame(width: decoration.size.width * zoom,
-                           height: decoration.size.height * zoom)
+                    .frame(width: onPage(decoration.size.width),
+                           height: onPage(decoration.size.height))
                     .overlay(selectionRing)
             } else {
                 Text(element.payload)
-                    .font(.system(size: element.widthValue * 6 * zoom))
+                    .font(.system(size: onPage(element.widthValue * 6)))
                     .overlay(selectionRing)
             }
 
@@ -259,7 +288,7 @@ struct ScrapbookElementView: View {
                 width: width,
                 paper: Color(scrapbookHex: element.frameColorHex),
                 onDarkPaper: ScrapbookStyle.isDark(hex: element.frameColorHex),
-                zoom: zoom
+                zoom: zoom * unit
             )
         )
         .overlay(selectionRing)
