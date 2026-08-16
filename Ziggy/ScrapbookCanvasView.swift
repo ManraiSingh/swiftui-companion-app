@@ -44,6 +44,7 @@ struct ScrapbookCanvasView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var showingStickers = false
     @State private var showingPaper = false
+    @State private var showingFrames = false
     @State private var showingCamera = false
     @State private var textFontIndex = 0
     @State private var textColor = "#2E2A27"
@@ -109,6 +110,16 @@ struct ScrapbookCanvasView: View {
             )
             .presentationDetents([.large])
         }
+        .sheet(isPresented: $showingFrames) {
+            if let element = selected {
+                FramePicker(
+                    element: element,
+                    onFrame: { setFrame(element, to: $0) },
+                    onColour: { setFrameColour(element, to: $0) }
+                )
+                .presentationDetents([.height(430)])
+            }
+        }
         .sheet(isPresented: $showingPaper) {
             CanvasPaperPicker(selected: paperIndex) { index in
                 paperIndex = index
@@ -134,7 +145,7 @@ struct ScrapbookCanvasView: View {
                 element: element,
                 scale: $draftScale,
                 onScaleCommit: { commitScale(element) },
-                onFrame: { cycleFrame(element) },
+                onFrame: { showingFrames = true },
                 onReplace: { replacePhoto(element) },
                 onLock: { toggleLock(element) },
                 onForward: { bringForward(element) },
@@ -252,13 +263,17 @@ struct ScrapbookCanvasView: View {
                     )
             }
 
-            // The stroke in progress.
+            // The stroke in progress, drawn through the same brush the
+            // finished one will use. It was a plain round line before, so
+            // every pen looked identical until you lifted your finger.
             if !livePoints.isEmpty {
-                ScrapbookStroke.path(for: livePoints, in: canvasSize)
-                    .stroke(
-                        Color(scrapbookHex: brushColor),
-                        style: StrokeStyle(lineWidth: brushWidth, lineCap: .round, lineJoin: .round)
-                    )
+                ScrapbookStrokeView(
+                    points: livePoints,
+                    canvasSize: canvasSize,
+                    colorHex: brushColor,
+                    width: brushWidth,
+                    brushIndex: brushIndex
+                )
             }
 
             if manager.elements.isEmpty && livePoints.isEmpty {
@@ -307,8 +322,18 @@ struct ScrapbookCanvasView: View {
         // this, a pinch or a turn did nothing until you had tapped the element
         // first, which made two-finger rotating look like it wasn't working.
         func engage() -> Bool {
+
             guard tool == .select, !element.locked else { return false }
-            if selectedID != element.id { selectedID = element.id }
+
+            if selectedID != element.id {
+                selectedID = element.id
+                // Taken now rather than left to `onChange`, which lands a
+                // frame later: the pinch would spend that frame scaling from
+                // the previously selected element's size, and finger and
+                // slider would end up disagreeing.
+                draftScale = element.scale
+            }
+
             return true
         }
 
@@ -494,8 +519,19 @@ struct ScrapbookCanvasView: View {
         element.y = Double.random(in: 0.34...0.62)
 
         manager.add(element, bookID: book.id, pageID: page.id)
-        selectedID = element.id
+        place(element)
         showingCamera = false
+    }
+
+    /// Hands the page over to whatever was just added.
+    ///
+    /// The tool has to come back to select as well: adding a photo while the
+    /// brush was in hand used to leave the brush active, so the first attempt
+    /// to move or turn the new photo drew a line across it instead.
+    private func place(_ element: ScrapbookElement) {
+        tool = .select
+        selectedID = element.id
+        draftScale = element.scale
     }
 
     private func addSticker(_ emoji: String) {
@@ -509,7 +545,7 @@ struct ScrapbookCanvasView: View {
         element.y = Double.random(in: 0.35...0.65)
 
         manager.add(element, bookID: book.id, pageID: page.id)
-        selectedID = element.id
+        place(element)
     }
 
     /// Drops one of the drawn paper bits on the page.
@@ -529,7 +565,7 @@ struct ScrapbookCanvasView: View {
         element.y = Double.random(in: 0.35...0.65)
 
         manager.add(element, bookID: book.id, pageID: page.id)
-        selectedID = element.id
+        place(element)
     }
 
     /// Drops a single cut-out letter on the page.
@@ -548,7 +584,7 @@ struct ScrapbookCanvasView: View {
         element.y = Double.random(in: 0.30...0.70)
 
         manager.add(element, bookID: book.id, pageID: page.id)
-        selectedID = element.id
+        place(element)
     }
 
     /// Starts a new piece of text on the page and puts the caret in it.
@@ -627,10 +663,17 @@ struct ScrapbookCanvasView: View {
         manager.update(updated, bookID: book.id, pageID: page.id)
     }
 
-    private func cycleFrame(_ element: ScrapbookElement) {
+    private func setFrame(_ element: ScrapbookElement, to frame: ScrapbookStyle.Frame) {
         guard element.kind == .photo else { return }
         var updated = element
-        updated.frameIndex = (element.frameIndex + 1) % ScrapbookStyle.Frame.allCases.count
+        updated.frameIndex = frame.rawValue
+        manager.update(updated, bookID: book.id, pageID: page.id)
+    }
+
+    private func setFrameColour(_ element: ScrapbookElement, to hex: String) {
+        guard element.kind == .photo else { return }
+        var updated = element
+        updated.frameColorHex = hex
         manager.update(updated, bookID: book.id, pageID: page.id)
     }
 
@@ -1128,6 +1171,103 @@ private struct StickerPicker: View {
             }
             .padding(.horizontal, 20)
         }
+    }
+}
+
+// MARK: - Frame picker
+
+/// Every frame, previewed on the actual photo, plus the paper it's cut from.
+private struct FramePicker: View {
+
+    let element: ScrapbookElement
+    let onFrame: (ScrapbookStyle.Frame) -> Void
+    let onColour: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = [GridItem(.adaptive(minimum: 92), spacing: 12)]
+
+    var body: some View {
+
+        VStack(spacing: 16) {
+
+            Text("Frame")
+                .font(.system(size: 19, weight: .bold, design: .serif))
+                .padding(.top, 18)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(ScrapbookStyle.Frame.allCases) { frame in
+                        tile(frame)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+
+                Text("Frame colour")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 20)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(ScrapbookStyle.framePalette, id: \.self) { hex in
+                            Circle()
+                                .fill(Color(scrapbookHex: hex))
+                                .frame(width: 30, height: 30)
+                                .overlay(
+                                    Circle().strokeBorder(
+                                        .primary.opacity(0.7),
+                                        lineWidth: element.frameColorHex == hex ? 3 : 1
+                                    )
+                                )
+                                .onTapGesture { onColour(hex) }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+            .padding(.bottom, 14)
+        }
+    }
+
+    /// Each option drawn with this element's own picture, so the choice is
+    /// made against the real thing rather than a stand-in.
+    private func tile(_ frame: ScrapbookStyle.Frame) -> some View {
+
+        var preview = element
+        preview.frameIndex = frame.rawValue
+        preview.rotation = 0
+        preview.scale = 0.42
+        preview.x = 0.5
+        preview.y = 0.5
+
+        let chosen = element.frameIndex == frame.rawValue
+
+        return VStack(spacing: 5) {
+
+            GeometryReader { proxy in
+                ScrapbookElementView(
+                    element: preview,
+                    canvasSize: proxy.size,
+                    isSelected: false
+                )
+            }
+            .frame(height: 86)
+
+            Text(frame.label)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(chosen ? .primary : .secondary)
+        }
+        .frame(width: 92, height: 112)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(chosen ? 0.20 : 0.08))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onFrame(frame) }
     }
 }
 

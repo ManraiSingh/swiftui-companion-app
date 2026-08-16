@@ -281,6 +281,11 @@ struct ScrapbookElement: Identifiable, Equatable {
 
     /// Which pen drew a stroke. Ignored by everything else.
     var brushIndex: Int = 0
+
+    /// The paper a photo's frame is cut from — the polaroid's card, the torn
+    /// border, the film body. Separate from `colorHex`, which is the element's
+    /// own ink, so recolouring a frame can't disturb anything else.
+    var frameColorHex: String = "#FDFAF5"
 }
 
 // MARK: - Stroke encoding

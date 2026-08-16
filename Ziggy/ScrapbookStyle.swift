@@ -181,6 +181,31 @@ enum ScrapbookStyle {
         "#A8763E", "#7D8491"
     ]
 
+    /// Papers a photo frame can be cut from.
+    static let framePalette: [String] = [
+        "#FDFAF5", "#F5E9D0", "#2B2B30", "#F6C453", "#E4572E",
+        "#94C4E8", "#F2A8C4", "#8FBF7F", "#4F6DE0", "#C9A0DC"
+    ]
+
+    /// Whether ink on this paper needs to be light.
+    ///
+    /// Rec. 601 luma — good enough to decide between white and dark, and it
+    /// keeps the film sprockets and polaroid shadow legible whichever colour
+    /// the frame has been changed to.
+    static func isDark(hex: String) -> Bool {
+
+        var value = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("#") { value.removeFirst() }
+
+        guard value.count == 6, let number = UInt32(value, radix: 16) else { return false }
+
+        let red = Double((number & 0xFF0000) >> 16)
+        let green = Double((number & 0x00FF00) >> 8)
+        let blue = Double(number & 0x0000FF)
+
+        return (0.299 * red + 0.587 * green + 0.114 * blue) < 140
+    }
+
     // MARK: Brushes
 
     /// The pens available on a page. Mirrors the doodle's set as closely as

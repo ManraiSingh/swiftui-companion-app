@@ -101,6 +101,53 @@ struct ScrapbookPaper: View {
     }
 }
 
+// MARK: - A stroke
+
+/// One drawn line, through a chosen brush.
+///
+/// Shared by the finished strokes on the page and the one still under the
+/// finger, so the line you are drawing looks exactly like the line you end up
+/// with rather than turning into the right pen only once you let go.
+struct ScrapbookStrokeView: View {
+
+    let points: [CGPoint]
+    let canvasSize: CGSize
+    let colorHex: String
+    let width: Double
+    let brushIndex: Int
+
+    var body: some View {
+
+        let brush = ScrapbookStyle.brush(brushIndex)
+        let path = ScrapbookStroke.path(for: points, in: canvasSize)
+        let ink = Color(scrapbookHex: colorHex)
+        let cap: CGLineCap = brush.flatCap ? .butt : .round
+
+        ZStack {
+
+            path.stroke(
+                ink.opacity(brush.opacity),
+                style: StrokeStyle(lineWidth: width * brush.widthScale,
+                                   lineCap: cap, lineJoin: .round)
+            )
+
+            // A second, thinner pass nudged off the first gives the broken
+            // edge a crayon or pencil leaves. Cheaper and steadier than
+            // scattering the points themselves, which would make a stroke
+            // look different every time it was redrawn.
+            if brush.grainy {
+                path
+                    .stroke(
+                        ink.opacity(brush.opacity * 0.45),
+                        style: StrokeStyle(lineWidth: width * brush.widthScale * 0.55,
+                                           lineCap: cap, lineJoin: .round)
+                    )
+                    .offset(x: 1.2, y: 1.2)
+            }
+        }
+    }
+}
+
 // MARK: - One element
 
 struct ScrapbookElementView: View {
@@ -183,7 +230,14 @@ struct ScrapbookElementView: View {
                     .overlay(ProgressView())
             }
         }
-        .modifier(PhotoFrameModifier(frame: frame, width: width))
+        .modifier(
+            PhotoFrameModifier(
+                frame: frame,
+                width: width,
+                paper: Color(scrapbookHex: element.frameColorHex),
+                onDarkPaper: ScrapbookStyle.isDark(hex: element.frameColorHex)
+            )
+        )
         .overlay(selectionRing)
     }
 
@@ -191,39 +245,17 @@ struct ScrapbookElementView: View {
 
     private var strokeShape: some View {
 
-        let brush = ScrapbookStyle.brush(element.brushIndex)
-        let path = ScrapbookStroke.path(
-            for: ScrapbookStroke.decode(element.payload),
-            in: canvasSize
-        )
-        let ink = Color(scrapbookHex: element.colorHex)
-        let style = StrokeStyle(
-            lineWidth: element.widthValue * brush.widthScale,
-            lineCap: brush.flatCap ? .butt : .round,
-            lineJoin: .round
-        )
-
         // A stroke covers the whole page and is positioned at its centre, so
         // the transform that every other element gets has to be undone here —
         // otherwise a stroke drawn at the top of the page jumps when the view
         // repositions it.
-        return ZStack {
-
-            path.stroke(ink.opacity(brush.opacity), style: style)
-
-            // A second, thinner pass nudged off the first gives the broken
-            // edge a crayon or pencil leaves. Cheaper and steadier than
-            // scattering the points themselves, which would make a stroke
-            // look different every time it was redrawn.
-            if brush.grainy {
-                path
-                    .stroke(ink.opacity(brush.opacity * 0.45),
-                            style: StrokeStyle(lineWidth: element.widthValue * brush.widthScale * 0.55,
-                                               lineCap: style.lineCap,
-                                               lineJoin: .round))
-                    .offset(x: 1.2, y: 1.2)
-            }
-        }
+        ScrapbookStrokeView(
+            points: ScrapbookStroke.decode(element.payload),
+            canvasSize: canvasSize,
+            colorHex: element.colorHex,
+            width: element.widthValue,
+            brushIndex: element.brushIndex
+        )
         .frame(width: canvasSize.width, height: canvasSize.height)
         .offset(
             x: canvasSize.width * (0.5 - element.x),
@@ -250,6 +282,16 @@ private struct PhotoFrameModifier: ViewModifier {
 
     let frame: ScrapbookStyle.Frame
     let width: CGFloat
+    let paper: Color
+
+    /// Whether the frame's paper is dark, so the details cut into it — film
+    /// sprockets, the polaroid's shadow — stay legible whichever colour it has
+    /// been changed to.
+    let onDarkPaper: Bool
+
+    private var detail: Color {
+        onDarkPaper ? .white.opacity(0.85) : .black.opacity(0.55)
+    }
 
     func body(content: Content) -> some View {
 
@@ -270,19 +312,19 @@ private struct PhotoFrameModifier: ViewModifier {
             }
             .padding(.top, 9)
             .padding(.horizontal, 9)
-            .background(Color(red: 0.99, green: 0.98, blue: 0.95))
+            .background(paper)
             .shadow(color: .black.opacity(0.26), radius: 6, y: 3)
 
         case .white:
             content
                 .padding(7)
-                .background(Color(red: 0.99, green: 0.98, blue: 0.95))
+                .background(paper)
                 .shadow(color: .black.opacity(0.22), radius: 5, y: 3)
 
         case .tape:
             content
                 .padding(5)
-                .background(Color.white.opacity(0.9))
+                .background(paper)
                 .overlay(alignment: .top) {
                     Rectangle()
                         .fill(Color(red: 0.96, green: 0.87, blue: 0.55).opacity(0.75))
@@ -303,7 +345,7 @@ private struct PhotoFrameModifier: ViewModifier {
             content
                 .padding(.vertical, 13)
                 .padding(.horizontal, 6)
-                .background(Color(red: 0.13, green: 0.12, blue: 0.12))
+                .background(paper)
                 .overlay(alignment: .top) { sprockets }
                 .overlay(alignment: .bottom) { sprockets }
                 .shadow(color: .black.opacity(0.3), radius: 5, y: 3)
@@ -313,7 +355,7 @@ private struct PhotoFrameModifier: ViewModifier {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.9), lineWidth: 3)
+                        .strokeBorder(paper, lineWidth: 3)
                 )
                 .shadow(color: .black.opacity(0.24), radius: 6, y: 3)
 
@@ -325,8 +367,7 @@ private struct PhotoFrameModifier: ViewModifier {
                 .clipShape(TornRect(seed: 3, depth: 5))
                 .padding(9)
                 .background(
-                    TornRect(seed: 11, depth: 7)
-                        .fill(Color(red: 0.99, green: 0.98, blue: 0.96))
+                    TornRect(seed: 11, depth: 7).fill(paper)
                 )
                 .shadow(color: .black.opacity(0.24), radius: 5, y: 3)
 
@@ -335,8 +376,7 @@ private struct PhotoFrameModifier: ViewModifier {
                 .clipShape(TornCircle(seed: 5, depth: 5))
                 .padding(11)
                 .background(
-                    TornCircle(seed: 17, depth: 8)
-                        .fill(Color(red: 0.99, green: 0.98, blue: 0.96))
+                    TornCircle(seed: 17, depth: 8).fill(paper)
                 )
                 .shadow(color: .black.opacity(0.26), radius: 7, y: 4)
 
@@ -344,7 +384,7 @@ private struct PhotoFrameModifier: ViewModifier {
             content
                 .clipShape(ArchShape())
                 .padding(8)
-                .background(ArchShape().fill(Color(red: 0.99, green: 0.98, blue: 0.95)))
+                .background(ArchShape().fill(paper))
                 .shadow(color: .black.opacity(0.22), radius: 5, y: 3)
         }
     }
@@ -353,7 +393,7 @@ private struct PhotoFrameModifier: ViewModifier {
         HStack(spacing: 5) {
             ForEach(0..<Int(max(width / 14, 3)), id: \.self) { _ in
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Color(red: 0.85, green: 0.84, blue: 0.82))
+                    .fill(detail)
                     .frame(width: 6, height: 5)
             }
         }

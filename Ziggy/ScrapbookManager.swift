@@ -454,7 +454,8 @@ final class ScrapbookManager: ObservableObject {
                         createdBy: data["createdBy"] as? String ?? "",
                         aspect: data["aspect"] as? Double ?? 1,
                         locked: data["locked"] as? Bool ?? false,
-                        brushIndex: data["brushIndex"] as? Int ?? 0
+                        brushIndex: data["brushIndex"] as? Int ?? 0,
+                        frameColorHex: data["frameColorHex"] as? String ?? "#FDFAF5"
                     )
                 }
               }
@@ -528,7 +529,8 @@ final class ScrapbookManager: ObservableObject {
             "createdBy": element.createdBy.isEmpty ? author : element.createdBy,
             "aspect": element.aspect,
             "locked": element.locked,
-            "brushIndex": element.brushIndex
+            "brushIndex": element.brushIndex,
+            "frameColorHex": element.frameColorHex
         ]
     }
 
