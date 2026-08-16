@@ -83,7 +83,7 @@ struct ScrapbookBookView: View {
             if count > 0, manager.elements.isEmpty, let page = currentPage {
                 manager.startElements(bookID: book.id, pageID: page.id)
             }
-            pageIndex = min(pageIndex, max(count - 1, 0))
+            pageIndex = clampedIndex(pageIndex)
         }
         .onChange(of: pageIndex) { _, index in
             guard manager.pages.indices.contains(index) else { return }
@@ -350,10 +350,19 @@ struct ScrapbookBookView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            manager.addPage(bookID: book.id) { _ in
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    pageIndex = max(manager.pages.count - 1, 0)
-                }
+
+            // The new page will land at the end, so its slot is the count as
+            // it stands now. Claiming it up front means the turn happens
+            // straight away and the page fills it when the listener catches
+            // up — reading the count inside the completion instead gave the
+            // old value, because the write finishing is not the same moment
+            // the page arrives.
+            let landing = manager.pages.count
+
+            manager.addPage(bookID: book.id) { _ in }
+
+            withAnimation(.easeInOut(duration: 0.3)) {
+                pageIndex = landing
             }
         }
     }
@@ -481,6 +490,18 @@ struct ScrapbookBookView: View {
     private var canTurnOn: Bool { rightIndex < manager.pages.count }
     private var canTurnBack: Bool { leftIndex > 0 }
 
+    /// Keeps a page index inside the book, counting the spread that holds the
+    /// "new page" invitation as a real place to be.
+    ///
+    /// This used to clamp to `pages.count - 1`, one short of that spread. In a
+    /// two-page book, turning on from the first spread aimed at index 2, got
+    /// pulled back to 1, and `leftIndex` collapsed to 0 — so you landed on
+    /// what looked like the new page but was really the first spread again,
+    /// with nothing behind it to turn back to.
+    private func clampedIndex(_ index: Int) -> Int {
+        min(max(index, 0), manager.pages.count)
+    }
+
     /// Turns a whole spread at a time, and lands on the left leaf so the
     /// "new page" invitation stays on the right where it belongs.
     private func turn(_ direction: Int) {
@@ -507,7 +528,7 @@ struct ScrapbookBookView: View {
             var settle = Transaction()
             settle.disablesAnimations = true
             withTransaction(settle) {
-                pageIndex = min(max(target, 0), max(manager.pages.count - 1, 0))
+                pageIndex = clampedIndex(target)
                 turnAmount = 0
             }
         }
