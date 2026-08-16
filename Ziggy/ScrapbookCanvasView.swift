@@ -50,7 +50,12 @@ struct ScrapbookCanvasView: View {
     /// The text element being typed into, straight on the page.
     @State private var typingID: String?
     @State private var typedText = ""
+    @State private var textSize: Double = 7
     @FocusState private var typingFocused: Bool
+
+    /// The selected element's size, held here so the slider and a pinch drive
+    /// the same number and the page can show the change as it happens.
+    @State private var draftScale: Double = 1
 
     @State private var paperIndex: Int
     @State private var photoPickerOpen = false
@@ -87,6 +92,8 @@ struct ScrapbookCanvasView: View {
             if let element = selected, tool == .select {
                 SelectedElementBar(
                     element: element,
+                    scale: $draftScale,
+                    onScaleCommit: { commitScale(element) },
                     onFrame: { cycleFrame(element) },
                     onReplace: { replacePhoto(element) },
                     onLock: { toggleLock(element) },
@@ -101,6 +108,7 @@ struct ScrapbookCanvasView: View {
                 TypingBar(
                     fontIndex: $textFontIndex,
                     colorHex: $textColor,
+                    size: $textSize,
                     onDone: { finishTyping() }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -115,6 +123,9 @@ struct ScrapbookCanvasView: View {
         }
         .background(Color(red: 0.13, green: 0.12, blue: 0.17).ignoresSafeArea())
         .onAppear { manager.startElements(bookID: book.id, pageID: page.id) }
+        .onChange(of: selectedID) { _, _ in
+            draftScale = selected?.scale ?? 1
+        }
         .photosPicker(isPresented: $photoPickerOpen, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in Task { await addPhoto(item) } }
         .sheet(isPresented: $showingStickers) {
@@ -207,7 +218,7 @@ struct ScrapbookCanvasView: View {
                let element = manager.elements.first(where: { $0.id == id }) {
 
                 TextField("Type…", text: $typedText, axis: .vertical)
-                    .font(ScrapbookStyle.font(textFontIndex, size: element.widthValue * 3))
+                    .font(ScrapbookStyle.font(textFontIndex, size: textSize * 3))
                     .foregroundStyle(Color(scrapbookHex: textColor))
                     .multilineTextAlignment(.center)
                     .lineLimit(1...4)
@@ -263,7 +274,7 @@ struct ScrapbookCanvasView: View {
         var copy = element
         copy.x += Double(dragOffset.width)
         copy.y += Double(dragOffset.height)
-        copy.scale = max(0.2, element.scale * pinchScale)
+        copy.scale = min(max(draftScale * pinchScale, 0.2), 4)
         copy.rotation = element.rotation + spinAngle
         return copy
     }
@@ -328,9 +339,10 @@ struct ScrapbookCanvasView: View {
                 var settled = element
                 settled.x = min(max(element.x + Double(dragOffset.width), 0.02), 0.98)
                 settled.y = min(max(element.y + Double(dragOffset.height), 0.02), 0.98)
-                settled.scale = min(max(element.scale * pinchScale, 0.2), 4)
+                settled.scale = min(max(draftScale * pinchScale, 0.2), 4)
                 settled.rotation = element.rotation + spinAngle
 
+                draftScale = settled.scale
                 manager.move(settled, bookID: book.id, pageID: page.id)
             }
     }
@@ -492,7 +504,7 @@ struct ScrapbookCanvasView: View {
         element.payload = ""
         element.fontIndex = textFontIndex
         element.colorHex = textColor
-        element.widthValue = 7
+        element.widthValue = textSize
         element.z = manager.nextZ
         element.x = 0.5
         element.y = 0.42
@@ -524,6 +536,7 @@ struct ScrapbookCanvasView: View {
             element.payload = clean
             element.fontIndex = textFontIndex
             element.colorHex = textColor
+            element.widthValue = textSize
             manager.update(element, bookID: book.id, pageID: page.id)
         }
 
@@ -540,6 +553,12 @@ struct ScrapbookCanvasView: View {
         guard element.kind == .photo else { return }
         replacingID = element.id
         photoPickerOpen = true
+    }
+
+    private func commitScale(_ element: ScrapbookElement) {
+        var updated = element
+        updated.scale = draftScale
+        manager.move(updated, bookID: book.id, pageID: page.id)
     }
 
     private func toggleLock(_ element: ScrapbookElement) {
@@ -643,6 +662,8 @@ struct ScrapbookCanvasView: View {
 private struct SelectedElementBar: View {
 
     let element: ScrapbookElement
+    @Binding var scale: Double
+    let onScaleCommit: () -> Void
     let onFrame: () -> Void
     let onReplace: () -> Void
     let onLock: () -> Void
@@ -651,6 +672,26 @@ private struct SelectedElementBar: View {
     let onDelete: () -> Void
 
     var body: some View {
+
+        VStack(spacing: 8) {
+
+            // Same number the two-finger pinch drives, so the two ways of
+            // resizing agree instead of fighting each other.
+            if !element.locked {
+                SizeSlider(
+                    label: String(format: "%.0f%%", scale * 100),
+                    value: $scale,
+                    range: 0.3...3,
+                    onCommit: onScaleCommit
+                )
+            }
+
+            actions
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var actions: some View {
 
         HStack(spacing: 8) {
 
@@ -674,7 +715,6 @@ private struct SelectedElementBar: View {
                    tint: Color(red: 1.0, green: 0.45, blue: 0.45))
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
     }
 
     private func action(
@@ -699,6 +739,38 @@ private struct SelectedElementBar: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// A labelled slider sized to sit in the editor's bars.
+private struct SizeSlider: View {
+
+    let label: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let onCommit: () -> Void
+
+    var body: some View {
+
+        HStack(spacing: 10) {
+
+            Image(systemName: "textformat.size")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white.opacity(0.75))
+
+            // Committed on release only — dragging it writes nothing until
+            // the finger comes up, but the page updates the whole time.
+            Slider(value: $value, in: range) { editing in
+                if !editing { onCommit() }
+            }
+            .tint(.white.opacity(0.9))
+
+            Text(label)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(width: 34, alignment: .trailing)
+        }
+        .padding(.horizontal, 18)
     }
 }
 
@@ -810,11 +882,19 @@ private struct TypingBar: View {
 
     @Binding var fontIndex: Int
     @Binding var colorHex: String
+    @Binding var size: Double
     let onDone: () -> Void
 
     var body: some View {
 
         VStack(spacing: 8) {
+
+            SizeSlider(
+                label: String(format: "%.0f", size * 3),
+                value: $size,
+                range: 3...20,
+                onCommit: {}
+            )
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
