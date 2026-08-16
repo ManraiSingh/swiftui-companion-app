@@ -46,26 +46,45 @@ enum ShelfSelection: Equatable {
     case ornament(String)
 }
 
-private enum ShelfMetrics {
-    static let topCap: CGFloat = 13
-    static let tierHeight: CGFloat = 200
-    static let plankHeight: CGFloat = 13
-    static let inset: CGFloat = 26
-    static let spacing: CGFloat = 7
-    static let addSlot: CGFloat = 50
-    static let ornamentBox: CGFloat = 134
+/// Every measurement the bookcase is built from.
+///
+/// Held against a reference width and scaled to whatever the phone gives, so
+/// the shelf is one illustration at different sizes rather than a different
+/// composition on each device. In fixed points a book took 12.7% of the shelf
+/// on an SE and 10.7% on a Pro Max — same book, noticeably different picture.
+private struct ShelfMetrics {
 
-    static let bookSlotHeight: CGFloat = 138
+    static let referenceWidth: CGFloat = 360
 
-    static var pitch: CGFloat { tierHeight + plankHeight }
+    let unit: CGFloat
+
+    init(width: CGFloat) {
+        unit = max(width, 1) / Self.referenceWidth
+    }
+
+    /// A base measurement, taken at this shelf's size.
+    func scaled(_ value: CGFloat) -> CGFloat { value * unit }
+
+    var topCap: CGFloat { scaled(13) }
+    var tierHeight: CGFloat { scaled(200) }
+    var plankHeight: CGFloat { scaled(13) }
+    var inset: CGFloat { scaled(26) }
+    var spacing: CGFloat { scaled(7) }
+    var addSlot: CGFloat { scaled(50) }
+    var ornamentBox: CGFloat { scaled(134) }
+    var bookSlotHeight: CGFloat { scaled(138) }
+    var postWidth: CGFloat { scaled(15) }
+    var gutterInset: CGFloat { scaled(14) }
+
+    var pitch: CGFloat { tierHeight + plankHeight }
 
     /// The y of the shelf surface that the items on `tier` stand on.
-    static func floorY(_ tier: Int) -> CGFloat {
+    func floorY(_ tier: Int) -> CGFloat {
         topCap + CGFloat(tier) * pitch + tierHeight
     }
 
     /// Which shelf a point falls on, for a drop.
-    static func tier(forY y: CGFloat, count: Int) -> Int {
+    func tier(forY y: CGFloat, count: Int) -> Int {
         let raw = Int(((y - topCap) / pitch).rounded(.down))
         return min(max(raw, 0), max(count - 1, 0))
     }
@@ -113,6 +132,9 @@ struct ScrapbookShelfView: View {
     /// drop target can't move around underneath the finger.
     @State private var dragLayout: [[ShelfItem]]?
 
+    /// Everything the bookcase is measured with, at this phone's width.
+    private var metrics: ShelfMetrics { ShelfMetrics(width: shelfWidth) }
+
     private var selectedBook: ScrapbookBook? {
         guard case .book(let id) = selection else { return nil }
         return manager.books.first { $0.id == id }
@@ -147,8 +169,12 @@ struct ScrapbookShelfView: View {
             return preview
         }
 
-        return (books.map(ShelfItem.init(book:))
-                + ornaments.map { ShelfItem(ornament: $0, boxHeight: ShelfMetrics.ornamentBox) })
+        let scale = metrics.unit
+
+        return (books.map { ShelfItem(book: $0, unit: scale) }
+                + ornaments.map {
+                    ShelfItem(ornament: $0, boxHeight: metrics.ornamentBox, unit: scale)
+                })
             .sorted { $0.position < $1.position }
     }
 
@@ -171,22 +197,22 @@ struct ScrapbookShelfView: View {
         // The "add an object" slot only exists while arranging, so the shelf
         // stays uncluttered the rest of the time.
 
-        let available = max(shelfWidth - ShelfMetrics.inset * 2, 1)
+        let available = max(shelfWidth - metrics.inset * 2, 1)
         var rows: [[ShelfItem]] = []
         var row: [ShelfItem] = []
         var used: CGFloat = 0
 
-        var trailing = [ShelfItem(addSlotWidth: ShelfMetrics.addSlot,
-                                  height: ShelfMetrics.bookSlotHeight)]
+        var trailing = [ShelfItem(addSlotWidth: metrics.addSlot,
+                                  height: metrics.bookSlotHeight)]
 
         if editing {
-            trailing.append(ShelfItem(addOrnamentWidth: ShelfMetrics.addSlot,
-                                      height: ShelfMetrics.bookSlotHeight))
+            trailing.append(ShelfItem(addOrnamentWidth: metrics.addSlot,
+                                      height: metrics.bookSlotHeight))
         }
 
         for item in list + trailing {
 
-            let needed = item.width + (row.isEmpty ? 0 : ShelfMetrics.spacing)
+            let needed = item.width + (row.isEmpty ? 0 : metrics.spacing)
 
             if used + needed > available, !row.isEmpty {
                 rows.append(row)
@@ -194,7 +220,7 @@ struct ScrapbookShelfView: View {
                 used = 0
             }
 
-            used += item.width + (row.isEmpty ? 0 : ShelfMetrics.spacing)
+            used += item.width + (row.isEmpty ? 0 : metrics.spacing)
             row.append(item)
         }
 
@@ -343,10 +369,10 @@ struct ScrapbookShelfView: View {
         var map: [String: CGPoint] = [:]
 
         for (tier, row) in rows.enumerated() {
-            var x = ShelfMetrics.inset
+            var x = metrics.inset
             for item in row {
-                map[item.id] = CGPoint(x: x, y: ShelfMetrics.floorY(tier) - item.height)
-                x += item.width + ShelfMetrics.spacing
+                map[item.id] = CGPoint(x: x, y: metrics.floorY(tier) - item.height)
+                x += item.width + metrics.spacing
             }
         }
 
@@ -357,7 +383,7 @@ struct ScrapbookShelfView: View {
 
         let rows = tiers
         let spots = placements(rows)
-        let height = ShelfMetrics.topCap + CGFloat(rows.count) * ShelfMetrics.pitch
+        let height = metrics.topCap + CGFloat(rows.count) * metrics.pitch
 
         return ZStack(alignment: .topLeading) {
 
@@ -371,12 +397,12 @@ struct ScrapbookShelfView: View {
             VStack(spacing: 0) {
 
                 Outlined(radius: 3, fill: ScrapbookStyle.woodLight)
-                    .frame(height: ShelfMetrics.topCap)
+                    .frame(height: metrics.topCap)
 
                 ForEach(0..<rows.count, id: \.self) { _ in
-                    Color.clear.frame(height: ShelfMetrics.tierHeight)
+                    Color.clear.frame(height: metrics.tierHeight)
                     Outlined(radius: 3, fill: ScrapbookStyle.wood)
-                        .frame(height: ShelfMetrics.plankHeight)
+                        .frame(height: metrics.plankHeight)
                 }
             }
 
@@ -426,16 +452,22 @@ struct ScrapbookShelfView: View {
         case .book(let book):
             BookSpine(
                 book: book,
+                unit: metrics.unit,
                 isSelected: selection == .book(book.id),
                 isLifted: dragging == book.id
             )
 
         case .ornament(let placement):
             placement.ornament.view
-                .frame(width: placement.displayWidth,
-                       height: ShelfMetrics.ornamentBox,
+                .frame(width: placement.ornament.width,
+                       height: 134,
                        alignment: .bottom)
-                .scaleEffect(placement.clampedScale, anchor: .bottom)
+                // Drawn at its natural size then scaled — these are vector
+                // shapes, so the transform costs nothing in sharpness.
+                .scaleEffect(placement.clampedScale * metrics.unit, anchor: .bottom)
+                .frame(width: placement.displayWidth * metrics.unit,
+                       height: metrics.ornamentBox,
+                       alignment: .bottom)
                 .overlay {
                     if selection == .ornament(placement.id) {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -445,14 +477,12 @@ struct ScrapbookShelfView: View {
                 }
 
         case .addSlot:
-            AddSlot(width: ShelfMetrics.addSlot,
-                    icon: "plus",
-                    label: "Book") { showingNewBook = true }
+            AddSlot(width: metrics.addSlot, unit: metrics.unit,
+                    icon: "plus", label: "Book") { showingNewBook = true }
 
         case .addOrnament:
-            AddSlot(width: ShelfMetrics.addSlot,
-                    icon: "leaf",
-                    label: "Object") { addOrnament() }
+            AddSlot(width: metrics.addSlot, unit: metrics.unit,
+                    icon: "leaf", label: "Object") { addOrnament() }
         }
     }
 
@@ -516,7 +546,7 @@ struct ScrapbookShelfView: View {
 
     private var post: some View {
         Outlined(radius: 4, fill: ScrapbookStyle.woodDark)
-            .frame(width: 15)
+            .frame(width: metrics.postWidth)
     }
 
     // MARK: Dragging
@@ -597,7 +627,7 @@ struct ScrapbookShelfView: View {
 
     private func dropIsOnShelf(_ point: CGPoint) -> Bool {
 
-        let height = ShelfMetrics.topCap + CGFloat(tiers.count) * ShelfMetrics.pitch
+        let height = metrics.topCap + CGFloat(tiers.count) * metrics.pitch
 
         return point.x >= 0 && point.x <= shelfWidth
             && point.y >= 0 && point.y <= height
@@ -617,16 +647,16 @@ struct ScrapbookShelfView: View {
 
         guard let rows = dragLayout, !rows.isEmpty else { return nil }
 
-        let tier = ShelfMetrics.tier(forY: point.y, count: rows.count)
+        let tier = metrics.tier(forY: point.y, count: rows.count)
 
         // Where this shelf starts in the overall order. The "New" slot isn't
         // part of it, so it's filtered out of the count.
         var index = rows[..<tier].reduce(0) { $0 + $1.filter(\.isMovable).count }
-        var x = ShelfMetrics.inset
+        var x = metrics.inset
 
         for entry in rows[tier] where entry.isMovable {
             if point.x < x + entry.width / 2 { break }
-            x += entry.width + ShelfMetrics.spacing
+            x += entry.width + metrics.spacing
             index += 1
         }
 
@@ -764,8 +794,16 @@ struct ScrapbookShelfView: View {
 private struct BookSpine: View {
 
     let book: ScrapbookBook
+
+    /// The shelf's scale, so a spine is the same share of the bookcase on
+    /// every phone rather than a fixed number of points.
+    let unit: CGFloat
+
     let isSelected: Bool
     let isLifted: Bool
+
+    private var width: CGFloat { book.displayThickness * unit }
+    private var height: CGFloat { book.displayHeight * unit }
 
     private var cover: ScrapbookStyle.Cover { ScrapbookStyle.cover(book.coverIndex) }
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 3, style: .continuous) }
@@ -781,8 +819,8 @@ private struct BookSpine: View {
                 Spacer()
                 bandLine
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 5)
+            .padding(.vertical, 12 * unit)
+            .padding(.horizontal, 5 * unit)
 
             // Vertical spine text. `rotationEffect` is a render-time
             // transform and does not change the size the view reports to its
@@ -790,20 +828,21 @@ private struct BookSpine: View {
             // footprint again afterwards. Without the second frame every spine
             // claims the width of its own title and the shelf bursts open.
             Text(book.title)
-                .font(.system(size: 11, weight: .bold, design: .serif))
+                .font(.system(size: 11 * unit, weight: .bold, design: .serif))
                 .foregroundStyle(cover.title)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(width: book.displayHeight - 44)
+                .minimumScaleFactor(0.7)
+                .frame(width: height - 44 * unit)
                 .rotationEffect(.degrees(-90))
-                .frame(width: 14, height: book.displayHeight - 44)
+                .frame(width: 14 * unit, height: height - 44 * unit)
         }
-        .frame(width: book.displayThickness, height: book.displayHeight)
+        .frame(width: width, height: height)
         .clipShape(shape)
-        .overlay(shape.stroke(ScrapbookStyle.outline, lineWidth: 2))
+        .overlay(shape.stroke(ScrapbookStyle.outline, lineWidth: 2 * unit))
         .overlay {
             if isSelected {
-                shape.stroke(ScrapbookStyle.blossom, lineWidth: 3).padding(-4)
+                shape.stroke(ScrapbookStyle.blossom, lineWidth: 3 * unit).padding(-4 * unit)
             }
         }
         // A lifted book stands straight and rides above its neighbours.
@@ -833,6 +872,7 @@ private struct BookSpine: View {
 private struct AddSlot: View {
 
     let width: CGFloat
+    let unit: CGFloat
     let icon: String
     let label: String
     let action: () -> Void
@@ -840,14 +880,15 @@ private struct AddSlot: View {
     var body: some View {
 
         Button(action: action) {
-            VStack(spacing: 7) {
+            VStack(spacing: 7 * unit) {
                 Image(systemName: icon)
-                    .font(.system(size: 19, weight: .bold))
+                    .font(.system(size: 19 * unit, weight: .bold))
                 Text(label)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: 11 * unit, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.7)
             }
             .foregroundStyle(ScrapbookStyle.outline.opacity(0.55))
-            .frame(width: width, height: 138)
+            .frame(width: width, height: 138 * unit)
             .background(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .strokeBorder(

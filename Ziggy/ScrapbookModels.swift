@@ -184,19 +184,22 @@ struct ShelfItem: Identifiable, Equatable {
         }
     }
 
-    init(book: ScrapbookBook) {
+    /// `unit` is the shelf's scale — see `ShelfMetrics`. Sizes are quoted at a
+    /// reference width and multiplied here, so the layout is the same picture
+    /// on every phone.
+    init(book: ScrapbookBook, unit: CGFloat = 1) {
         id = book.id
         kind = .book(book)
         position = book.position
-        width = book.displayThickness
-        height = book.displayHeight
+        width = book.displayThickness * unit
+        height = book.displayHeight * unit
     }
 
-    init(ornament: ScrapbookOrnamentPlacement, boxHeight: CGFloat) {
+    init(ornament: ScrapbookOrnamentPlacement, boxHeight: CGFloat, unit: CGFloat = 1) {
         id = ornament.id
         kind = .ornament(ornament)
         position = ornament.position
-        width = ornament.displayWidth
+        width = ornament.displayWidth * unit
         height = boxHeight
     }
 

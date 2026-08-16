@@ -87,6 +87,29 @@ struct ScrapbookPaper: View {
                 }
             }
 
+            if paper.dots {
+                GeometryReader { proxy in
+
+                    let unit = max(proxy.size.width, 1) / ScrapbookStyle.pageReferenceWidth
+                    let pitch = max(30 * unit, 3)
+                    let dot = max(2.4 * unit, 0.6)
+
+                    Path { path in
+                        var y = pitch / 2
+                        while y < proxy.size.height {
+                            var x = pitch / 2
+                            while x < proxy.size.width {
+                                path.addEllipse(in: CGRect(x: x - dot / 2, y: y - dot / 2,
+                                                           width: dot, height: dot))
+                                x += pitch
+                            }
+                            y += pitch
+                        }
+                    }
+                    .fill(paper.tint.opacity(0.85))
+                }
+            }
+
             if paper.grid {
                 GeometryReader { proxy in
 

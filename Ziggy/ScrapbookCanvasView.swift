@@ -117,7 +117,7 @@ struct ScrapbookCanvasView: View {
                     onFrame: { setFrame(element, to: $0) },
                     onColour: { setFrameColour(element, to: $0) }
                 )
-                .presentationDetents([.height(430)])
+                .presentationDetents([.large])
             }
         }
         .sheet(isPresented: $showingPaper) {
@@ -125,7 +125,7 @@ struct ScrapbookCanvasView: View {
                 paperIndex = index
                 manager.setPaper(bookID: book.id, pageID: page.id, paperIndex: index)
             }
-            .presentationDetents([.height(300)])
+            .presentationDetents([.large])
         }
         .fullScreenCover(isPresented: $showingCamera) {
             ScrapbookCameraPicker { image in addPhoto(image) }
@@ -1185,7 +1185,9 @@ private struct FramePicker: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private let columns = [GridItem(.adaptive(minimum: 92), spacing: 12)]
+    // Two to a row rather than four. The old tiles were 92pt wide with the
+    // photo inside them, which left the actual frame too small to judge.
+    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
 
     var body: some View {
 
@@ -1240,13 +1242,16 @@ private struct FramePicker: View {
         var preview = element
         preview.frameIndex = frame.rawValue
         preview.rotation = 0
-        preview.scale = 0.42
+        // Sized to fill the tile. A page draws a photo at 42% of its width,
+        // so at 1 the preview sat small in the middle of the tile with most of
+        // the space showing nothing.
+        preview.scale = 1.25
         preview.x = 0.5
         preview.y = 0.5
 
         let chosen = element.frameIndex == frame.rawValue
 
-        return VStack(spacing: 5) {
+        return VStack(spacing: 6) {
 
             GeometryReader { proxy in
                 ScrapbookElementView(
@@ -1255,13 +1260,13 @@ private struct FramePicker: View {
                     isSelected: false
                 )
             }
-            .frame(height: 86)
+            .frame(height: 150)
 
             Text(frame.label)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundStyle(chosen ? .primary : .secondary)
         }
-        .frame(width: 92, height: 112)
+        .frame(height: 182)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.secondary.opacity(chosen ? 0.20 : 0.08))

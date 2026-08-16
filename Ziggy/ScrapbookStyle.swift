@@ -101,45 +101,87 @@ enum ScrapbookStyle {
         let name: String
         let base: Color
         let tint: Color
-        let ruled: Bool
-        let grid: Bool
+        var ruled: Bool = false
+        var grid: Bool = false
+        var dots: Bool = false
     }
 
     static let papers: [Paper] = [
         Paper(name: "Cream",  base: Color(red: 0.97, green: 0.94, blue: 0.87),
-              tint: Color(red: 0.93, green: 0.88, blue: 0.78), ruled: false, grid: false),
+              tint: Color(red: 0.93, green: 0.88, blue: 0.78)),
 
         Paper(name: "Kraft",  base: Color(red: 0.87, green: 0.77, blue: 0.62),
-              tint: Color(red: 0.80, green: 0.68, blue: 0.51), ruled: false, grid: false),
+              tint: Color(red: 0.80, green: 0.68, blue: 0.51)),
 
         Paper(name: "Ruled",  base: Color(red: 0.98, green: 0.97, blue: 0.94),
-              tint: Color(red: 0.72, green: 0.80, blue: 0.88), ruled: true,  grid: false),
+              tint: Color(red: 0.72, green: 0.80, blue: 0.88), ruled: true),
 
         Paper(name: "Grid",   base: Color(red: 0.98, green: 0.97, blue: 0.93),
-              tint: Color(red: 0.80, green: 0.83, blue: 0.78), ruled: false, grid: true),
+              tint: Color(red: 0.80, green: 0.83, blue: 0.78), grid: true),
 
         Paper(name: "Blush",  base: Color(red: 0.99, green: 0.91, blue: 0.90),
-              tint: Color(red: 0.95, green: 0.82, blue: 0.82), ruled: false, grid: false),
+              tint: Color(red: 0.95, green: 0.82, blue: 0.82)),
 
         Paper(name: "Sky",    base: Color(red: 0.90, green: 0.94, blue: 0.99),
-              tint: Color(red: 0.80, green: 0.87, blue: 0.96), ruled: false, grid: false),
+              tint: Color(red: 0.80, green: 0.87, blue: 0.96)),
 
         Paper(name: "Mint",   base: Color(red: 0.90, green: 0.96, blue: 0.92),
-              tint: Color(red: 0.79, green: 0.90, blue: 0.83), ruled: false, grid: false),
+              tint: Color(red: 0.79, green: 0.90, blue: 0.83)),
 
         Paper(name: "Night",  base: Color(red: 0.16, green: 0.17, blue: 0.24),
-              tint: Color(red: 0.24, green: 0.26, blue: 0.34), ruled: false, grid: false)
+              tint: Color(red: 0.24, green: 0.26, blue: 0.34)),
+
+        // Ten more.
+        Paper(name: "Legal",  base: Color(red: 0.99, green: 0.96, blue: 0.80),
+              tint: Color(red: 0.85, green: 0.72, blue: 0.55), ruled: true),
+
+        Paper(name: "Dots",   base: Color(red: 0.99, green: 0.98, blue: 0.96),
+              tint: Color(red: 0.72, green: 0.70, blue: 0.66), dots: true),
+
+        Paper(name: "Linen",  base: Color(red: 0.93, green: 0.91, blue: 0.87),
+              tint: Color(red: 0.84, green: 0.81, blue: 0.75)),
+
+        Paper(name: "Lilac",  base: Color(red: 0.94, green: 0.92, blue: 0.99),
+              tint: Color(red: 0.85, green: 0.81, blue: 0.95)),
+
+        Paper(name: "Sand",   base: Color(red: 0.96, green: 0.90, blue: 0.79),
+              tint: Color(red: 0.88, green: 0.79, blue: 0.63)),
+
+        Paper(name: "Olive",  base: Color(red: 0.91, green: 0.92, blue: 0.83),
+              tint: Color(red: 0.79, green: 0.82, blue: 0.66)),
+
+        Paper(name: "Rose",   base: Color(red: 0.98, green: 0.88, blue: 0.86),
+              tint: Color(red: 0.92, green: 0.74, blue: 0.72)),
+
+        Paper(name: "Ocean",  base: Color(red: 0.85, green: 0.92, blue: 0.94),
+              tint: Color(red: 0.68, green: 0.83, blue: 0.87), grid: true),
+
+        Paper(name: "Slate",  base: Color(red: 0.29, green: 0.31, blue: 0.35),
+              tint: Color(red: 0.38, green: 0.40, blue: 0.45)),
+
+        Paper(name: "Cocoa",  base: Color(red: 0.36, green: 0.27, blue: 0.22),
+              tint: Color(red: 0.46, green: 0.35, blue: 0.28), dots: true)
     ]
 
     static func paper(_ index: Int) -> Paper {
         papers[((index % papers.count) + papers.count) % papers.count]
     }
 
-    /// Text defaults to light on the dark paper, otherwise it vanishes.
+    /// Text defaults to light on a dark paper, otherwise it vanishes.
+    ///
+    /// Judged from the paper's own brightness rather than its name, so adding
+    /// a paper can't quietly leave its hints unreadable.
     static func defaultInk(onPaper index: Int) -> Color {
-        paper(index).name == "Night"
+        isDark(paper(index).base)
             ? Color(red: 0.96, green: 0.95, blue: 0.92)
             : ink
+    }
+
+    /// Rec. 601 luma on a SwiftUI colour.
+    static func isDark(_ color: Color) -> Bool {
+        let parts = UIColor(color).cgColor.components ?? []
+        guard parts.count >= 3 else { return false }
+        return (0.299 * parts[0] + 0.587 * parts[1] + 0.114 * parts[2]) < 0.55
     }
 
     // MARK: Photo frames

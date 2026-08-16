@@ -94,7 +94,7 @@ struct ScrapbookBookView: View {
                     manager.setPaper(bookID: book.id, pageID: page.id, paperIndex: index)
                 }
             }
-            .presentationDetents([.height(300)])
+            .presentationDetents([.large])
         }
     }
 
