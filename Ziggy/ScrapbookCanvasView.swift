@@ -163,6 +163,7 @@ struct ScrapbookCanvasView: View {
                 onLabel: labelling(element),
                 onInlay: filling(element),
                 onTint: tinting(element),
+                onFont: fonting(element),
                 onLock: { toggleLock(element) },
                 onForward: { bringForward(element) },
                 onDuplicate: { duplicate(element) },
@@ -801,15 +802,34 @@ struct ScrapbookCanvasView: View {
         }
     }
 
-    /// The paper's own colour, for the drawn stickers. Emoji and cut-out
-    /// letters bring their own colours, so there is nothing to change on them.
+    /// The colour to change while something is selected: a piece of text's ink,
+    /// or the paper a drawn sticker is cut from.
+    ///
+    /// Emoji and cut-out letters bring their own colours, so there is nothing
+    /// to change on those.
     private func tinting(_ element: ScrapbookElement) -> ((String) -> Void)? {
 
-        guard decoration(of: element) != nil else { return nil }
+        guard element.kind == .text || decoration(of: element) != nil else { return nil }
 
         return { hex in
             var updated = element
             updated.colorHex = hex
+            manager.update(updated, bookID: book.id, pageID: page.id)
+        }
+    }
+
+    /// Changing the lettering of something already written, without having to
+    /// pick the words back up first.
+    private func fonting(_ element: ScrapbookElement) -> ((Int) -> Void)? {
+
+        let writing = element.kind == .text
+            || (decoration(of: element)?.holdsText ?? false)
+
+        guard writing else { return nil }
+
+        return { index in
+            var updated = element
+            updated.fontIndex = index
             manager.update(updated, bookID: book.id, pageID: page.id)
         }
     }
@@ -966,13 +986,21 @@ private struct SelectedElementBar: View {
     /// Present only for the stickers a picture can go inside.
     let onInlay: (() -> Void)?
 
-    /// Present only for the drawn stickers, whose paper has a colour to change.
+    /// Present for text, whose ink it changes, and for the drawn stickers,
+    /// whose paper it changes.
     let onTint: ((String) -> Void)?
+
+    /// Present for anything with words on it.
+    let onFont: ((Int) -> Void)?
 
     let onLock: () -> Void
     let onForward: () -> Void
     let onDuplicate: () -> Void
     let onDelete: () -> Void
+
+    /// The lettering is a row of sixteen, so it stays folded away until asked
+    /// for rather than standing between the page and everything else.
+    @State private var showingFonts = false
 
     var body: some View {
 
@@ -989,14 +1017,45 @@ private struct SelectedElementBar: View {
                 )
             }
 
+            if showingFonts, let onFont { lettering(onFont) }
+
             if let onTint { tints(onTint) }
 
             actions
         }
         .padding(.vertical, 8)
+        // Folded away again when the selection moves on, so it isn't still
+        // open over an element it has nothing to do with.
+        .onChange(of: element.id) { _, _ in showingFonts = false }
     }
 
-    /// The sticker's own paper colour, changed in place.
+    /// Every font, applied to what's selected as it's tapped.
+    private func lettering(_ pick: @escaping (Int) -> Void) -> some View {
+
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(ScrapbookStyle.fonts.enumerated()), id: \.offset) { index, choice in
+                    Text(choice.label)
+                        .font(ScrapbookStyle.font(index, size: 14))
+                        .foregroundStyle(element.fontIndex == index
+                                         ? Color(red: 0.16, green: 0.14, blue: 0.22)
+                                         : .white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule().fill(element.fontIndex == index
+                                           ? Color.white
+                                           : Color.white.opacity(0.12))
+                        )
+                        .onTapGesture { pick(index) }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    /// Text's ink, or a sticker's own paper colour, changed in place.
     private func tints(_ pick: @escaping (String) -> Void) -> some View {
 
         ScrollView(.horizontal, showsIndicators: false) {
@@ -1038,6 +1097,14 @@ private struct SelectedElementBar: View {
 
             if let onLabel {
                 action(labelTitle, "character.cursor.ibeam", onLabel)
+            }
+
+            if onFont != nil {
+                action("Font", "textformat", {
+                    withAnimation(.easeOut(duration: 0.18)) { showingFonts.toggle() }
+                }, tint: showingFonts
+                    ? Color(red: 1.0, green: 0.82, blue: 0.42)
+                    : .white)
             }
 
             action(
