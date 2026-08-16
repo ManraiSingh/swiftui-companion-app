@@ -66,6 +66,10 @@ struct ScrapbookCanvasView: View {
     /// place a new one.
     @State private var replacingID: String?
 
+    /// Set while the picker is open to put the chosen picture inside a sticker
+    /// — the stamp, the frame, the bubble, the film — rather than on the page.
+    @State private var fillingID: String?
+
     init(book: ScrapbookBook, page: ScrapbookPage) {
         self.book = book
         self.page = page
@@ -74,6 +78,15 @@ struct ScrapbookCanvasView: View {
 
     private var selected: ScrapbookElement? {
         manager.elements.first { $0.id == selectedID }
+    }
+
+    /// The piece of paper being written on, if the words being typed belong to
+    /// a sticker rather than to the page.
+    private var typingDecoration: ScrapbookDecoration? {
+        guard let id = typingID,
+              let element = manager.elements.first(where: { $0.id == id }),
+              element.kind == .sticker else { return nil }
+        return ScrapbookDecoration.from(payload: element.payload)
     }
 
     var body: some View {
@@ -148,6 +161,8 @@ struct ScrapbookCanvasView: View {
                 onFrame: { showingFrames = true },
                 onReplace: { replacePhoto(element) },
                 onLabel: labelling(element),
+                onInlay: filling(element),
+                onTint: tinting(element),
                 onLock: { toggleLock(element) },
                 onForward: { bringForward(element) },
                 onDuplicate: { duplicate(element) },
@@ -161,6 +176,9 @@ struct ScrapbookCanvasView: View {
                 fontIndex: $textFontIndex,
                 colorHex: $textColor,
                 size: $textSize,
+                // A caption's size is a proportion of the paper it sits on, not
+                // a point size, so the readout says so.
+                onSticker: typingDecoration != nil,
                 onDone: { finishTyping() }
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -246,23 +264,10 @@ struct ScrapbookCanvasView: View {
                 .gesture(transformGesture(for: element, canvasSize: canvasSize))
             }
 
-            // The caret, sitting where the finished text will sit.
+            // The caret, sitting where the finished words will sit.
             if let id = typingID,
                let element = manager.elements.first(where: { $0.id == id }) {
-
-                TextField("Type…", text: $typedText, axis: .vertical)
-                    .font(ScrapbookStyle.font(textFontIndex, size: textSize * 3))
-                    .foregroundStyle(Color(scrapbookHex: textColor))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(1...4)
-                    .focused($typingFocused)
-                    .submitLabel(.done)
-                    .onSubmit { finishTyping() }
-                    .frame(width: canvasSize.width * 0.82)
-                    .position(
-                        x: element.x * canvasSize.width,
-                        y: element.y * canvasSize.height
-                    )
+                typingField(for: element, canvasSize: canvasSize)
             }
 
             // The stroke in progress, drawn through the same brush the
@@ -288,6 +293,42 @@ struct ScrapbookCanvasView: View {
         .contentShape(Rectangle())
         .gesture(canvasGesture(canvasSize: canvasSize))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The field you actually type into, drawn where the words will end up.
+    ///
+    /// A caption is bound to the sticker's own box and set at the size the
+    /// caption will be — it used to be typed at page-text size across most of
+    /// the width of the paper, so a date being written ran well outside the
+    /// strip of tape it belonged to and then jumped into place on Done.
+    private func typingField(for element: ScrapbookElement, canvasSize: CGSize) -> some View {
+
+        let unit = max(canvasSize.width, 1) / ScrapbookStyle.pageReferenceWidth
+        let zoom = CGFloat(min(max(element.scale, 0.2), 4)) * unit
+        let decoration = ScrapbookDecoration.from(payload: element.payload)
+
+        let size: CGFloat = decoration.map { $0.captionSize(widthValue: textSize) * zoom }
+            ?? CGFloat(textSize) * 3 * unit
+
+        let width: CGFloat = decoration.map { $0.size.width * zoom * 0.86 }
+            ?? canvasSize.width * 0.82
+
+        return TextField("Type…", text: $typedText, axis: .vertical)
+            .font(ScrapbookStyle.font(textFontIndex, size: size))
+            .foregroundStyle(Color(scrapbookHex: textColor))
+            .multilineTextAlignment(.center)
+            .lineLimit(1...4)
+            .focused($typingFocused)
+            .submitLabel(.done)
+            .onSubmit { finishTyping() }
+            .frame(width: width)
+            // Turned with the paper it is being written on, so the words lie
+            // along a tilted strip rather than across it.
+            .rotationEffect(.degrees(decoration == nil ? 0 : element.rotation))
+            .position(
+                x: element.x * canvasSize.width,
+                y: element.y * canvasSize.height
+            )
     }
 
     private var emptyHint: some View {
@@ -502,6 +543,19 @@ struct ScrapbookCanvasView: View {
 
         guard let base64 = image.scrapbookBase64() else { return }
 
+        // Filling a sticker rather than laying a photo on the page: the
+        // picture goes inside the piece of paper, which keeps its size, angle
+        // and any words already on it.
+        if let id = fillingID, var host = manager.elements.first(where: { $0.id == id }) {
+            host.imagePayload = base64
+            manager.update(host, bookID: book.id, pageID: page.id)
+            ScrapbookImageCache.shared.forget(id + "#inlay")
+            fillingID = nil
+            showingCamera = false
+            selectedID = id
+            return
+        }
+
         // Replacing rather than adding: keep everything about the element
         // except the picture itself.
         if let id = replacingID, var existing = manager.elements.first(where: { $0.id == id }) {
@@ -639,6 +693,8 @@ struct ScrapbookCanvasView: View {
         if element.kind == .sticker {
             element.caption = clean
             element.fontIndex = textFontIndex
+            element.widthValue = textSize
+            element.captionColorHex = textColor
             manager.update(element, bookID: book.id, pageID: page.id)
             typingID = nil
             typedText = ""
@@ -680,17 +736,58 @@ struct ScrapbookCanvasView: View {
     /// The action for writing on a paper sticker, or nothing for anything else.
     private func labelling(_ element: ScrapbookElement) -> (() -> Void)? {
 
-        guard element.kind == .sticker,
-              let decoration = ScrapbookDecoration.from(payload: element.payload),
-              decoration.holdsText
+        guard let decoration = decoration(of: element), decoration.holdsText
         else { return nil }
 
         return { startLabelling(element) }
     }
 
+    /// The action for putting a picture inside a sticker, for the ones that are
+    /// a container rather than a shape.
+    private func filling(_ element: ScrapbookElement) -> (() -> Void)? {
+
+        guard let decoration = decoration(of: element), decoration.holdsImage
+        else { return nil }
+
+        return {
+            fillingID = element.id
+            photoPickerOpen = true
+        }
+    }
+
+    /// The paper's own colour, for the drawn stickers. Emoji and cut-out
+    /// letters bring their own colours, so there is nothing to change on them.
+    private func tinting(_ element: ScrapbookElement) -> ((String) -> Void)? {
+
+        guard decoration(of: element) != nil else { return nil }
+
+        return { hex in
+            var updated = element
+            updated.colorHex = hex
+            manager.update(updated, bookID: book.id, pageID: page.id)
+        }
+    }
+
+    private func decoration(of element: ScrapbookElement) -> ScrapbookDecoration? {
+        guard element.kind == .sticker else { return nil }
+        return ScrapbookDecoration.from(payload: element.payload)
+    }
+
     /// Types straight onto the sticker, the same way text goes on the page.
+    ///
+    /// The bar opens on the label's own size and ink rather than on whatever
+    /// the last piece of page text used, so picking up an existing caption
+    /// doesn't resize or recolour it the moment you touch anything.
     private func startLabelling(_ element: ScrapbookElement) {
+
         typedText = element.caption
+        textFontIndex = element.fontIndex
+        textSize = min(max(element.widthValue, 3), 20)
+
+        textColor = element.captionColorHex.isEmpty
+            ? (ScrapbookStyle.isDark(hex: element.colorHex) ? "#FAF7F0" : "#332B24")
+            : element.captionColorHex
+
         typingID = element.id
         selectedID = nil
         tool = .select
@@ -744,11 +841,18 @@ struct ScrapbookCanvasView: View {
 
         HStack(spacing: 6) {
 
+            // Both clear whatever the last picker was aimed at. A cancelled
+            // replace or fill otherwise stays armed, and the next picture
+            // meant for the page would land inside that element instead.
             toolButton("photo.on.rectangle", "Photo") {
+                replacingID = nil
+                fillingID = nil
                 photoPickerOpen = true
             }
 
             toolButton("camera.fill", "Camera") {
+                replacingID = nil
+                fillingID = nil
                 showingCamera = true
             }
 
@@ -813,6 +917,12 @@ private struct SelectedElementBar: View {
     /// Present only for paper stickers, which are the ones words look right on.
     let onLabel: (() -> Void)?
 
+    /// Present only for the stickers a picture can go inside.
+    let onInlay: (() -> Void)?
+
+    /// Present only for the drawn stickers, whose paper has a colour to change.
+    let onTint: ((String) -> Void)?
+
     let onLock: () -> Void
     let onForward: () -> Void
     let onDuplicate: () -> Void
@@ -833,9 +943,31 @@ private struct SelectedElementBar: View {
                 )
             }
 
+            if let onTint { tints(onTint) }
+
             actions
         }
         .padding(.vertical, 8)
+    }
+
+    /// The sticker's own paper colour, changed in place.
+    private func tints(_ pick: @escaping (String) -> Void) -> some View {
+
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(ScrapbookStyle.inkPalette, id: \.self) { hex in
+                    Circle()
+                        .fill(Color(scrapbookHex: hex))
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Circle().strokeBorder(.white,
+                                                  lineWidth: element.colorHex == hex ? 3 : 1)
+                        )
+                        .onTapGesture { pick(hex) }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
     }
 
     private var actions: some View {
@@ -845,6 +977,11 @@ private struct SelectedElementBar: View {
             if element.kind == .photo {
                 action("Frame", "square.on.square", onFrame)
                 action("Replace", "arrow.triangle.2.circlepath", onReplace)
+            }
+
+            if let onInlay {
+                action(element.imagePayload.isEmpty ? "Photo" : "Change",
+                       "photo.on.rectangle", onInlay)
             }
 
             if let onLabel {
@@ -1018,6 +1155,11 @@ private struct TypingBar: View {
     @Binding var fontIndex: Int
     @Binding var colorHex: String
     @Binding var size: Double
+
+    /// Words on a sticker are sized against the paper they sit on rather than
+    /// in points, so the readout is a proportion of it.
+    let onSticker: Bool
+
     let onDone: () -> Void
 
     var body: some View {
@@ -1025,7 +1167,9 @@ private struct TypingBar: View {
         VStack(spacing: 8) {
 
             SizeSlider(
-                label: String(format: "%.0f", size * 3),
+                label: onSticker
+                    ? String(format: "%.0f%%", size / 7 * 100)
+                    : String(format: "%.0f", size * 3),
                 value: $size,
                 range: 3...20,
                 onCommit: {}
@@ -1140,15 +1284,17 @@ private struct StickerPicker: View {
 
     private func tile(_ decoration: ScrapbookDecoration) -> some View {
 
-        // Scaled to a common tile rather than drawn small, so each previews at
-        // the proportions it will have on the page.
+        // Drawn at tile size rather than drawn full size and shrunk. A
+        // `scaleEffect` magnifies a picture that has already been rendered, so
+        // the preview came out soft and — worse — its detail no longer matched
+        // the proportions it lands on the page with.
         let fit = min(72 / decoration.size.width, 50 / decoration.size.height)
 
         return VStack(spacing: 5) {
 
-            decoration.view(tint: ScrapbookStyle.terracotta)
-                .frame(width: decoration.size.width, height: decoration.size.height)
-                .scaleEffect(fit)
+            decoration.view(tint: ScrapbookStyle.terracotta, zoom: fit)
+                .frame(width: decoration.size.width * fit,
+                       height: decoration.size.height * fit)
                 .frame(width: 78, height: 52)
 
             Text(decoration.label)

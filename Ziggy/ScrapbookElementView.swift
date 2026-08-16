@@ -340,11 +340,20 @@ struct ScrapbookElementView: View {
                 ScrapbookLetterSticker(character: character, zoom: zoom * unit)
                     .overlay(selectionRing)
             } else if let decoration = ScrapbookDecoration.from(payload: element.payload) {
-                decoration.view(tint: Color(scrapbookHex: element.colorHex))
-                    .frame(width: onPage(decoration.size.width),
-                           height: onPage(decoration.size.height))
-                    .overlay { caption(on: decoration) }
+
+                let box = CGSize(width: onPage(decoration.size.width),
+                                 height: onPage(decoration.size.height))
+
+                // The piece is told how much bigger than natural it is being
+                // drawn, so its stripes, tears and stitching grow with it
+                // instead of staying a fixed few points.
+                decoration.view(tint: Color(scrapbookHex: element.colorHex),
+                                zoom: zoom * unit)
+                    .frame(width: box.width, height: box.height)
+                    .overlay { inlay(on: decoration, in: box) }
+                    .overlay { caption(on: decoration, in: box) }
                     .overlay(selectionRing)
+
             } else {
                 Text(element.payload)
                     .font(.system(size: onPage(element.widthValue * 6)))
@@ -356,32 +365,80 @@ struct ScrapbookElementView: View {
         }
     }
 
+    /// A picture tucked inside a sticker — the photo in a stamp, in the dashed
+    /// frame, in the bubble, or along the film.
+    ///
+    /// Placed against the window each piece declares rather than filling the
+    /// whole box, so the stamp's perforated border and the film's sprockets
+    /// still show around it.
+    @ViewBuilder
+    private func inlay(on decoration: ScrapbookDecoration, in box: CGSize) -> some View {
+
+        if let window = decoration.imageWindow,
+           !element.imagePayload.isEmpty,
+           let image = ScrapbookImageCache.shared.image(for: element.id + "#inlay",
+                                                        base64: element.imagePayload) {
+
+            let width = window.width * box.width
+            let height = window.height * box.height
+
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: width, height: height)
+                .clipShape(
+                    RoundedRectangle(cornerRadius: decoration.imageCorner * width,
+                                     style: .continuous)
+                )
+                .position(x: window.midX * box.width, y: window.midY * box.height)
+                .allowsHitTesting(false)
+        }
+    }
+
     /// Words written on a paper sticker.
     ///
-    /// The ink is picked against the paper's own colour rather than fixed, so
-    /// a date on dark tape stays readable without anyone choosing a colour for
-    /// it.
+    /// Held inside the piece rather than laid over it: the box is the sticker's
+    /// own, and the type shrinks to fit rather than running off the edges of a
+    /// small strip of tape.
     @ViewBuilder
-    private func caption(on decoration: ScrapbookDecoration) -> some View {
+    private func caption(on decoration: ScrapbookDecoration, in box: CGSize) -> some View {
 
         if decoration.holdsText, !element.caption.isEmpty {
 
-            let paperIsDark = ScrapbookStyle.isDark(hex: element.colorHex)
+            // The bubble's tail hangs below the body, so its words sit higher.
+            let lift = decoration == .speechBubble ? box.height * 0.16 : 0
 
             Text(element.caption)
-                .font(ScrapbookStyle.font(element.fontIndex,
-                                          size: onPage(decoration.size.height * 0.40)))
-                .foregroundStyle(paperIsDark
-                                 ? Color(red: 0.98, green: 0.97, blue: 0.94)
-                                 : Color(red: 0.20, green: 0.17, blue: 0.14))
-                .lineLimit(2)
-                .minimumScaleFactor(0.4)
+                .font(ScrapbookStyle.font(
+                    element.fontIndex,
+                    size: onPage(decoration.captionSize(widthValue: element.widthValue))
+                ))
+                .foregroundStyle(captionInk)
+                .lineLimit(3)
+                .minimumScaleFactor(0.25)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, onPage(decoration.size.width * 0.08))
-                // The bubble's tail hangs below, so its words sit higher.
-                .padding(.bottom, decoration == .speechBubble
-                         ? onPage(decoration.size.height * 0.18) : 0)
+                // A picture behind the words is any colour at all, so they get
+                // an edge to stand off it.
+                .shadow(color: element.imagePayload.isEmpty
+                        ? .clear : .black.opacity(0.55),
+                        radius: max(box.width * 0.012, 0.5))
+                .frame(width: box.width * 0.86, height: box.height * 0.82 - lift)
+                .padding(.bottom, lift)
         }
+    }
+
+    /// The caption's ink: whatever was chosen under the words, or — until one
+    /// is — a colour picked against the paper's own brightness, so a date on
+    /// dark tape is readable the moment it is written.
+    private var captionInk: Color {
+
+        if !element.captionColorHex.isEmpty {
+            return Color(scrapbookHex: element.captionColorHex)
+        }
+
+        return ScrapbookStyle.isDark(hex: element.colorHex)
+            ? Color(red: 0.98, green: 0.97, blue: 0.94)
+            : Color(red: 0.20, green: 0.17, blue: 0.14)
     }
 
     // MARK: Photo

@@ -491,7 +491,9 @@ final class ScrapbookManager: ObservableObject {
             locked: data["locked"] as? Bool ?? false,
             brushIndex: data["brushIndex"] as? Int ?? 0,
             frameColorHex: data["frameColorHex"] as? String ?? "#FDFAF5",
-            caption: data["caption"] as? String ?? ""
+            caption: data["caption"] as? String ?? "",
+            captionColorHex: data["captionColorHex"] as? String ?? "",
+            imagePayload: data["imagePayload"] as? String ?? ""
         )
     }
 
@@ -589,7 +591,9 @@ final class ScrapbookManager: ObservableObject {
             "locked": element.locked,
             "brushIndex": element.brushIndex,
             "frameColorHex": element.frameColorHex,
-            "caption": element.caption
+            "caption": element.caption,
+            "captionColorHex": element.captionColorHex,
+            "imagePayload": element.imagePayload
         ]
     }
 

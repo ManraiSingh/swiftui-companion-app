@@ -90,21 +90,59 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         }
     }
 
-    @ViewBuilder
-    func view(tint: Color) -> some View {
+    /// Where a picture can be tucked inside, as fractions of the sticker's own
+    /// box. Only the pieces that are a container rather than a shape: a stamp,
+    /// a frame, a bubble, a length of film.
+    var imageWindow: CGRect? {
         switch self {
-        case .washiTape:    WashiTape(tint: tint)
-        case .tornStrip:    TornStrip(tint: tint)
-        case .star:         StarBurst(tint: tint)
-        case .sparkle:      Sparkle(tint: tint)
+        case .stamp:        return CGRect(x: 0.16, y: 0.15, width: 0.68, height: 0.70)
+        case .dashedBox:    return CGRect(x: 0.05, y: 0.06, width: 0.90, height: 0.88)
+        case .speechBubble: return CGRect(x: 0.07, y: 0.07, width: 0.86, height: 0.67)
+        case .filmStrip:    return CGRect(x: 0.05, y: 0.27, width: 0.90, height: 0.46)
+        default:            return nil
+        }
+    }
+
+    var holdsImage: Bool { imageWindow != nil }
+
+    /// How round the window's corners are, against its own width.
+    var imageCorner: CGFloat {
+        switch self {
+        case .speechBubble: return 0.09
+        case .dashedBox:    return 0.03
+        default:            return 0
+        }
+    }
+
+    /// The caption's point size before the page's own scaling.
+    ///
+    /// Proportional to the piece it sits on, so words fill a banner and a strip
+    /// of tape alike. `widthValue` is the size setting the slider drives — 7 is
+    /// what a sticker is created at, and gives the proportions each piece was
+    /// drawn for.
+    func captionSize(widthValue: Double) -> CGFloat {
+        size.height * 0.40 * CGFloat(min(max(widthValue, 1), 24) / 7)
+    }
+
+    /// `zoom` is how much bigger than its natural size the piece is being
+    /// drawn. Every measurement inside is multiplied by it, so a sticker keeps
+    /// its proportions as it grows instead of the stripes, tears and stitching
+    /// staying a fixed few points while the shape around them stretches.
+    @ViewBuilder
+    func view(tint: Color, zoom: CGFloat = 1) -> some View {
+        switch self {
+        case .washiTape:    WashiTape(tint: tint, zoom: zoom)
+        case .tornStrip:    TornStrip(tint: tint, zoom: zoom)
+        case .star:         StarBurst(tint: tint, zoom: zoom)
+        case .sparkle:      Sparkle(tint: tint, zoom: zoom)
         case .arrow:        HandArrow(tint: tint)
-        case .banner:       Banner(tint: tint)
+        case .banner:       Banner(tint: tint, zoom: zoom)
         case .paperClip:    PaperClip(tint: tint)
-        case .stamp:        Stamp(tint: tint)
-        case .filmStrip:    FilmStrip(tint: tint)
-        case .speechBubble: SpeechBubble(tint: tint)
-        case .heart:        HeartDoodle(tint: tint)
-        case .dashedBox:    DashedBox(tint: tint)
+        case .stamp:        Stamp(tint: tint, zoom: zoom)
+        case .filmStrip:    FilmStrip(tint: tint, zoom: zoom)
+        case .speechBubble: SpeechBubble(tint: tint, zoom: zoom)
+        case .heart:        HeartDoodle(tint: tint, zoom: zoom)
+        case .dashedBox:    DashedBox(tint: tint, zoom: zoom)
         case .heartOutline: OutlineHeart(tint: tint)
         case .doubleHeart:  DoubleHeart(tint: tint)
         case .loopArrow:    LoopArrow(tint: tint)
@@ -117,19 +155,20 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
 private struct WashiTape: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         Rectangle()
             .fill(tint.opacity(0.62))
             .overlay(
                 // The faint stripes real washi tape has.
-                HStack(spacing: 7) {
+                HStack(spacing: 7 * zoom) {
                     ForEach(0..<9, id: \.self) { _ in
-                        Rectangle().fill(.white.opacity(0.35)).frame(width: 3)
+                        Rectangle().fill(.white.opacity(0.35)).frame(width: 3 * zoom)
                     }
                 }
             )
-            .clipShape(TornEdges(teeth: 7, depth: 3))
+            .clipShape(TornEdges(teeth: 7, depth: 3 * zoom))
     }
 }
 
@@ -138,15 +177,16 @@ private struct WashiTape: View {
 private struct TornStrip: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
-        TornEdges(teeth: 11, depth: 5)
+        TornEdges(teeth: 11, depth: 5 * zoom)
             .fill(tint.opacity(0.9))
             .overlay(
-                TornEdges(teeth: 11, depth: 5)
-                    .stroke(.black.opacity(0.08), lineWidth: 1)
+                TornEdges(teeth: 11, depth: 5 * zoom)
+                    .stroke(.black.opacity(0.08), lineWidth: zoom)
             )
-            .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+            .shadow(color: .black.opacity(0.12), radius: 2 * zoom, y: zoom)
     }
 }
 
@@ -187,17 +227,22 @@ private struct TornEdges: Shape {
 private struct StarBurst: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         SpikeStar(points: 5, innerRatio: 0.42)
             .fill(tint)
-            .overlay(SpikeStar(points: 5, innerRatio: 0.42).stroke(.black.opacity(0.12), lineWidth: 1))
+            .overlay(
+                SpikeStar(points: 5, innerRatio: 0.42)
+                    .stroke(.black.opacity(0.12), lineWidth: zoom)
+            )
     }
 }
 
 private struct Sparkle: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         ZStack {
@@ -205,11 +250,11 @@ private struct Sparkle: View {
             SpikeStar(points: 4, innerRatio: 0.22)
                 .fill(tint.opacity(0.55))
                 .scaleEffect(0.5)
-                .offset(x: 16, y: -14)
+                .offset(x: 16 * zoom, y: -14 * zoom)
             SpikeStar(points: 4, innerRatio: 0.22)
                 .fill(tint.opacity(0.4))
                 .scaleEffect(0.34)
-                .offset(x: -17, y: 15)
+                .offset(x: -17 * zoom, y: 15 * zoom)
         }
     }
 }
@@ -254,6 +299,10 @@ private struct HandArrow: View {
             let width = proxy.size.width
             let height = proxy.size.height
 
+            // Taken off the box rather than fixed, so the pen keeps its weight
+            // as the arrow is made bigger.
+            let line = max(width * 0.052, 1)
+
             ZStack {
                 Path { path in
                     path.move(to: CGPoint(x: width * 0.05, y: height * 0.72))
@@ -263,14 +312,14 @@ private struct HandArrow: View {
                         control2: CGPoint(x: width * 0.62, y: height * 0.86)
                     )
                 }
-                .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round))
 
                 Path { path in
                     path.move(to: CGPoint(x: width * 0.66, y: height * 0.20))
                     path.addLine(to: CGPoint(x: width * 0.92, y: height * 0.36))
                     path.addLine(to: CGPoint(x: width * 0.68, y: height * 0.60))
                 }
-                .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -281,12 +330,13 @@ private struct HandArrow: View {
 private struct Banner: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         BannerShape()
             .fill(tint)
-            .overlay(BannerShape().stroke(.black.opacity(0.12), lineWidth: 1))
-            .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+            .overlay(BannerShape().stroke(.black.opacity(0.12), lineWidth: zoom))
+            .shadow(color: .black.opacity(0.14), radius: 3 * zoom, y: 2 * zoom)
     }
 }
 
@@ -337,7 +387,8 @@ private struct PaperClip: View {
                 )
                 path.addLine(to: CGPoint(x: width * 0.5, y: height * 0.34))
             }
-            .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+            .stroke(tint, style: StrokeStyle(lineWidth: max(width * 0.125, 1),
+                                             lineCap: .round, lineJoin: .round))
         }
     }
 }
@@ -347,22 +398,28 @@ private struct PaperClip: View {
 private struct Stamp: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
-        StampShape()
+        StampShape(bite: 5 * zoom)
             .fill(tint)
             .overlay(
-                StampShape()
-                    .inset(by: 8)
+                StampShape(bite: 5 * zoom)
+                    .inset(by: 8 * zoom)
                     .stroke(.white.opacity(0.85),
-                            style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                            style: StrokeStyle(lineWidth: 1.5 * zoom,
+                                               dash: [4 * zoom, 3 * zoom]))
             )
-            .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+            .shadow(color: .black.opacity(0.14), radius: 3 * zoom, y: 2 * zoom)
     }
 }
 
 /// A stamp's scalloped edge.
 private struct StampShape: InsettableShape {
+
+    /// How deep the perforations bite. Scaled with the stamp, otherwise a big
+    /// one comes out with the same tiny nicks a small one has.
+    var bite: CGFloat = 5
 
     var inset: CGFloat = 0
 
@@ -375,7 +432,7 @@ private struct StampShape: InsettableShape {
     func path(in rect: CGRect) -> Path {
 
         let frame = rect.insetBy(dx: inset, dy: inset)
-        let bite: CGFloat = 5
+        let bite = max(self.bite, 0.5)
         var path = Path(frame)
 
         // Bitten out along each edge.
@@ -402,6 +459,7 @@ private struct StampShape: InsettableShape {
 private struct FilmStrip: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         ZStack {
@@ -412,24 +470,26 @@ private struct FilmStrip: View {
                 Spacer()
                 sprockets
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 4 * zoom)
 
-            HStack(spacing: 4) {
+            // The three blank cells. A picture placed inside covers exactly
+            // this band, so they read as the empty frames until one is.
+            HStack(spacing: 4 * zoom) {
                 ForEach(0..<3, id: \.self) { _ in
                     Rectangle().fill(.white.opacity(0.22))
                 }
             }
-            .padding(.vertical, 15)
-            .padding(.horizontal, 6)
+            .padding(.vertical, 15 * zoom)
+            .padding(.horizontal, 6 * zoom)
         }
     }
 
     private var sprockets: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 6 * zoom) {
             ForEach(0..<9, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 1.5)
+                RoundedRectangle(cornerRadius: 1.5 * zoom)
                     .fill(.white.opacity(0.85))
-                    .frame(width: 6, height: 5)
+                    .frame(width: 6 * zoom, height: 5 * zoom)
             }
         }
     }
@@ -440,25 +500,26 @@ private struct FilmStrip: View {
 private struct SpeechBubble: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
 
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 16 * zoom, style: .continuous)
                 .fill(tint)
-                .padding(.bottom, 12)
+                .padding(.bottom, 12 * zoom)
 
             Path { path in
-                path.move(to: CGPoint(x: 16, y: 0))
-                path.addLine(to: CGPoint(x: 40, y: 0))
-                path.addLine(to: CGPoint(x: 20, y: 14))
+                path.move(to: CGPoint(x: 16 * zoom, y: 0))
+                path.addLine(to: CGPoint(x: 40 * zoom, y: 0))
+                path.addLine(to: CGPoint(x: 20 * zoom, y: 14 * zoom))
                 path.closeSubpath()
             }
             .fill(tint)
-            .frame(width: 44, height: 14)
-            .offset(x: 14)
+            .frame(width: 44 * zoom, height: 14 * zoom)
+            .offset(x: 14 * zoom)
         }
-        .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+        .shadow(color: .black.opacity(0.14), radius: 3 * zoom, y: 2 * zoom)
     }
 }
 
@@ -467,11 +528,12 @@ private struct SpeechBubble: View {
 private struct HeartDoodle: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         DoodleHeart()
             .fill(tint)
-            .overlay(DoodleHeart().stroke(.black.opacity(0.12), lineWidth: 1))
+            .overlay(DoodleHeart().stroke(.black.opacity(0.12), lineWidth: zoom))
     }
 }
 
@@ -607,10 +669,12 @@ private struct LoopArrow: View {
 private struct DashedBox: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .stroke(tint, style: StrokeStyle(lineWidth: 3, dash: [9, 7]))
+        RoundedRectangle(cornerRadius: 8 * zoom, style: .continuous)
+            .stroke(tint, style: StrokeStyle(lineWidth: 3 * zoom,
+                                             dash: [9 * zoom, 7 * zoom]))
     }
 }
 

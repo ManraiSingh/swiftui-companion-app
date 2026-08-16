@@ -294,6 +294,17 @@ struct ScrapbookElement: Identifiable, Equatable {
     /// on a banner. Kept apart from `payload`, which for a sticker is the
     /// thing itself, so a label can be changed without disturbing it.
     var caption: String = ""
+
+    /// The caption's ink. Empty means pick it from the paper's own brightness,
+    /// which is what an unlabelled sticker starts out doing; setting it is the
+    /// colour swatch under the words taking over.
+    var captionColorHex: String = ""
+
+    /// A picture tucked inside a sticker — the photo in a stamp, the frame or
+    /// the film strip. Base64 JPEG, like a photo element's `payload`; separate
+    /// from it because for a sticker `payload` is already the token naming the
+    /// piece of paper.
+    var imagePayload: String = ""
 }
 
 // MARK: - Stroke encoding
