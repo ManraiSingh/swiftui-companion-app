@@ -40,6 +40,13 @@ final class ScrapbookManager: ObservableObject {
     @Published private(set) var books: [ScrapbookBook] = []
     @Published private(set) var pages: [ScrapbookPage] = []
     @Published private(set) var elements: [ScrapbookElement] = []
+
+    /// Elements for several pages at once, keyed by page id.
+    ///
+    /// The editor works on one page, so `elements` above suits it. A book,
+    /// though, shows two pages side by side and two more during a turn — with
+    /// only one page loaded, every leaf but the live one came out blank.
+    @Published private(set) var pageElements: [String: [ScrapbookElement]] = [:]
     @Published private(set) var ornaments: [ScrapbookOrnamentPlacement] = []
 
     /// Surfaced in the UI so a permissions failure doesn't just look like an
@@ -49,6 +56,7 @@ final class ScrapbookManager: ObservableObject {
     private var shelfListener: ListenerRegistration?
     private var pagesListener: ListenerRegistration?
     private var elementsListener: ListenerRegistration?
+    private var pageListeners: [String: ListenerRegistration] = [:]
     private var ornamentsListener: ListenerRegistration?
 
     private var openBookID: String?
@@ -412,6 +420,80 @@ final class ScrapbookManager: ObservableObject {
 
     // MARK: - Elements
 
+    /// Watches a set of pages together, keeping only the listeners it still
+    /// needs.
+    ///
+    /// Called with the spread plus its neighbours, so turning a page reveals
+    /// something that is already loaded rather than filling in afterwards.
+    func watch(pages ids: [String], bookID: String) {
+
+        let wanted = Set(ids)
+
+        for (id, listener) in pageListeners where !wanted.contains(id) {
+            listener.remove()
+            pageListeners[id] = nil
+            pageElements[id] = nil
+        }
+
+        for id in wanted where pageListeners[id] == nil {
+
+            guard let ref = elementsRef(bookID, id) else { continue }
+
+            pageListeners[id] = ref
+                .order(by: "z")
+                .addSnapshotListener { [weak self] snapshot, error in
+                  MainActor.assumeIsolated {
+
+                    guard let self else { return }
+
+                    if let error {
+                        self.lastError = error.localizedDescription
+                        return
+                    }
+
+                    self.pageElements[id] = (snapshot?.documents ?? [])
+                        .compactMap(Self.element(from:))
+                  }
+                }
+        }
+    }
+
+    func stopWatching() {
+        pageListeners.values.forEach { $0.remove() }
+        pageListeners = [:]
+        pageElements = [:]
+    }
+
+    /// One document to one element. Shared so the page a book shows and the
+    /// page its editor opens can never read the same record differently.
+    private static func element(from document: QueryDocumentSnapshot) -> ScrapbookElement? {
+
+        let data = document.data()
+
+        guard let raw = data["kind"] as? String,
+              let kind = ScrapbookElementKind(rawValue: raw) else { return nil }
+
+        return ScrapbookElement(
+            id: document.documentID,
+            kind: kind,
+            x: data["x"] as? Double ?? 0.5,
+            y: data["y"] as? Double ?? 0.5,
+            scale: data["scale"] as? Double ?? 1,
+            rotation: data["rotation"] as? Double ?? 0,
+            z: data["z"] as? Int ?? 0,
+            payload: data["payload"] as? String ?? "",
+            colorHex: data["colorHex"] as? String ?? "#2E2A27",
+            frameIndex: data["frameIndex"] as? Int ?? 0,
+            fontIndex: data["fontIndex"] as? Int ?? 0,
+            widthValue: data["widthValue"] as? Double ?? 6,
+            createdBy: data["createdBy"] as? String ?? "",
+            aspect: data["aspect"] as? Double ?? 1,
+            locked: data["locked"] as? Bool ?? false,
+            brushIndex: data["brushIndex"] as? Int ?? 0,
+            frameColorHex: data["frameColorHex"] as? String ?? "#FDFAF5"
+        )
+    }
+
     func startElements(bookID: String, pageID: String) {
 
         guard let ref = elementsRef(bookID, pageID) else { return }
@@ -432,32 +514,7 @@ final class ScrapbookManager: ObservableObject {
                     return
                 }
 
-                self.elements = (snapshot?.documents ?? []).compactMap { document in
-
-                    let data = document.data()
-                    guard let raw = data["kind"] as? String,
-                          let kind = ScrapbookElementKind(rawValue: raw) else { return nil }
-
-                    return ScrapbookElement(
-                        id: document.documentID,
-                        kind: kind,
-                        x: data["x"] as? Double ?? 0.5,
-                        y: data["y"] as? Double ?? 0.5,
-                        scale: data["scale"] as? Double ?? 1,
-                        rotation: data["rotation"] as? Double ?? 0,
-                        z: data["z"] as? Int ?? 0,
-                        payload: data["payload"] as? String ?? "",
-                        colorHex: data["colorHex"] as? String ?? "#2E2A27",
-                        frameIndex: data["frameIndex"] as? Int ?? 0,
-                        fontIndex: data["fontIndex"] as? Int ?? 0,
-                        widthValue: data["widthValue"] as? Double ?? 6,
-                        createdBy: data["createdBy"] as? String ?? "",
-                        aspect: data["aspect"] as? Double ?? 1,
-                        locked: data["locked"] as? Bool ?? false,
-                        brushIndex: data["brushIndex"] as? Int ?? 0,
-                        frameColorHex: data["frameColorHex"] as? String ?? "#FDFAF5"
-                    )
-                }
+                self.elements = (snapshot?.documents ?? []).compactMap(Self.element(from:))
               }
             }
     }
@@ -550,6 +607,7 @@ final class ScrapbookManager: ObservableObject {
     /// away every listener has to go with it, or the next relationship
     /// inherits the last one's shelf.
     func handleDisconnect() {
+        stopWatching()
         stopElements()
         stopPages()
         stopOrnaments()

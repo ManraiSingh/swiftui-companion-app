@@ -67,6 +67,7 @@ struct ScrapbookBookView: View {
         }
         .onAppear {
             manager.startPages(bookID: book.id)
+            loadVisiblePages()
 
             // A beat before it opens, so the closed cover is actually seen.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
@@ -76,19 +77,14 @@ struct ScrapbookBookView: View {
             }
         }
         .onDisappear {
-            manager.stopElements()
+            manager.stopWatching()
             manager.stopPages()
         }
-        .onChange(of: manager.pages.count) { _, count in
-            if count > 0, manager.elements.isEmpty, let page = currentPage {
-                manager.startElements(bookID: book.id, pageID: page.id)
-            }
+        .onChange(of: manager.pages.count) { _, _ in
             pageIndex = clampedIndex(pageIndex)
+            loadVisiblePages()
         }
-        .onChange(of: pageIndex) { _, index in
-            guard manager.pages.indices.contains(index) else { return }
-            manager.startElements(bookID: book.id, pageID: manager.pages[index].id)
-        }
+        .onChange(of: pageIndex) { _, _ in loadVisiblePages() }
         .fullScreenCover(item: $editingPage) { page in
             ScrapbookCanvasView(book: book, page: page)
         }
@@ -232,6 +228,22 @@ struct ScrapbookBookView: View {
         .onPreferenceChange(SpreadWidthKey.self) { spreadWidth = max($0, 1) }
     }
 
+    /// Keeps the open spread loaded, plus the spread either side of it.
+    ///
+    /// A turn shows four pages at once — the two you are leaving and the two
+    /// arriving — so loading only the current pair would mean the page you
+    /// turn onto arrives blank and fills in a moment later.
+    private func loadVisiblePages() {
+
+        let window = (leftIndex - 2)...(rightIndex + 2)
+
+        let ids = window
+            .filter { manager.pages.indices.contains($0) }
+            .map { manager.pages[$0].id }
+
+        manager.watch(pages: ids, bookID: book.id)
+    }
+
     private static let gutter: CGFloat = 10
 
     /// The gutter, so the two halves read as one bound book.
@@ -306,7 +318,7 @@ struct ScrapbookBookView: View {
 
             ScrapbookPagePreview(
                 page: page,
-                elements: index == pageIndex ? manager.elements : []
+                elements: manager.pageElements[page.id] ?? []
             )
             .contentShape(Rectangle())
             .onTapGesture {
