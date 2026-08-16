@@ -193,81 +193,84 @@ struct ScrapbookBookView: View {
     /// you were reading, its back is the next one. So the turning leaf swaps
     /// which page it draws as it passes upright, and mirrors it — you are
     /// looking at the other side of the same sheet.
+    ///
+    /// The leaf is drawn *over* both halves rather than inside one of them.
+    /// It used to live in the half it started from, which was fine going
+    /// forward — the half it sweeps onto is drawn earlier, so the leaf
+    /// covered it — but backwards it swept onto the half drawn *after* it and
+    /// was painted straight over. The page simply disappeared halfway through
+    /// the turn.
     private var spread: some View {
 
-        HStack(spacing: 0) {
+        GeometryReader { proxy in
 
-            leftHalf
+            let half = (proxy.size.width - Self.gutter) / 2
 
-            // The gutter, so the two halves read as one bound book.
-            LinearGradient(
-                colors: [
-                    ScrapbookStyle.outline.opacity(0.28),
-                    ScrapbookStyle.outline.opacity(0.06),
-                    ScrapbookStyle.outline.opacity(0.28)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: 10)
+            ZStack {
 
-            rightHalf
+                // What sits under the turn: the page that stays put, and the
+                // one being revealed.
+                HStack(spacing: 0) {
+                    leaf(at: baseLeftIndex)
+                        .frame(width: half)
+                        .allowsHitTesting(turnAmount == 0)
+
+                    gutterView
+
+                    leaf(at: baseRightIndex)
+                        .frame(width: half)
+                        .allowsHitTesting(turnAmount == 0)
+                }
+
+                if turnAmount != 0 {
+                    turningLeaf(half: half, in: proxy.size)
+                }
+            }
+            .preference(key: SpreadWidthKey.self, value: proxy.size.width)
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: SpreadWidthKey.self, value: proxy.size.width)
-            }
-        )
         .onPreferenceChange(SpreadWidthKey.self) { spreadWidth = max($0, 1) }
+    }
+
+    private static let gutter: CGFloat = 10
+
+    /// The gutter, so the two halves read as one bound book.
+    private var gutterView: some View {
+        LinearGradient(
+            colors: [
+                ScrapbookStyle.outline.opacity(0.28),
+                ScrapbookStyle.outline.opacity(0.06),
+                ScrapbookStyle.outline.opacity(0.28)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(width: Self.gutter)
     }
 
     /// How far round the turn is, 0 to 1.
     private var turnProgress: CGFloat { min(abs(turnAmount), 1) }
 
-    @ViewBuilder
-    private var leftHalf: some View {
+    private var goingOn: Bool { turnAmount > 0 }
 
-        if turnAmount < 0 {
-            // Turning back: the previous left page waits underneath.
-            ZStack {
-                leaf(at: leftIndex - 2).allowsHitTesting(false)
-                turningLeaf(forward: false)
-            }
-        } else {
-            leaf(at: leftIndex)
-        }
-    }
+    /// The page beneath the turn on each side.
+    private var baseLeftIndex: Int { turnAmount < 0 ? leftIndex - 2 : leftIndex }
+    private var baseRightIndex: Int { turnAmount > 0 ? rightIndex + 2 : rightIndex }
 
-    @ViewBuilder
-    private var rightHalf: some View {
-
-        if turnAmount > 0 {
-            // Turning on: the next right page waits underneath.
-            ZStack {
-                leaf(at: rightIndex + 2).allowsHitTesting(false)
-                turningLeaf(forward: true)
-            }
-        } else {
-            leaf(at: rightIndex)
-        }
-    }
-
-    /// The sheet in motion.
-    private func turningLeaf(forward: Bool) -> some View {
+    /// The sheet in motion, laid over whichever half it started from.
+    private func turningLeaf(half: CGFloat, in size: CGSize) -> some View {
 
         // Past halfway you are seeing the back of the sheet, so it draws the
         // page on the other side — mirrored, because a page seen from behind
         // is reversed.
         let showingBack = turnProgress > 0.5
 
-        let face: Int = forward
+        let face: Int = goingOn
             ? (showingBack ? leftIndex + 2 : rightIndex)
             : (showingBack ? rightIndex - 2 : leftIndex)
 
-        let angle = (forward ? -180.0 : 180.0) * Double(turnProgress)
-
         return leaf(at: face)
+            .frame(width: half, height: size.height)
             .scaleEffect(x: showingBack ? -1 : 1, y: 1)
             .overlay(
                 // The sheet catches less light as it lifts, which is most of
@@ -275,15 +278,21 @@ struct ScrapbookBookView: View {
                 Color.black.opacity(Double(turnProgress) * 0.22)
             )
             .rotation3DEffect(
-                .degrees(angle),
+                .degrees((goingOn ? -180 : 180) * Double(turnProgress)),
                 axis: (x: 0, y: 1, z: 0),
-                anchor: forward ? .leading : .trailing,
+                anchor: goingOn ? .leading : .trailing,
                 perspective: 0.42
             )
             .shadow(
                 color: .black.opacity(Double(turnProgress) * 0.35),
                 radius: 12,
-                x: forward ? -8 : 8
+                x: goingOn ? -8 : 8
+            )
+            // Sat over the half it lifts from, so it can sweep across the
+            // spine and land on the other one.
+            .position(
+                x: goingOn ? size.width - half / 2 : half / 2,
+                y: size.height / 2
             )
             .allowsHitTesting(false)
     }
