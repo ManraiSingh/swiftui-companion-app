@@ -1,0 +1,497 @@
+//
+//  ScrapbookDecorations.swift
+//  Ziggy
+//
+//  The paper bits — tape, torn strips, stars, banners. The things that make a
+//  page look made rather than laid out.
+//
+//  Drawn rather than shipped as images so they stay sharp at any size, cost
+//  nothing to download, and can be recoloured.
+//
+//  They ride in an ordinary sticker element: the payload is a token like
+//  "#tape" instead of an emoji, which keeps them on the same footing as
+//  everything else on the page — draggable, resizable, turnable, lockable —
+//  without a second element kind to thread through the whole editor.
+//
+
+import SwiftUI
+
+enum ScrapbookDecoration: String, CaseIterable, Identifiable {
+
+    case washiTape, tornStrip, star, sparkle
+    case arrow, banner, paperClip, stamp
+    case filmStrip, speechBubble, heart, dashedBox
+
+    var id: String { rawValue }
+
+    /// The payload written into the element.
+    var token: String { "#" + rawValue }
+
+    /// Recognises a decoration element, ignoring plain emoji stickers.
+    static func from(payload: String) -> ScrapbookDecoration? {
+        guard payload.hasPrefix("#") else { return nil }
+        return ScrapbookDecoration(rawValue: String(payload.dropFirst()))
+    }
+
+    var label: String {
+        switch self {
+        case .washiTape:    return "Tape"
+        case .tornStrip:    return "Torn"
+        case .star:         return "Star"
+        case .sparkle:      return "Sparkle"
+        case .arrow:        return "Arrow"
+        case .banner:       return "Banner"
+        case .paperClip:    return "Clip"
+        case .stamp:        return "Stamp"
+        case .filmStrip:    return "Film"
+        case .speechBubble: return "Bubble"
+        case .heart:        return "Heart"
+        case .dashedBox:    return "Frame"
+        }
+    }
+
+    /// Drawn at this size for a sticker of scale 1; the element's own scale
+    /// takes it from there.
+    var size: CGSize {
+        switch self {
+        case .washiTape:    return CGSize(width: 110, height: 34)
+        case .tornStrip:    return CGSize(width: 120, height: 40)
+        case .star:         return CGSize(width: 64, height: 64)
+        case .sparkle:      return CGSize(width: 56, height: 56)
+        case .arrow:        return CGSize(width: 96, height: 48)
+        case .banner:       return CGSize(width: 124, height: 46)
+        case .paperClip:    return CGSize(width: 40, height: 76)
+        case .stamp:        return CGSize(width: 70, height: 78)
+        case .filmStrip:    return CGSize(width: 130, height: 56)
+        case .speechBubble: return CGSize(width: 108, height: 74)
+        case .heart:        return CGSize(width: 60, height: 54)
+        case .dashedBox:    return CGSize(width: 104, height: 84)
+        }
+    }
+
+    @ViewBuilder
+    func view(tint: Color) -> some View {
+        switch self {
+        case .washiTape:    WashiTape(tint: tint)
+        case .tornStrip:    TornStrip(tint: tint)
+        case .star:         StarBurst(tint: tint)
+        case .sparkle:      Sparkle(tint: tint)
+        case .arrow:        HandArrow(tint: tint)
+        case .banner:       Banner(tint: tint)
+        case .paperClip:    PaperClip(tint: tint)
+        case .stamp:        Stamp(tint: tint)
+        case .filmStrip:    FilmStrip(tint: tint)
+        case .speechBubble: SpeechBubble(tint: tint)
+        case .heart:        HeartDoodle(tint: tint)
+        case .dashedBox:    DashedBox(tint: tint)
+        }
+    }
+}
+
+// MARK: - Tape
+
+private struct WashiTape: View {
+
+    let tint: Color
+
+    var body: some View {
+        Rectangle()
+            .fill(tint.opacity(0.62))
+            .overlay(
+                // The faint stripes real washi tape has.
+                HStack(spacing: 7) {
+                    ForEach(0..<9, id: \.self) { _ in
+                        Rectangle().fill(.white.opacity(0.35)).frame(width: 3)
+                    }
+                }
+            )
+            .clipShape(TornEdges(teeth: 7, depth: 3))
+    }
+}
+
+// MARK: - Torn paper
+
+private struct TornStrip: View {
+
+    let tint: Color
+
+    var body: some View {
+        TornEdges(teeth: 11, depth: 5)
+            .fill(tint.opacity(0.9))
+            .overlay(
+                TornEdges(teeth: 11, depth: 5)
+                    .stroke(.black.opacity(0.08), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+    }
+}
+
+/// A rectangle with ragged top and bottom, for tape and torn paper.
+private struct TornEdges: Shape {
+
+    let teeth: Int
+    let depth: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+
+        var path = Path()
+        let step = rect.width / CGFloat(max(teeth, 1))
+
+        path.move(to: CGPoint(x: 0, y: depth))
+
+        for tooth in 0...teeth {
+            let x = CGFloat(tooth) * step
+            let y = tooth.isMultiple(of: 2) ? 0 : depth
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - depth))
+
+        for tooth in stride(from: teeth, through: 0, by: -1) {
+            let x = CGFloat(tooth) * step
+            let y = tooth.isMultiple(of: 2) ? rect.maxY : rect.maxY - depth
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Star
+
+private struct StarBurst: View {
+
+    let tint: Color
+
+    var body: some View {
+        SpikeStar(points: 5, innerRatio: 0.42)
+            .fill(tint)
+            .overlay(SpikeStar(points: 5, innerRatio: 0.42).stroke(.black.opacity(0.12), lineWidth: 1))
+    }
+}
+
+private struct Sparkle: View {
+
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            SpikeStar(points: 4, innerRatio: 0.22).fill(tint)
+            SpikeStar(points: 4, innerRatio: 0.22)
+                .fill(tint.opacity(0.55))
+                .scaleEffect(0.5)
+                .offset(x: 16, y: -14)
+            SpikeStar(points: 4, innerRatio: 0.22)
+                .fill(tint.opacity(0.4))
+                .scaleEffect(0.34)
+                .offset(x: -17, y: 15)
+        }
+    }
+}
+
+private struct SpikeStar: Shape {
+
+    let points: Int
+    let innerRatio: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+
+        var path = Path()
+        let centre = CGPoint(x: rect.midX, y: rect.midY)
+        let outer = min(rect.width, rect.height) / 2
+        let inner = outer * innerRatio
+        let step = .pi / CGFloat(points)
+
+        for index in 0..<(points * 2) {
+            let radius = index.isMultiple(of: 2) ? outer : inner
+            let angle = CGFloat(index) * step - .pi / 2
+            let point = CGPoint(
+                x: centre.x + cos(angle) * radius,
+                y: centre.y + sin(angle) * radius
+            )
+            index == 0 ? path.move(to: point) : path.addLine(to: point)
+        }
+
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Arrow
+
+private struct HandArrow: View {
+
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+
+            let width = proxy.size.width
+            let height = proxy.size.height
+
+            ZStack {
+                Path { path in
+                    path.move(to: CGPoint(x: width * 0.05, y: height * 0.72))
+                    path.addCurve(
+                        to: CGPoint(x: width * 0.88, y: height * 0.38),
+                        control1: CGPoint(x: width * 0.34, y: height * 0.92),
+                        control2: CGPoint(x: width * 0.62, y: height * 0.86)
+                    )
+                }
+                .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+
+                Path { path in
+                    path.move(to: CGPoint(x: width * 0.66, y: height * 0.20))
+                    path.addLine(to: CGPoint(x: width * 0.92, y: height * 0.36))
+                    path.addLine(to: CGPoint(x: width * 0.68, y: height * 0.60))
+                }
+                .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+            }
+        }
+    }
+}
+
+// MARK: - Banner
+
+private struct Banner: View {
+
+    let tint: Color
+
+    var body: some View {
+        BannerShape()
+            .fill(tint)
+            .overlay(BannerShape().stroke(.black.opacity(0.12), lineWidth: 1))
+            .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+    }
+}
+
+private struct BannerShape: Shape {
+
+    func path(in rect: CGRect) -> Path {
+
+        var path = Path()
+        let notch = rect.width * 0.10
+
+        path.move(to: .zero)
+        path.addLine(to: CGPoint(x: rect.maxX, y: 0))
+        path.addLine(to: CGPoint(x: rect.maxX - notch, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: 0, y: rect.maxY))
+        path.addLine(to: CGPoint(x: notch, y: rect.midY))
+        path.closeSubpath()
+
+        return path
+    }
+}
+
+// MARK: - Paper clip
+
+private struct PaperClip: View {
+
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+
+            let width = proxy.size.width
+            let height = proxy.size.height
+
+            Path { path in
+                path.move(to: CGPoint(x: width * 0.28, y: height * 0.86))
+                path.addLine(to: CGPoint(x: width * 0.28, y: height * 0.22))
+                path.addArc(
+                    center: CGPoint(x: width * 0.5, y: height * 0.22),
+                    radius: width * 0.22,
+                    startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false
+                )
+                path.addLine(to: CGPoint(x: width * 0.72, y: height * 0.74))
+                path.addArc(
+                    center: CGPoint(x: width * 0.5, y: height * 0.74),
+                    radius: width * 0.22,
+                    startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false
+                )
+                path.addLine(to: CGPoint(x: width * 0.5, y: height * 0.34))
+            }
+            .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+// MARK: - Stamp
+
+private struct Stamp: View {
+
+    let tint: Color
+
+    var body: some View {
+        StampShape()
+            .fill(tint)
+            .overlay(
+                StampShape()
+                    .inset(by: 8)
+                    .stroke(.white.opacity(0.85),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+            )
+            .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+    }
+}
+
+/// A stamp's scalloped edge.
+private struct StampShape: InsettableShape {
+
+    var inset: CGFloat = 0
+
+    func inset(by amount: CGFloat) -> StampShape {
+        var copy = self
+        copy.inset += amount
+        return copy
+    }
+
+    func path(in rect: CGRect) -> Path {
+
+        let frame = rect.insetBy(dx: inset, dy: inset)
+        let bite: CGFloat = 5
+        var path = Path(frame)
+
+        // Bitten out along each edge.
+        for x in stride(from: frame.minX, through: frame.maxX, by: bite * 2) {
+            path.addEllipse(in: CGRect(x: x - bite / 2, y: frame.minY - bite / 2,
+                                       width: bite, height: bite))
+            path.addEllipse(in: CGRect(x: x - bite / 2, y: frame.maxY - bite / 2,
+                                       width: bite, height: bite))
+        }
+
+        for y in stride(from: frame.minY, through: frame.maxY, by: bite * 2) {
+            path.addEllipse(in: CGRect(x: frame.minX - bite / 2, y: y - bite / 2,
+                                       width: bite, height: bite))
+            path.addEllipse(in: CGRect(x: frame.maxX - bite / 2, y: y - bite / 2,
+                                       width: bite, height: bite))
+        }
+
+        return path
+    }
+}
+
+// MARK: - Film strip
+
+private struct FilmStrip: View {
+
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(tint)
+
+            VStack {
+                sprockets
+                Spacer()
+                sprockets
+            }
+            .padding(.vertical, 4)
+
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Rectangle().fill(.white.opacity(0.22))
+                }
+            }
+            .padding(.vertical, 15)
+            .padding(.horizontal, 6)
+        }
+    }
+
+    private var sprockets: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<9, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(.white.opacity(0.85))
+                    .frame(width: 6, height: 5)
+            }
+        }
+    }
+}
+
+// MARK: - Speech bubble
+
+private struct SpeechBubble: View {
+
+    let tint: Color
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(tint)
+                .padding(.bottom, 12)
+
+            Path { path in
+                path.move(to: CGPoint(x: 16, y: 0))
+                path.addLine(to: CGPoint(x: 40, y: 0))
+                path.addLine(to: CGPoint(x: 20, y: 14))
+                path.closeSubpath()
+            }
+            .fill(tint)
+            .frame(width: 44, height: 14)
+            .offset(x: 14)
+        }
+        .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+    }
+}
+
+// MARK: - Heart
+
+private struct HeartDoodle: View {
+
+    let tint: Color
+
+    var body: some View {
+        DoodleHeart()
+            .fill(tint)
+            .overlay(DoodleHeart().stroke(.black.opacity(0.12), lineWidth: 1))
+    }
+}
+
+private struct DoodleHeart: Shape {
+
+    func path(in rect: CGRect) -> Path {
+
+        var path = Path()
+
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addCurve(
+            to: CGPoint(x: rect.minX, y: rect.height * 0.3),
+            control1: CGPoint(x: rect.width * 0.18, y: rect.height * 0.78),
+            control2: CGPoint(x: rect.minX, y: rect.height * 0.55)
+        )
+        path.addArc(
+            center: CGPoint(x: rect.width * 0.25, y: rect.height * 0.3),
+            radius: rect.width * 0.25,
+            startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false
+        )
+        path.addArc(
+            center: CGPoint(x: rect.width * 0.75, y: rect.height * 0.3),
+            radius: rect.width * 0.25,
+            startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.midX, y: rect.maxY),
+            control1: CGPoint(x: rect.maxX, y: rect.height * 0.55),
+            control2: CGPoint(x: rect.width * 0.82, y: rect.height * 0.78)
+        )
+        path.closeSubpath()
+
+        return path
+    }
+}
+
+// MARK: - Dashed frame
+
+private struct DashedBox: View {
+
+    let tint: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .stroke(tint, style: StrokeStyle(lineWidth: 3, dash: [9, 7]))
+    }
+}

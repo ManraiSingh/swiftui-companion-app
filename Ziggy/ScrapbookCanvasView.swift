@@ -32,6 +32,7 @@ struct ScrapbookCanvasView: View {
     // Brush
     @State private var brushColor = "#2E2A27"
     @State private var brushWidth: Double = 6
+    @State private var brushIndex = 0
     @State private var livePoints: [CGPoint] = []
 
     // Live gesture state, so dragging feels immediate without a round trip.
@@ -89,35 +90,7 @@ struct ScrapbookCanvasView: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
 
-            if let element = selected, tool == .select {
-                SelectedElementBar(
-                    element: element,
-                    scale: $draftScale,
-                    onScaleCommit: { commitScale(element) },
-                    onFrame: { cycleFrame(element) },
-                    onReplace: { replacePhoto(element) },
-                    onLock: { toggleLock(element) },
-                    onForward: { bringForward(element) },
-                    onDuplicate: { duplicate(element) },
-                    onDelete: { deleteSelected(element) }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            if typingID != nil {
-                TypingBar(
-                    fontIndex: $textFontIndex,
-                    colorHex: $textColor,
-                    size: $textSize,
-                    onDone: { finishTyping() }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            if tool == .brush || tool == .eraser {
-                BrushBar(color: $brushColor, width: $brushWidth, isEraser: tool == .eraser)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            bars
 
             toolbar
         }
@@ -129,8 +102,11 @@ struct ScrapbookCanvasView: View {
         .photosPicker(isPresented: $photoPickerOpen, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in Task { await addPhoto(item) } }
         .sheet(isPresented: $showingStickers) {
-            StickerPicker { emoji in addSticker(emoji) }
-                .presentationDetents([.medium])
+            StickerPicker(
+                onEmoji: { addSticker($0) },
+                onDecoration: { addDecoration($0) }
+            )
+            .presentationDetents([.large])
         }
         .sheet(isPresented: $showingPaper) {
             CanvasPaperPicker(selected: paperIndex) { index in
@@ -142,6 +118,49 @@ struct ScrapbookCanvasView: View {
         .fullScreenCover(isPresented: $showingCamera) {
             ScrapbookCameraPicker { image in addPhoto(image) }
                 .ignoresSafeArea()
+        }
+    }
+
+    /// Whichever context bar belongs to what's happening.
+    ///
+    /// Pulled out of `body` because the three of them inline pushed the view
+    /// past what the type checker will infer in reasonable time.
+    @ViewBuilder
+    private var bars: some View {
+
+        if let element = selected, tool == .select {
+            SelectedElementBar(
+                element: element,
+                scale: $draftScale,
+                onScaleCommit: { commitScale(element) },
+                onFrame: { cycleFrame(element) },
+                onReplace: { replacePhoto(element) },
+                onLock: { toggleLock(element) },
+                onForward: { bringForward(element) },
+                onDuplicate: { duplicate(element) },
+                onDelete: { deleteSelected(element) }
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        if typingID != nil {
+            TypingBar(
+                fontIndex: $textFontIndex,
+                colorHex: $textColor,
+                size: $textSize,
+                onDone: { finishTyping() }
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        if tool == .brush || tool == .eraser {
+            BrushBar(
+                color: $brushColor,
+                width: $brushWidth,
+                brushIndex: $brushIndex,
+                isEraser: tool == .eraser
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -391,6 +410,7 @@ struct ScrapbookCanvasView: View {
                 element.payload = ScrapbookStroke.encode(livePoints)
                 element.colorHex = brushColor
                 element.widthValue = brushWidth
+                element.brushIndex = brushIndex
                 element.z = manager.nextZ
                 element.x = 0.5
                 element.y = 0.5
@@ -484,6 +504,26 @@ struct ScrapbookCanvasView: View {
         element.widthValue = 7
         element.z = manager.nextZ
         element.rotation = Double.random(in: -12...12)
+        element.x = Double.random(in: 0.35...0.65)
+        element.y = Double.random(in: 0.35...0.65)
+
+        manager.add(element, bookID: book.id, pageID: page.id)
+        selectedID = element.id
+    }
+
+    /// Drops one of the drawn paper bits on the page.
+    ///
+    /// It goes in as an ordinary sticker, so it's draggable, resizable,
+    /// turnable and lockable like everything else without the editor needing
+    /// to know it's any different.
+    private func addDecoration(_ decoration: ScrapbookDecoration) {
+
+        var element = ScrapbookElement(id: UUID().uuidString, kind: .sticker)
+        element.payload = decoration.token
+        element.colorHex = brushColor
+        element.widthValue = 7
+        element.z = manager.nextZ
+        element.rotation = Double.random(in: -8...8)
         element.x = Double.random(in: 0.35...0.65)
         element.y = Double.random(in: 0.35...0.65)
 
@@ -780,6 +820,7 @@ private struct BrushBar: View {
 
     @Binding var color: String
     @Binding var width: Double
+    @Binding var brushIndex: Int
     let isEraser: Bool
 
     var body: some View {
@@ -787,6 +828,37 @@ private struct BrushBar: View {
         VStack(spacing: 8) {
 
             if !isEraser {
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(ScrapbookStyle.brushes.enumerated()), id: \.offset) { index, brush in
+                            Button {
+                                brushIndex = index
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: brush.icon)
+                                        .font(.system(size: 15, weight: .bold))
+                                    Text(brush.label)
+                                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                                }
+                                .foregroundStyle(brushIndex == index
+                                                 ? Color(red: 0.16, green: 0.14, blue: 0.22)
+                                                 : .white)
+                                .frame(width: 66)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(brushIndex == index
+                                              ? Color.white
+                                              : Color.white.opacity(0.12))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(ScrapbookStyle.inkPalette, id: \.self) { hex in
@@ -804,76 +876,27 @@ private struct BrushBar: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                Image(systemName: "minus")
-                    .font(.system(size: 11, weight: .bold))
-                Slider(value: $width, in: 2...40)
-                Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .bold))
+            // Laid out the way the doodle's is: nib, a plain slider, and a dot
+            // showing the true width — no stepper buttons pinching the track.
+            HStack(spacing: 14) {
+
+                Image(systemName: "pencil.tip")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.7))
+
+                Slider(value: $width, in: 2...60)
+                    .tint(.white.opacity(0.9))
+
                 Circle()
-                    .fill(isEraser ? Color.white : Color(scrapbookHex: color))
-                    .frame(width: max(width / 2, 6), height: max(width / 2, 6))
-                    .frame(width: 22, height: 22)
+                    .fill(isEraser ? Color.white.opacity(0.65) : Color(scrapbookHex: color))
+                    .frame(width: min(width, 30), height: min(width, 30))
+                    .frame(width: 30, height: 30)
             }
-            .foregroundStyle(.white)
             .padding(.horizontal, 18)
         }
         .padding(.vertical, 8)
     }
 }
-
-// MARK: - Sticker picker
-
-private struct StickerPicker: View {
-
-    let onPick: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    private let columns = [GridItem(.adaptive(minimum: 52), spacing: 10)]
-
-    var body: some View {
-
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-
-                Text("Stickers")
-                    .font(.system(size: 19, weight: .bold, design: .serif))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-
-                ForEach(ScrapbookStyle.stickerGroups, id: \.0) { group in
-
-                    VStack(alignment: .leading, spacing: 10) {
-
-                        Text(group.0)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-
-                        LazyVGrid(columns: columns, spacing: 10) {
-                            ForEach(group.1, id: \.self) { emoji in
-                                Text(emoji)
-                                    .font(.system(size: 30))
-                                    .frame(width: 50, height: 50)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(Color.secondary.opacity(0.10))
-                                    )
-                                    .onTapGesture {
-                                        onPick(emoji)
-                                        dismiss()
-                                    }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            }
-            .padding(.bottom, 24)
-        }
-    }
-}
-
-// MARK: - Text composer
 
 // MARK: - Typing bar
 
@@ -949,6 +972,114 @@ private struct TypingBar: View {
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Sticker picker
+
+private struct StickerPicker: View {
+
+    let onEmoji: (String) -> Void
+    let onDecoration: (ScrapbookDecoration) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private let emojiColumns = [GridItem(.adaptive(minimum: 52), spacing: 10)]
+    private let paperColumns = [GridItem(.adaptive(minimum: 84), spacing: 12)]
+
+    var body: some View {
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+
+                Text("Stickers")
+                    .font(.system(size: 19, weight: .bold, design: .serif))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+
+                paperSection
+                emojiSections
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    /// The paper bits come first — they're what makes a page look made rather
+    /// than typed.
+    private var paperSection: some View {
+
+        VStack(alignment: .leading, spacing: 10) {
+
+            Text("Paper")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: paperColumns, spacing: 12) {
+                ForEach(ScrapbookDecoration.allCases) { decoration in
+                    tile(decoration)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func tile(_ decoration: ScrapbookDecoration) -> some View {
+
+        // Scaled to a common tile rather than drawn small, so each previews at
+        // the proportions it will have on the page.
+        let fit = min(72 / decoration.size.width, 50 / decoration.size.height)
+
+        return VStack(spacing: 5) {
+
+            decoration.view(tint: ScrapbookStyle.terracotta)
+                .frame(width: decoration.size.width, height: decoration.size.height)
+                .scaleEffect(fit)
+                .frame(width: 78, height: 52)
+
+            Text(decoration.label)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 84, height: 78)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.10))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onDecoration(decoration)
+            dismiss()
+        }
+    }
+
+    private var emojiSections: some View {
+
+        ForEach(ScrapbookStyle.stickerGroups, id: \.0) { group in
+
+            VStack(alignment: .leading, spacing: 10) {
+
+                Text(group.0)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(columns: emojiColumns, spacing: 10) {
+                    ForEach(group.1, id: \.self) { emoji in
+                        Text(emoji)
+                            .font(.system(size: 30))
+                            .frame(width: 50, height: 50)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.secondary.opacity(0.10))
+                            )
+                            .onTapGesture {
+                                onEmoji(emoji)
+                                dismiss()
+                            }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
     }
 }
 

@@ -278,6 +278,9 @@ struct ScrapbookElement: Identifiable, Equatable {
     /// Pinned to the page. A locked element ignores drags, pinches and turns
     /// so it can't be knocked out of place while you work around it.
     var locked: Bool = false
+
+    /// Which pen drew a stroke. Ignored by everything else.
+    var brushIndex: Int = 0
 }
 
 // MARK: - Stroke encoding

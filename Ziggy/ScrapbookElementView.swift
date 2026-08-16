@@ -139,9 +139,17 @@ struct ScrapbookElementView: View {
                 .overlay(selectionRing)
 
         case .sticker:
-            Text(element.payload)
-                .font(.system(size: element.widthValue * 6))
-                .overlay(selectionRing)
+            // A sticker is either an emoji or one of the drawn paper bits,
+            // told apart by the "#" the decoration tokens carry.
+            if let decoration = ScrapbookDecoration.from(payload: element.payload) {
+                decoration.view(tint: Color(scrapbookHex: element.colorHex))
+                    .frame(width: decoration.size.width, height: decoration.size.height)
+                    .overlay(selectionRing)
+            } else {
+                Text(element.payload)
+                    .font(.system(size: element.widthValue * 6))
+                    .overlay(selectionRing)
+            }
 
         case .stroke:
             strokeShape
@@ -178,25 +186,44 @@ struct ScrapbookElementView: View {
 
     private var strokeShape: some View {
 
+        let brush = ScrapbookStyle.brush(element.brushIndex)
+        let path = ScrapbookStroke.path(
+            for: ScrapbookStroke.decode(element.payload),
+            in: canvasSize
+        )
+        let ink = Color(scrapbookHex: element.colorHex)
+        let style = StrokeStyle(
+            lineWidth: element.widthValue * brush.widthScale,
+            lineCap: brush.flatCap ? .butt : .round,
+            lineJoin: .round
+        )
+
         // A stroke covers the whole page and is positioned at its centre, so
         // the transform that every other element gets has to be undone here —
         // otherwise a stroke drawn at the top of the page jumps when the view
         // repositions it.
-        ScrapbookStroke
-            .path(for: ScrapbookStroke.decode(element.payload), in: canvasSize)
-            .stroke(
-                Color(scrapbookHex: element.colorHex),
-                style: StrokeStyle(
-                    lineWidth: element.widthValue,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-            .frame(width: canvasSize.width, height: canvasSize.height)
-            .offset(
-                x: canvasSize.width * (0.5 - element.x),
-                y: canvasSize.height * (0.5 - element.y)
-            )
+        return ZStack {
+
+            path.stroke(ink.opacity(brush.opacity), style: style)
+
+            // A second, thinner pass nudged off the first gives the broken
+            // edge a crayon or pencil leaves. Cheaper and steadier than
+            // scattering the points themselves, which would make a stroke
+            // look different every time it was redrawn.
+            if brush.grainy {
+                path
+                    .stroke(ink.opacity(brush.opacity * 0.45),
+                            style: StrokeStyle(lineWidth: element.widthValue * brush.widthScale * 0.55,
+                                               lineCap: style.lineCap,
+                                               lineJoin: .round))
+                    .offset(x: 1.2, y: 1.2)
+            }
+        }
+        .frame(width: canvasSize.width, height: canvasSize.height)
+        .offset(
+            x: canvasSize.width * (0.5 - element.x),
+            y: canvasSize.height * (0.5 - element.y)
+        )
     }
 
     @ViewBuilder

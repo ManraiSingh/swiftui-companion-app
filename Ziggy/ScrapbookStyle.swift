@@ -175,6 +175,43 @@ enum ScrapbookStyle {
         "#A8763E", "#7D8491"
     ]
 
+    // MARK: Brushes
+
+    /// The pens available on a page. Mirrors the doodle's set as closely as
+    /// plain stroke drawing allows — the doodle has PencilKit's real inks
+    /// behind it, so these approximate the same feel with opacity, width and
+    /// cap rather than reproducing the texture.
+    struct Brush {
+        let label: String
+        let icon: String
+        let opacity: Double
+        let widthScale: Double
+        let flatCap: Bool
+        /// Drawn twice, slightly apart, for the grain of a crayon.
+        let grainy: Bool
+    }
+
+    static let brushes: [Brush] = [
+        Brush(label: "Pen",      icon: "pencil.tip",              opacity: 1.00,
+              widthScale: 1.0,  flatCap: false, grainy: false),
+        Brush(label: "Fountain", icon: "paintbrush.pointed.fill", opacity: 0.95,
+              widthScale: 1.35, flatCap: false, grainy: false),
+        Brush(label: "Marker",   icon: "highlighter",             opacity: 0.55,
+              widthScale: 2.1,  flatCap: true,  grainy: false),
+        Brush(label: "Pencil",   icon: "pencil",                  opacity: 0.72,
+              widthScale: 0.6,  flatCap: false, grainy: true),
+        Brush(label: "Monoline", icon: "scribble",                opacity: 1.00,
+              widthScale: 0.85, flatCap: true,  grainy: false),
+        Brush(label: "Water",    icon: "drop.fill",               opacity: 0.34,
+              widthScale: 2.6,  flatCap: false, grainy: false),
+        Brush(label: "Crayon",   icon: "paintpalette.fill",       opacity: 0.80,
+              widthScale: 1.5,  flatCap: true,  grainy: true)
+    ]
+
+    static func brush(_ index: Int) -> Brush {
+        brushes[((index % brushes.count) + brushes.count) % brushes.count]
+    }
+
     // MARK: Stickers
 
     /// Grouped so the picker has sections rather than one endless grid.
