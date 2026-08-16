@@ -9,6 +9,13 @@
 
 import SwiftUI
 
+private struct SpreadWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 1
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct ScrapbookBookView: View {
 
     let book: ScrapbookBook
@@ -20,6 +27,12 @@ struct ScrapbookBookView: View {
     @State private var pageIndex = 0
     @State private var editingPage: ScrapbookPage?
     @State private var showingPaper = false
+
+    /// How far through a page turn we are: 0 settled, +1 a leaf fully turned
+    /// forward, -1 fully turned back. Driven by the finger, so the page hangs
+    /// wherever you let it.
+    @State private var turnAmount: CGFloat = 0
+    @State private var spreadWidth: CGFloat = 1
 
     private var cover: ScrapbookStyle.Cover { ScrapbookStyle.cover(book.coverIndex) }
 
@@ -140,24 +153,51 @@ struct ScrapbookBookView: View {
         }
         // Two pages side by side, so the aspect is twice a single page's.
         .aspectRatio(0.74 * 2, contentMode: .fit)
-        // Swiping across the spread turns it, the way the paged TabView used
-        // to before the book had two leaves to keep in step.
+        // The page follows the finger rather than waiting for the swipe to
+        // finish, so a half-hearted drag shows a half-lifted page and falls
+        // back — which is what makes it feel like paper.
         .gesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
+            DragGesture(minimumDistance: 14)
+                .onChanged { value in
+
                     guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    turn(value.translation.width < 0 ? 1 : -1)
+
+                    let pull = -value.translation.width / (spreadWidth / 2)
+
+                    turnAmount = pull > 0
+                        ? (canTurnOn ? min(pull, 1) : 0)
+                        : (canTurnBack ? max(pull, -1) : 0)
+                }
+                .onEnded { value in
+
+                    guard turnAmount != 0 else { return }
+
+                    // Past a third of the way, or thrown hard enough, it goes
+                    // over; otherwise it drops back.
+                    let thrown = abs(value.predictedEndTranslation.width) > spreadWidth / 3
+
+                    if turnProgress > 0.34 || thrown {
+                        complete(forward: turnAmount > 0)
+                    } else {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                            turnAmount = 0
+                        }
+                    }
                 }
         )
     }
 
-    /// The open spread: the left page is whatever exists there, the right is
-    /// the next page or the invitation to start one.
+    /// The open spread, with a leaf that turns about the spine.
+    ///
+    /// A page turn is one sheet pivoting on the gutter: its front is the page
+    /// you were reading, its back is the next one. So the turning leaf swaps
+    /// which page it draws as it passes upright, and mirrors it — you are
+    /// looking at the other side of the same sheet.
     private var spread: some View {
 
         HStack(spacing: 0) {
 
-            leaf(at: leftIndex)
+            leftHalf
 
             // The gutter, so the two halves read as one bound book.
             LinearGradient(
@@ -171,9 +211,81 @@ struct ScrapbookBookView: View {
             )
             .frame(width: 10)
 
-            leaf(at: rightIndex)
+            rightHalf
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: SpreadWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(SpreadWidthKey.self) { spreadWidth = max($0, 1) }
+    }
+
+    /// How far round the turn is, 0 to 1.
+    private var turnProgress: CGFloat { min(abs(turnAmount), 1) }
+
+    @ViewBuilder
+    private var leftHalf: some View {
+
+        if turnAmount < 0 {
+            // Turning back: the previous left page waits underneath.
+            ZStack {
+                leaf(at: leftIndex - 2).allowsHitTesting(false)
+                turningLeaf(forward: false)
+            }
+        } else {
+            leaf(at: leftIndex)
+        }
+    }
+
+    @ViewBuilder
+    private var rightHalf: some View {
+
+        if turnAmount > 0 {
+            // Turning on: the next right page waits underneath.
+            ZStack {
+                leaf(at: rightIndex + 2).allowsHitTesting(false)
+                turningLeaf(forward: true)
+            }
+        } else {
+            leaf(at: rightIndex)
+        }
+    }
+
+    /// The sheet in motion.
+    private func turningLeaf(forward: Bool) -> some View {
+
+        // Past halfway you are seeing the back of the sheet, so it draws the
+        // page on the other side — mirrored, because a page seen from behind
+        // is reversed.
+        let showingBack = turnProgress > 0.5
+
+        let face: Int = forward
+            ? (showingBack ? leftIndex + 2 : rightIndex)
+            : (showingBack ? rightIndex - 2 : leftIndex)
+
+        let angle = (forward ? -180.0 : 180.0) * Double(turnProgress)
+
+        return leaf(at: face)
+            .scaleEffect(x: showingBack ? -1 : 1, y: 1)
+            .overlay(
+                // The sheet catches less light as it lifts, which is most of
+                // what sells the fold.
+                Color.black.opacity(Double(turnProgress) * 0.22)
+            )
+            .rotation3DEffect(
+                .degrees(angle),
+                axis: (x: 0, y: 1, z: 0),
+                anchor: forward ? .leading : .trailing,
+                perspective: 0.42
+            )
+            .shadow(
+                color: .black.opacity(Double(turnProgress) * 0.35),
+                radius: 12,
+                x: forward ? -8 : 8
+            )
+            .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -329,14 +441,14 @@ struct ScrapbookBookView: View {
 
         HStack(spacing: 12) {
 
-            turnButton("chevron.left", enabled: leftIndex > 0) { turn(-1) }
+            turnButton("chevron.left", enabled: canTurnBack) { turn(-1) }
 
             Text(spreadLabel)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(ScrapbookStyle.paperWhite.opacity(0.9))
                 .frame(minWidth: 92)
 
-            turnButton("chevron.right", enabled: rightIndex < manager.pages.count) { turn(1) }
+            turnButton("chevron.right", enabled: canTurnOn) { turn(1) }
 
             Spacer()
 
@@ -357,15 +469,38 @@ struct ScrapbookBookView: View {
         return "Pages \(leftIndex + 1)–\(min(rightIndex + 1, total)) of \(total)"
     }
 
+    private var canTurnOn: Bool { rightIndex < manager.pages.count }
+    private var canTurnBack: Bool { leftIndex > 0 }
+
     /// Turns a whole spread at a time, and lands on the left leaf so the
     /// "new page" invitation stays on the right where it belongs.
     private func turn(_ direction: Int) {
+        guard direction > 0 ? canTurnOn : canTurnBack else { return }
+        turnAmount = direction > 0 ? 0.001 : -0.001
+        complete(forward: direction > 0)
+    }
 
-        let target = leftIndex + direction * 2
-        guard target >= 0, target <= manager.pages.count else { return }
+    /// Carries the leaf the rest of the way over, then swaps the spread
+    /// underneath it.
+    ///
+    /// The swap is made in a transaction with animation off: the leaf has
+    /// already landed showing the new page, so animating the change again
+    /// would show it a second time.
+    private func complete(forward: Bool) {
 
-        withAnimation(.easeInOut(duration: 0.3)) {
-            pageIndex = min(target, max(manager.pages.count - 1, 0))
+        withAnimation(.easeOut(duration: 0.34)) {
+            turnAmount = forward ? 1 : -1
+        }
+
+        let target = leftIndex + (forward ? 2 : -2)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) {
+            var settle = Transaction()
+            settle.disablesAnimations = true
+            withTransaction(settle) {
+                pageIndex = min(max(target, 0), max(manager.pages.count - 1, 0))
+                turnAmount = 0
+            }
         }
     }
 
