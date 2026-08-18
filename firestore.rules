@@ -1,0 +1,107 @@
+rules_version = '2';
+
+// Ziggy — Firestore security rules.
+//
+// Every document the app touches lives under `relationships/{code}`: the pet,
+// emotions, events, games, devices, daily questions, instants, doodles and the
+// whole scrapbook. That makes the rule one sentence long — only the two people
+// in a relationship can read or write anything inside it — and everything else
+// here is about how somebody becomes one of those two.
+//
+// Membership is the `members` array on the relationship document, which the app
+// already writes on first sync. These rules do not introduce it; they start
+// enforcing it.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // The members of a relationship, read from the parent document.
+    //
+    // Costs one document read per rule evaluation. Worth it: the alternative
+    // is copying the member list onto every element of every page, which is
+    // more data, more writes, and one more thing to get out of step.
+    function membersOf(code) {
+      return get(/databases/$(database)/documents/relationships/$(code)).data.members;
+    }
+
+    function isMember(code) {
+      return signedIn() && request.auth.uid in membersOf(code);
+    }
+
+    match /relationships/{code} {
+
+      // The list as it stands, and as this write would leave it. Both tolerate
+      // the field being absent — a relationship created before the app wrote
+      // membership has no `members` at all, and reading it directly would
+      // throw rather than deny.
+      function current() {
+        return resource != null && 'members' in resource.data
+          ? resource.data.members
+          : [];
+      }
+
+      function proposed() {
+        return 'members' in request.resource.data
+          ? request.resource.data.members
+          : [];
+      }
+
+      allow get, list: if signedIn() && request.auth.uid in current();
+
+      // Starting a relationship: you may put yourself in, and only yourself.
+      allow create: if signedIn()
+                    && proposed().size() == 1
+                    && proposed().hasOnly([request.auth.uid]);
+
+      // Two ways an update is allowed.
+      //
+      // Either you are already in and you stay in — which covers every
+      // ordinary write to the document, and also lets you remove a member.
+      //
+      // Removal has to be possible, because the cap below would otherwise be
+      // a trap. If a partner never signed in and loses their phone, their old
+      // anonymous uid still occupies a place; they re-enter the right code and
+      // are refused, locked out of their own scrapbook forever. Someone in the
+      // relationship has to be able to free that place and re-invite them.
+      //
+      // You cannot use it to grow past two, but a relationship that is already
+      // larger — from before any of this was enforced — may carry on and
+      // shrink, rather than being frozen out entirely.
+      //
+      // Or you are joining: there is room, everyone already in stays in, and
+      // the only name you add is your own.
+      //
+      // The room check is what makes a guessed code far less useful. A code
+      // whose second partner has already joined is closed, so only an invite
+      // created and not yet accepted is exposed at all.
+      allow update: if signedIn() && (
+                      (request.auth.uid in current()
+                       && request.auth.uid in proposed()
+                       && (proposed().size() <= 2
+                           || proposed().size() <= current().size()))
+                      ||
+                      (current().size() < 2
+                       && proposed().hasAll(current())
+                       && proposed().hasOnly(current().concat([request.auth.uid])))
+                    );
+
+      // Nothing deletes a relationship. Leaving is a local act — the app
+      // forgets the code — and the memories stay for the other person.
+      allow delete: if false;
+
+      // Everything inside: the pet, the games, the scrapbook, all of it.
+      match /{path=**} {
+        allow read, write: if isMember(code);
+      }
+    }
+
+    // Anything not named above is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

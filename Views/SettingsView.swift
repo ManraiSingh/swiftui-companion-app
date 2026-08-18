@@ -6,10 +6,13 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct SettingsView: View {
 
     @ObservedObject var petVM: PetViewModel
+
+    @StateObject private var account = ZiggyAccount.shared
 
     @AppStorage("ziggy_username")
     private var username = ""
@@ -65,6 +68,21 @@ struct SettingsView: View {
                                     flash($savedFlash)
                                 }
                             }
+                        }
+
+                        // Account
+                        //
+                        // Offered here rather than forced on launch. Everyone
+                        // already using Ziggy has a name and a partner and
+                        // never passes back through onboarding, so this is
+                        // their way in — and it stays quiet once taken.
+                        settingsCard(
+                            icon: account.isSignedIn ? "🔒" : "☁️",
+                            title: account.isSignedIn
+                                ? "Your Memories Are Safe"
+                                : "Keep Your Memories Safe"
+                        ) {
+                            accountCard
                         }
 
                         // Pet
@@ -220,6 +238,55 @@ struct SettingsView: View {
     }
 
     // MARK: - Components
+
+    /// Sign in, or the reassurance that it's already done.
+    @ViewBuilder
+    private var accountCard: some View {
+
+        if account.isSignedIn {
+
+            HStack(spacing: 10) {
+
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundColor(.green.opacity(0.8))
+
+                Text("Signed in with Apple. Your Ziggy and your scrapbook will come back on a new phone.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+
+        } else {
+
+            VStack(spacing: 12) {
+
+                Text("Right now everything lives only on this phone. Sign in and it follows you — nothing else changes.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                SignInWithAppleButton(.signIn) { request in
+                    account.prepare(request)
+                } onCompletion: { result in
+                    account.finish(result)
+                }
+                .signInWithAppleButtonStyle(.black)
+                .frame(height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .disabled(account.isWorking)
+                .opacity(account.isWorking ? 0.6 : 1)
+
+                if let error = account.lastError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red.opacity(0.8))
+                }
+            }
+        }
+    }
 
     private func settingsCard<Content: View>(
         icon: String,

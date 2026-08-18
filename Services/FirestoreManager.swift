@@ -244,6 +244,60 @@ class FirestoreManager {
         }
     }
 
+    // MARK: - Accounts
+
+    /// Records that this member is on a real account rather than an anonymous
+    /// one.
+    ///
+    /// Each device can only know its *own* sign-in state — Firebase tells a
+    /// phone about the user on that phone and nobody else. So each writes its
+    /// own id into `linkedMembers`, and that is how the app can say whether
+    /// your partner is protected too.
+    func publishAccountStatus() {
+
+        guard !relationshipCode.isEmpty,
+              let user = Auth.auth().currentUser,
+              !user.isAnonymous else { return }
+
+        let uid = user.uid
+
+        ensureRelationshipMembership { [weak self] canSync in
+
+            guard let self, canSync else { return }
+
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .setData(["linkedMembers": FieldValue.arrayUnion([uid])], merge: true)
+        }
+    }
+
+    /// Which relationship this account belongs to, for a phone that has never
+    /// seen it.
+    ///
+    /// This is what signing in actually buys: the uid comes back with the
+    /// Apple account, and the relationship is whichever one lists it. Without
+    /// it a new phone knows who you are and still can't find your scrapbook,
+    /// because the code only ever lived in the old phone's UserDefaults.
+    func findRelationship(_ completion: @escaping (String?) -> Void) {
+
+        ensureSignedIn { [weak self] uid in
+
+            guard let self, let uid else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            self.db.collection("relationships")
+                .whereField("members", arrayContains: uid)
+                .limit(to: 1)
+                .getDocuments { snapshot, _ in
+                    DispatchQueue.main.async {
+                        completion(snapshot?.documents.first?.documentID)
+                    }
+                }
+        }
+    }
+
     func refreshSavedDeviceToken() {
         guard
             let token = UserDefaults.standard.string(forKey: deviceTokenKey)
@@ -272,12 +326,34 @@ class FirestoreManager {
 
             let ref = self.db.collection("relationships").document(code)
 
-            // 1) Write membership first.
-            ref.setData([
-                "createdAt": Timestamp(),
-                "members": [uid]
-            ], merge: true) { error in
-                guard error == nil else {
+            // 1) Claim the code, and only if nobody holds it.
+            //
+            // Codes are drawn at random from about ten million, so two people
+            // will eventually pick the same one. This used to write
+            // `"members": [uid]` with merge, which *replaces* the array — the
+            // second person to draw a code silently threw an established
+            // couple out of their own relationship, leaving their pet and
+            // their scrapbook unreachable behind a code that was no longer
+            // theirs.
+            //
+            // A transaction that refuses an existing document turns that into
+            // an ordinary miss, and the caller simply draws again.
+            self.db.runTransaction({ transaction, _ -> Any? in
+
+                let existing = try? transaction.getDocument(ref)
+
+                guard existing?.exists != true else { return "taken" }
+
+                transaction.setData([
+                    "createdAt": Timestamp(),
+                    "members": [uid]
+                ], forDocument: ref, merge: true)
+
+                return nil
+
+            }) { outcome, error in
+
+                guard error == nil, outcome as? String != "taken" else {
                     DispatchQueue.main.async { completion(false) }
                     return
                 }

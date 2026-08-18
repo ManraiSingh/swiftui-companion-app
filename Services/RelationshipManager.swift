@@ -34,6 +34,11 @@ final class RelationshipManager: ObservableObject {
             forKey: key
         )
 
+        // Now that there's a relationship to write it to, record whether this
+        // member is on a real account. Signing in can happen before pairing,
+        // in which case there was nowhere to put this at the time.
+        FirestoreManager.shared.publishAccountStatus()
+
         NotificationCenter.default.post(
             name: NSNotification.Name("RelationshipChanged"),
             object: nil

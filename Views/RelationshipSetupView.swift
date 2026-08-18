@@ -317,20 +317,38 @@ struct RelationshipSetupView: View {
     }
 
     private func createInvite() {
-        let code = generateCode()
         isCreatingInvite = true
         inviteError = ""
-        generatedCode = code
+        claimCode(attemptsLeft: 5)
+    }
+
+    /// Draws a code and claims it, drawing again if somebody already holds it.
+    ///
+    /// Creating now refuses a code that is taken rather than writing over the
+    /// couple who have it, so a collision has to be answered here. Five goes
+    /// is far more than enough: against ten million codes, missing five times
+    /// running would need the app to have more users than there are codes.
+    private func claimCode(attemptsLeft: Int) {
+
+        guard attemptsLeft > 0 else {
+            isCreatingInvite = false
+            generatedCode = ""
+            inviteError = "Could not create invite. Check your connection and try again."
+            return
+        }
+
+        let code = generateCode()
 
         FirestoreManager.shared.createRelationship(code: code) { created in
-            isCreatingInvite = false
 
-            if created {
-                inviteCreated = true
-            } else {
-                generatedCode = ""
-                inviteError = "Could not create invite. Check your connection and try again."
+            guard created else {
+                claimCode(attemptsLeft: attemptsLeft - 1)
+                return
             }
+
+            generatedCode = code
+            isCreatingInvite = false
+            inviteCreated = true
         }
     }
 

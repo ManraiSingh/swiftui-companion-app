@@ -6,11 +6,14 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct OnboardingView: View {
 
     @State private var name = ""
     @State private var bounce = false
+
+    @StateObject private var account = ZiggyAccount.shared
 
     @AppStorage("ziggy_username")
     private var username = ""
@@ -117,6 +120,8 @@ struct OnboardingView: View {
                             )
                     }
                     .disabled(!canContinue)
+
+                    signIn
                 }
                 .padding(.horizontal, 28)
 
@@ -125,6 +130,79 @@ struct OnboardingView: View {
             }
         }
         .onAppear { bounce = true }
+    }
+
+    /// Signing in, offered rather than required.
+    ///
+    /// It sits under the ordinary way in, not in front of it — nobody is made
+    /// to have an account to meet Ziggy. What it buys is stated plainly,
+    /// because "sign in" on its own reads as a chore and this is the only
+    /// thing standing between a new phone and losing everything.
+    ///
+    /// Apple hands back the user's name on the first authorisation, so for
+    /// anyone who takes it this replaces the step above rather than adding one.
+    private var signIn: some View {
+
+        VStack(spacing: 10) {
+
+            HStack {
+                line
+                Text("or")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                line
+            }
+
+            SignInWithAppleButton(.signIn) { request in
+                account.prepare(request)
+            } onCompletion: { result in
+                account.finish(result) { done in
+
+                    guard done else { return }
+
+                    // Apple only offers a name the very first time an account
+                    // authorises this app. A returning user gets nothing back,
+                    // so if they also haven't typed one they stay on this
+                    // screen — signed in already — and carry on with the field
+                    // above rather than being let through as "Anonymous".
+                    let typed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let known = UserManager.shared.username
+
+                    if !typed.isEmpty {
+                        username = typed
+                    } else if known != "Anonymous" && !known.isEmpty {
+                        username = known
+                    }
+                }
+            }
+            .signInWithAppleButtonStyle(.black)
+            .frame(height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .disabled(account.isWorking)
+            .opacity(account.isWorking ? 0.6 : 1)
+
+            Text("So your memories survive a new phone")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                // The screen is tight once the button is in, and without this
+                // the line is offered a single row and truncated mid-sentence.
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let error = account.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red.opacity(0.8))
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private var line: some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.25))
+            .frame(height: 1)
     }
 }
 
