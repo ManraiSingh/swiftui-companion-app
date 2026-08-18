@@ -154,6 +154,27 @@ struct OnboardingView: View {
                 line
             }
 
+            // Already signed in — which happens on a reinstall, because the
+            // keychain outlives the app even though the name and the code do
+            // not. Offering the button again would invite a second sign-in
+            // that has nothing left to do.
+            if account.isSignedIn {
+
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundColor(.green.opacity(0.8))
+                    Text("Signed in with Apple")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(accent)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background(.white.opacity(0.7))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+
+            } else {
+
             SignInWithAppleButton(.signIn) { request in
                 account.prepare(request)
             } onCompletion: { result in
@@ -182,7 +203,11 @@ struct OnboardingView: View {
             .disabled(account.isWorking)
             .opacity(account.isWorking ? 0.6 : 1)
 
-            Text("So your memories survive a new phone")
+            }
+
+            Text(account.isSignedIn
+                 ? "Your memories are already safe"
+                 : "So your memories survive a new phone")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

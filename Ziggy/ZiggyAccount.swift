@@ -46,9 +46,30 @@ final class ZiggyAccount: ObservableObject {
     @Published var recoveredCode: String?
 
     private var nonce: String?
+    private var authListener: AuthStateDidChangeListenerHandle?
 
     private init() {
+
         refresh()
+
+        // Watch who this device is, rather than asking once at launch.
+        //
+        // Firebase restores its session from the keychain, and the keychain
+        // survives the app being deleted — so a reinstall often comes back up
+        // already signed in, with no relationship code, because that only ever
+        // lived in UserDefaults and went with the app. Nobody should have to
+        // press a button to be given back what is already theirs, so the
+        // moment a real account appears the relationship is looked up.
+        //
+        // Also catches an Apple ID revoked from Settings: the listener fires,
+        // `isSignedIn` goes false, and the app stops claiming otherwise.
+        authListener = Auth.auth().addStateDidChangeListener { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.refresh()
+                if self.isSignedIn { self.recover() }
+            }
+        }
     }
 
     /// Re-reads the current Firebase user. Cheap, and worth calling whenever
@@ -160,20 +181,43 @@ final class ZiggyAccount: ObservableObject {
                     return
                 }
 
-                // This Apple ID already has an account here — which is the
-                // whole point of the feature. It means the user has signed in
-                // on some other phone, and their real identity is waiting.
-                // Sign into it and pick their relationship back up.
                 let code = AuthErrorCode(rawValue: (error as NSError).code)
 
+                #if DEBUG
+                print("Apple link failed:", (error as NSError).code, error.localizedDescription)
+                #endif
+
+                // Already signed in with Apple on this very account, and
+                // pressing the button again is not a failure.
+                //
+                // Firebase keeps its session in the keychain, and the keychain
+                // outlives the app — deleting Ziggy and installing it again
+                // leaves the same signed-in user in place. So the first thing
+                // somebody does on a "fresh" install is sign in, which tries
+                // to attach Apple to an account that already has it. That is
+                // the reinstall case, and it needs to end in success and a
+                // look for the relationship, not an error.
+                if code == .providerAlreadyLinked {
+                    self.recover()
+                    self.settle(offeredName: offeredName)
+                    completion(true)
+                    return
+                }
+
+                // This Apple ID belongs to an account of its own — which is
+                // the whole point of the feature. The user has signed in on
+                // some other phone, and their real identity is waiting. Sign
+                // into it and pick their relationship back up.
                 if code == .credentialAlreadyInUse || code == .emailAlreadyInUse {
                     self.signIn(credential, offeredName: offeredName, completion: completion)
                     return
                 }
 
-                self.isWorking = false
-                self.lastError = "Could not sign in. Please try again."
-                completion(false)
+                // Anything else: the credential Apple just handed us is good,
+                // so signing in with it outright will still land the user on a
+                // working account. Better than a dead end on an error we
+                // didn't anticipate.
+                self.signIn(credential, offeredName: offeredName, completion: completion)
             }
         }
     }
