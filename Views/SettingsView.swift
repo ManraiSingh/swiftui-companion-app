@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var editedName = ""
     @State private var petName = ""
     @State private var showDisconnectConfirm = false
+    @State private var showFreeSeatConfirm = false
+    @State private var isFreeingSeat = false
+    @State private var seatFreed = false
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
     @State private var savedFlash = false
@@ -140,6 +143,31 @@ struct SettingsView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
                                 }
 
+                                // A relationship holds two phones. If your
+                                // partner changes theirs without signing in,
+                                // their old one still holds a place and they
+                                // cannot get back in with the right code.
+                                Button {
+                                    showFreeSeatConfirm = true
+                                } label: {
+
+                                    Text(seatFreed
+                                         ? "Ready — share your code 💌"
+                                         : "My partner lost access")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 13)
+                                        .background(.white.opacity(0.7))
+                                        .foregroundColor(accent)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(.pink.opacity(0.3), lineWidth: 1)
+                                        )
+                                }
+                                .disabled(isFreeingSeat)
+
                                 Button(role: .destructive) {
                                     showDisconnectConfirm = true
                                 } label: {
@@ -215,6 +243,19 @@ struct SettingsView: View {
                 Text("You'll need the love code to reconnect.")
             }
             .confirmationDialog(
+                "Let your partner join again?",
+                isPresented: $showFreeSeatConfirm,
+                titleVisibility: .visible
+            ) {
+
+                Button("Free their place") { freePartnerSeat() }
+
+                Button("Cancel", role: .cancel) {}
+
+            } message: {
+                Text("Use this if your partner changed phone and can't get back in with your code. Nothing you've made together is affected — they just need the code again afterwards.")
+            }
+            .confirmationDialog(
                 "Delete all your data?",
                 isPresented: $showDeleteConfirm,
                 titleVisibility: .visible
@@ -238,6 +279,19 @@ struct SettingsView: View {
     }
 
     // MARK: - Components
+
+    /// Clears the stale phone out of the relationship so a partner who
+    /// changed devices can rejoin. Their side of everything you've made
+    /// together is untouched — only the list of who is currently in.
+    private func freePartnerSeat() {
+
+        isFreeingSeat = true
+
+        FirestoreManager.shared.releasePartnerSeat { freed in
+            isFreeingSeat = false
+            seatFreed = freed
+        }
+    }
 
     /// Sign in, or the reassurance that it's already done.
     @ViewBuilder

@@ -308,6 +308,44 @@ class FirestoreManager {
         }
     }
 
+    /// Clears everyone but you out of the relationship, so your partner can
+    /// join again.
+    ///
+    /// A relationship holds two members, and a member is a phone's hidden id —
+    /// not a person. Someone who never signed in and then changes phone or
+    /// reinstalls arrives with a *new* id, while their old one still sits in
+    /// the relationship holding a place. Both places are taken, one of them by
+    /// a device that no longer exists, and they are refused when they enter
+    /// their own code.
+    ///
+    /// Nobody can fix that from the outside, so this lets the partner who is
+    /// still in do it: drop the stale id, and there is room again.
+    ///
+    /// Your own id is always kept — this frees a place, it never gives one up.
+    func releasePartnerSeat(completion: @escaping (Bool) -> Void) {
+
+        guard !relationshipCode.isEmpty else { completion(false); return }
+
+        ensureSignedIn { [weak self] uid in
+
+            guard let self, let uid else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .setData(["members": [uid]], merge: true) { error in
+
+                    if let error {
+                        print("Could not free the seat:", error.localizedDescription)
+                    }
+
+                    DispatchQueue.main.async { completion(error == nil) }
+                }
+        }
+    }
+
     /// The name this device saved alongside its push token, so a reinstalled
     /// phone doesn't have to be told who it belongs to twice.
     func findSavedUsername(_ completion: @escaping (String?) -> Void) {
