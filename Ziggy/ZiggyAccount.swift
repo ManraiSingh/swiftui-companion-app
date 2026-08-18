@@ -272,6 +272,38 @@ final class ZiggyAccount: ObservableObject {
         FirestoreManager.shared.publishAccountStatus()
     }
 
+    /// Recovery, asked for out loud.
+    ///
+    /// The same work the app does quietly on launch, but driven by a button so
+    /// there is something to press when it hasn't happened — and so it can say
+    /// when there was nothing to find, instead of leaving the user staring at
+    /// a screen that claims they are signed in and still wants their code.
+    func restore(_ completion: @escaping (String?) -> Void) {
+
+        isWorking = true
+        lastError = nil
+
+        recover()
+
+        // The keychain answers immediately; the Firestore lookup does not, so
+        // give it a beat before deciding nothing came back.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+
+            guard let self else { return }
+
+            self.isWorking = false
+
+            guard RelationshipManager.shared.isConnected else {
+                self.lastError = "Nothing to bring back yet. Enter your name to carry on."
+                completion(nil)
+                return
+            }
+
+            let name = UserManager.shared.username
+            completion(name == "Anonymous" || name.isEmpty ? nil : name)
+        }
+    }
+
     /// Puts a reinstalled phone back the way it was.
     ///
     /// This is the payoff for signing in at all: the device asks who it is,

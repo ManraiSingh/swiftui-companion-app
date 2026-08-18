@@ -16,6 +16,18 @@ final class RelationshipManager: ObservableObject {
             UserDefaults.standard.string(
                 forKey: key
             ) ?? ""
+
+        // Back up the code every launch, not only when it is first saved.
+        //
+        // `saveCode` runs when two people pair, and never again. So everybody
+        // who was already paired before this existed had nothing in the
+        // keychain to recover from — the app would come back after a reinstall
+        // signed in, find nothing stored, and ask for the code as if it had
+        // never been told. Copying it on launch fills that in for them.
+        if !relationshipCode.isEmpty {
+            ZiggyKeychain.set(relationshipCode, for: ZiggyKeychain.relationshipKey)
+            ZiggyKeychain.set(UserManager.shared.username, for: ZiggyKeychain.usernameKey)
+        }
     }
 
     var isConnected: Bool {

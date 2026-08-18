@@ -154,24 +154,39 @@ struct OnboardingView: View {
                 line
             }
 
-            // Already signed in — which happens on a reinstall, because the
-            // keychain outlives the app even though the name and the code do
-            // not. Offering the button again would invite a second sign-in
-            // that has nothing left to do.
+            // Already signed in — which is what a reinstall looks like, since
+            // the keychain outlives the app even though the name and the code
+            // do not.
+            //
+            // A badge saying "signed in" was useless here: it told the user
+            // something they could not act on while still asking them to type
+            // their name and hunt for a code. This is a way back in instead.
             if account.isSignedIn {
 
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundColor(.green.opacity(0.8))
-                    Text("Signed in with Apple")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(accent)
+                Button {
+                    account.restore { name in
+                        username = name ?? UserManager.shared.username
+                    }
+                } label: {
+
+                    HStack(spacing: 8) {
+
+                        if account.isWorking {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "arrow.down.circle.fill")
+                        }
+
+                        Text(account.isWorking ? "Looking…" : "Welcome back — continue")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(accent)
+                    .foregroundColor(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(.white.opacity(0.7))
-                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .disabled(account.isWorking)
 
             } else {
 
@@ -206,7 +221,7 @@ struct OnboardingView: View {
             }
 
             Text(account.isSignedIn
-                 ? "Your memories are already safe"
+                 ? "Bring your Ziggy and your scrapbook back"
                  : "So your memories survive a new phone")
                 .font(.caption)
                 .foregroundColor(.secondary)
