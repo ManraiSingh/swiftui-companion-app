@@ -34,6 +34,11 @@ final class RelationshipManager: ObservableObject {
             forKey: key
         )
 
+        // Kept somewhere that outlives the app as well. UserDefaults goes when
+        // Ziggy is deleted, and without this a signed-in user comes back to a
+        // phone that knows who they are but not who they're with.
+        ZiggyKeychain.set(code, for: ZiggyKeychain.relationshipKey)
+
         // Now that there's a relationship to write it to, record whether this
         // member is on a real account. Signing in can happen before pairing,
         // in which case there was nowhere to put this at the time.
@@ -61,6 +66,10 @@ final class RelationshipManager: ObservableObject {
         UserDefaults.standard.removeObject(
             forKey: key
         )
+
+        // Forgotten there too, or disconnecting wouldn't stick — the next
+        // launch would quietly put the old relationship straight back.
+        ZiggyKeychain.remove(ZiggyKeychain.relationshipKey)
 
         PersistenceManager.shared.resetPet()
 

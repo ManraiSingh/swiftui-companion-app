@@ -281,6 +281,21 @@ final class ZiggyAccount: ObservableObject {
 
         guard !RelationshipManager.shared.isConnected else { return }
 
+        // The keychain first, because it is the one place that survives the
+        // app being deleted and needs nobody's permission to read.
+        //
+        // Searching Firestore for the relationship is the better answer in
+        // principle — it works on a phone that has never held this account —
+        // but it is a query across the whole collection, and the rules live
+        // on the server, so it only starts working once those are deployed.
+        // Until then this is what actually brings a book back.
+        if let saved = ZiggyKeychain.get(ZiggyKeychain.relationshipKey) {
+            RelationshipManager.shared.saveCode(saved)
+            recoveredCode = saved
+            restoreNameFromRelationship()
+            return
+        }
+
         FirestoreManager.shared.findRelationship { [weak self] code in
 
             MainActor.assumeIsolated {
@@ -319,8 +334,11 @@ final class ZiggyAccount: ObservableObject {
         let current = UserManager.shared.username
         guard current.isEmpty || current == "Anonymous" else { return }
 
-        guard let name = Auth.auth().currentUser?.displayName,
-              !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        // Firebase's copy first, then the one that outlived the app.
+        let name = Auth.auth().currentUser?.displayName
+            ?? ZiggyKeychain.get(ZiggyKeychain.usernameKey)
+
+        guard let name, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
         UserManager.shared.username = name
     }

@@ -28,6 +28,11 @@ class UserManager {
                 newValue,
                 forKey: key
             )
+
+            // Kept past a reinstall as well, so a signed-in user isn't asked
+            // their own name a second time. Only ever read back when signed
+            // in — see ZiggyKeychain.
+            ZiggyKeychain.set(newValue, for: ZiggyKeychain.usernameKey)
         }
     }
 }
