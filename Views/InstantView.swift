@@ -28,6 +28,7 @@ struct InstantView: View {
     @State private var isSending = false
     @State private var showCamera = false
     @State private var showSendError = false
+    @State private var showArchive = false
     @State private var sendErrorMessage = ""
 
     private let cream = LinearGradient(
@@ -111,6 +112,9 @@ struct InstantView: View {
             CameraPicker(image: $selectedImage)
                 .ignoresSafeArea()
         }
+        .fullScreenCover(isPresented: $showArchive) {
+            InstantArchiveView()
+        }
         .alert("Oops", isPresented: $showSendError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -151,15 +155,24 @@ struct InstantView: View {
 
             Spacer()
 
-            // invisible balancer to keep title centered
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.left")
-                Text("Back").fontWeight(.semibold)
+            // The space the invisible balancer was holding, put to use. An
+            // instant is replaced by the next one, so this is the only way
+            // back to the ones already sent.
+            Button {
+                showArchive = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "photo.stack")
+                    Text("Memories").fontWeight(.semibold)
+                }
+                .font(.subheadline)
+                .foregroundColor(accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(.white.opacity(0.9))
+                .clipShape(Capsule())
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
             }
-            .font(.headline)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .opacity(0)
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)

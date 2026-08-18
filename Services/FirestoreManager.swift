@@ -153,7 +153,8 @@ class FirestoreManager {
             eventsListener, airHockeyListener, traceGameListener,
             scoresListener, ticTacToeListener, dotsAndBoxesListener,
             connectFourListener, memoryMatchListener, instantBadgeListener,
-            instantViewListener, doodleViewListener, doodleWidgetListener
+            instantViewListener, instantArchiveListener,
+            doodleViewListener, doodleWidgetListener
         ] {
             listener?.remove()
         }
@@ -164,8 +165,8 @@ class FirestoreManager {
         scoresListener = nil;           ticTacToeListener = nil
         dotsAndBoxesListener = nil;     connectFourListener = nil
         memoryMatchListener = nil;      instantBadgeListener = nil
-        instantViewListener = nil;      doodleViewListener = nil
-        doodleWidgetListener = nil
+        instantViewListener = nil;      instantArchiveListener = nil
+        doodleViewListener = nil;       doodleWidgetListener = nil
     }
 
     func savePet(_ pet: Pet) {
@@ -3119,6 +3120,30 @@ class FirestoreManager {
             "sentAt": now
         ], forDocument: base.document("instant_meta"))
 
+        // And a copy that is kept.
+        //
+        // The two documents above are the *current* instant — the next one
+        // sent overwrites them, which is what makes an instant an instant.
+        // This is the archive: its own document per photo, so nothing sent is
+        // ever lost and the pair of you can look back through them.
+        //
+        // Written in the same batch, so a photo either arrives in both places
+        // or in neither.
+        let keepsake = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("instants")
+            .document()
+
+        batch.setData([
+            "imageBase64": imageBase64,
+            "caption": caption,
+            "captionX": captionX,
+            "captionY": captionY,
+            "sender": sender,
+            "senderDeviceID": self.deviceID,
+            "sentAt": now
+        ], forDocument: keepsake)
+
         batch.commit { error in
             completion(error)
         }
@@ -3128,6 +3153,7 @@ class FirestoreManager {
     private var instantBadgeListener: ListenerRegistration?
     // Full-image listener (InstantView) — only one ever active
     private var instantViewListener: ListenerRegistration?
+    private var instantArchiveListener: ListenerRegistration?
 
     func listenForInstant(
         completion: @escaping ([String: Any]?) -> Void
@@ -3170,6 +3196,70 @@ class FirestoreManager {
     func stopInstantViewListener() {
         instantViewListener?.remove()
         instantViewListener = nil
+    }
+
+    // MARK: - The instants that were kept
+
+    /// Watches the archive, newest first.
+    ///
+    /// Capped rather than unbounded: a couple who send one a day for two years
+    /// would otherwise have every photo they have ever taken pulled down each
+    /// time the screen opened. A hundred is far more than anybody scrolls, and
+    /// the rest are still there if the limit is ever raised.
+    func startInstantArchive(_ completion: @escaping ([ArchivedInstant]) -> Void) {
+
+        guard !relationshipCode.isEmpty else { completion([]); return }
+
+        instantArchiveListener?.remove()
+
+        instantArchiveListener = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("instants")
+            .order(by: "sentAt", descending: true)
+            .limit(to: 100)
+            .addSnapshotListener { snapshot, error in
+
+                if let error {
+                    print("Instant archive failed:", error.localizedDescription)
+                }
+
+                let kept = (snapshot?.documents ?? []).map { document -> ArchivedInstant in
+                    let data = document.data()
+                    return ArchivedInstant(
+                        id: document.documentID,
+                        imageBase64: data["imageBase64"] as? String ?? "",
+                        caption: data["caption"] as? String ?? "",
+                        sender: data["sender"] as? String ?? "",
+                        senderDeviceID: data["senderDeviceID"] as? String ?? "",
+                        sentAt: (data["sentAt"] as? Timestamp)?.dateValue() ?? Date()
+                    )
+                }
+
+                DispatchQueue.main.async { completion(kept) }
+            }
+    }
+
+    func stopInstantArchive() {
+        instantArchiveListener?.remove()
+        instantArchiveListener = nil
+    }
+
+    /// Whether this device sent a given instant, which is what decides who may
+    /// remove it — you can take back something you sent, but you cannot delete
+    /// what your partner gave you.
+    func isMine(_ instant: ArchivedInstant) -> Bool {
+        instant.senderDeviceID == deviceID
+    }
+
+    func deleteArchivedInstant(_ id: String) {
+
+        guard !relationshipCode.isEmpty else { return }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("instants")
+            .document(id)
+            .delete()
     }
 
     func deleteInstant() {
