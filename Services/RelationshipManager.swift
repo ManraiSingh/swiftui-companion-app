@@ -37,7 +37,12 @@ final class RelationshipManager: ObservableObject {
         // Kept somewhere that outlives the app as well. UserDefaults goes when
         // Ziggy is deleted, and without this a signed-in user comes back to a
         // phone that knows who they are but not who they're with.
+        //
+        // Written here rather than in `UserManager`, which is shared with the
+        // widget extension — the widget doesn't build the app's own files, so
+        // reaching for the keychain from there simply doesn't compile.
         ZiggyKeychain.set(code, for: ZiggyKeychain.relationshipKey)
+        ZiggyKeychain.set(UserManager.shared.username, for: ZiggyKeychain.usernameKey)
 
         // Now that there's a relationship to write it to, record whether this
         // member is on a real account. Signing in can happen before pairing,

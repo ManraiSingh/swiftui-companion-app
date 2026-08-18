@@ -265,6 +265,10 @@ final class ZiggyAccount: ObservableObject {
             UserManager.shared.username = offeredName
         }
 
+        // Put somewhere that survives the app being deleted, so a reinstall
+        // doesn't ask a signed-in user their own name again.
+        ZiggyKeychain.set(UserManager.shared.username, for: ZiggyKeychain.usernameKey)
+
         FirestoreManager.shared.publishAccountStatus()
     }
 
