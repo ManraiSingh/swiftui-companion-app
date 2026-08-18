@@ -270,6 +270,21 @@ struct DoodleView: View {
                             .stroke(.pink.opacity(0.2), lineWidth: 1)
                     )
 
+                // Keeping a doodle your partner drew you is the point of this
+                // popup — it is otherwise the only place their drawing exists,
+                // and the next one they send replaces it.
+                Button {
+                    saveToPhotos(image)
+                } label: {
+                    Label("Save to Photos", systemImage: "square.and.arrow.down")
+                        .font(.subheadline).fontWeight(.bold)
+                        .foregroundColor(accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(Capsule().fill(.white.opacity(0.9)))
+                        .overlay(Capsule().stroke(.pink.opacity(0.3), lineWidth: 1))
+                }
+
                 Button {
                     showPartnerDoodlePopup = false
                 } label: {
@@ -365,6 +380,22 @@ struct DoodleView: View {
 
     // Sits in the canvas's own top-right corner rather than the toolbar, so
     // it's right where the paper is and costs the toolbar no height.
+    /// Keeps whatever is on the canvas.
+    ///
+    /// A doodle is sent and then gone — the next one overwrites it — so
+    /// without this the only way to keep one you liked drawing was a
+    /// screenshot with the toolbar in it.
+    private func saveToPhotos(_ image: UIImage) {
+
+        ZiggyPhotoSaver.save(image) { outcome in
+            switch outcome {
+            case .saved:  showToast("Saved to Photos 📸")
+            case .denied: showToast("Allow photo access in Settings")
+            case .failed: showToast("Could not save, try again")
+            }
+        }
+    }
+
     private var backgroundColorControl: some View {
         // The grid opens to the LEFT of the button, not underneath it. Below
         // is where the colour bar lives — open or collapsed to its bead — so
@@ -374,6 +405,21 @@ struct DoodleView: View {
             if showBGPicker {
                 backgroundSwatchGrid
             }
+
+            // Next to the paper rather than in the toolbar, which is already
+            // full and would have to grow taller to hold it.
+            Button {
+                saveToPhotos(exportDrawing())
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(accent)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(.white.opacity(0.94)))
+                    .overlay(Circle().stroke(Color.black.opacity(0.1), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
+            }
+            .buttonStyle(.plain)
 
             Button {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {

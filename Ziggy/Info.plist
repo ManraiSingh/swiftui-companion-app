@@ -37,6 +37,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Ziggy needs camera access so you can snap a photo and send an Instant to your love.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Ziggy saves your doodles to your photo library so you can keep them.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
