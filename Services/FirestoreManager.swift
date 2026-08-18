@@ -290,9 +290,43 @@ class FirestoreManager {
             self.db.collection("relationships")
                 .whereField("members", arrayContains: uid)
                 .limit(to: 1)
-                .getDocuments { snapshot, _ in
+                .getDocuments { snapshot, error in
+
+                    // Reported rather than swallowed. A denied query and a
+                    // genuine "you have no relationship" look identical from
+                    // the caller's side, and the difference is the whole
+                    // question when somebody's book fails to come back.
+                    if let error {
+                        print("Relationship lookup failed:", error.localizedDescription)
+                    }
+
                     DispatchQueue.main.async {
                         completion(snapshot?.documents.first?.documentID)
+                    }
+                }
+        }
+    }
+
+    /// The name this device saved alongside its push token, so a reinstalled
+    /// phone doesn't have to be told who it belongs to twice.
+    func findSavedUsername(_ completion: @escaping (String?) -> Void) {
+
+        guard !relationshipCode.isEmpty else { completion(nil); return }
+
+        ensureSignedIn { [weak self] uid in
+
+            guard let self, let uid else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("devices")
+                .document(uid)
+                .getDocument { snapshot, _ in
+                    DispatchQueue.main.async {
+                        completion(snapshot?.get("username") as? String)
                     }
                 }
         }

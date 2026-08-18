@@ -268,20 +268,73 @@ final class ZiggyAccount: ObservableObject {
         FirestoreManager.shared.publishAccountStatus()
     }
 
-    /// Finds the relationship this account belongs to, for a phone that has
-    /// never seen it.
+    /// Puts a reinstalled phone back the way it was.
     ///
-    /// This is the payoff for signing in at all: a new device asks who it is,
-    /// and its scrapbook comes back.
+    /// This is the payoff for signing in at all: the device asks who it is,
+    /// and its name and its scrapbook come back. Anything short of that still
+    /// leaves the user typing their name and hunting for a six-character code
+    /// they may not have written down — which is most of the problem signing
+    /// in was supposed to solve.
     private func recover() {
+
+        restoreName()
 
         guard !RelationshipManager.shared.isConnected else { return }
 
         FirestoreManager.shared.findRelationship { [weak self] code in
+
             MainActor.assumeIsolated {
-                guard let self, let code else { return }
+
+                guard let self else { return }
+
+                guard let code else {
+                    // Nothing found. Not necessarily wrong — a signed-in user
+                    // who never paired has no relationship — so it stays quiet
+                    // and the ordinary pairing screen does its job.
+                    #if DEBUG
+                    print("Recovery: no relationship found for this account")
+                    #endif
+                    return
+                }
+
                 RelationshipManager.shared.saveCode(code)
                 self.recoveredCode = code
+
+                // The name lives with the relationship too, so a phone that
+                // signed in before Apple stopped handing names out can still
+                // get its own back.
+                self.restoreNameFromRelationship()
+            }
+        }
+    }
+
+    /// The name Firebase kept.
+    ///
+    /// Apple gives a full name on the very first authorisation and never
+    /// again — but Firebase stores it on the account as `displayName` when the
+    /// credential is first linked. On a reinstall that is still there, so
+    /// there is no need to ask for it a second time.
+    private func restoreName() {
+
+        let current = UserManager.shared.username
+        guard current.isEmpty || current == "Anonymous" else { return }
+
+        guard let name = Auth.auth().currentUser?.displayName,
+              !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        UserManager.shared.username = name
+    }
+
+    /// Failing that, the name this device wrote alongside its push token.
+    private func restoreNameFromRelationship() {
+
+        let current = UserManager.shared.username
+        guard current.isEmpty || current == "Anonymous" else { return }
+
+        FirestoreManager.shared.findSavedUsername { name in
+            MainActor.assumeIsolated {
+                guard let name, !name.isEmpty, name != "Anonymous" else { return }
+                UserManager.shared.username = name
             }
         }
     }
