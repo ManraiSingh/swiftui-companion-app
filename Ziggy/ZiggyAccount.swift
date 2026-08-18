@@ -75,7 +75,17 @@ final class ZiggyAccount: ObservableObject {
         let raw = Self.randomNonce()
         nonce = raw
 
-        request.requestedScopes = [.fullName]
+        // Name and email.
+        //
+        // The email is not for writing to anyone — it is so an account has
+        // something readable attached to it. Without it Firebase has no
+        // identifier to show, every signed-in user reads as "(anonymous)" in
+        // the console, and there is no way to look somebody up when they write
+        // in about a subscription or a lost scrapbook.
+        //
+        // Apple lets the user hide it behind a relay address, and that is
+        // fine: it is still unique and still theirs.
+        request.requestedScopes = [.fullName, .email]
         request.nonce = Self.sha256(raw)
     }
 
