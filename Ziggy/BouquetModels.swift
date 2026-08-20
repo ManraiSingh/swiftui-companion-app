@@ -143,6 +143,42 @@ struct Bouquet: Identifiable, Equatable {
     }
 }
 
+// MARK: - Where everything sits
+
+/// One place that decides the shape of a bouquet, so the view that draws it
+/// and the builder that aims stems into it can never disagree.
+///
+/// The wrap is anchored to the *bottom* of the canvas rather than placed at a
+/// fraction of its height plus an offset. The old way added a fixed amount to
+/// a proportional position, so on a short canvas the point of the cone ran
+/// clean off the bottom edge.
+enum BouquetLayout {
+
+    static func stage(_ size: CGSize) -> CGFloat {
+        min(size.width, size.height * 0.78)
+    }
+
+    static func unit(_ size: CGSize) -> CGFloat {
+        stage(size) / 198
+    }
+
+    static func wrapSize(_ size: CGSize) -> CGSize {
+        let s = stage(size)
+        return CGSize(width: s * 0.42, height: s * 0.48)
+    }
+
+    static func wrapCentre(_ size: CGSize) -> CGPoint {
+        CGPoint(x: size.width / 2,
+                y: size.height * 0.97 - wrapSize(size).height / 2)
+    }
+
+    /// Where every cut end meets — up inside the wrap, not at its point.
+    static func tie(_ size: CGSize) -> CGPoint {
+        let centre = wrapCentre(size)
+        return CGPoint(x: centre.x, y: centre.y - wrapSize(size).height * 0.26)
+    }
+}
+
 // MARK: - The wrap
 
 /// The paper cone the stems disappear into, and the ribbon tied round it.
@@ -284,16 +320,9 @@ struct BouquetView: View {
     var body: some View {
         GeometryReader { proxy in
 
-            let w = proxy.size.width
-            let h = proxy.size.height
-
-            // Everything is sized off one reference width rather than off the
-            // raw frame. The builder's canvas is tall and narrow and the
-            // showcase's is wide — measuring the wrap against each frame's own
-            // height stretched it into a totally different shape in each, and
-            // in the builder it overflowed the card entirely.
-            let stage = min(w, h * 0.78)
-            let unit = stage / 230
+            let size = proxy.size
+            let unit = BouquetLayout.unit(size)
+            let tie = BouquetLayout.tie(size)
 
             ZStack {
 
@@ -311,10 +340,7 @@ struct BouquetView: View {
                             height: sh
                         )
                         .rotationEffect(.degrees(stem.rotation), anchor: .bottom)
-                        .position(
-                            x: BouquetStem.tie.x * w,
-                            y: BouquetStem.tie.y * h - sh / 2
-                        )
+                        .position(x: tie.x, y: tie.y - sh / 2)
                 }
 
                 // No flowers, no wrapping. An empty cone hanging in the
@@ -325,8 +351,9 @@ struct BouquetView: View {
                         shade: bouquet.wrap.shade,
                         ribbon: Color(scrapbookHex: bouquet.ribbonHex)
                     )
-                    .frame(width: stage * 0.42, height: stage * 0.48)
-                    .position(x: w * 0.5, y: h * 0.80 + stage * 0.15)
+                    .frame(width: BouquetLayout.wrapSize(size).width,
+                           height: BouquetLayout.wrapSize(size).height)
+                    .position(BouquetLayout.wrapCentre(size))
                 }
 
                 if showsLetter, !bouquet.letter.isEmpty {
@@ -334,7 +361,8 @@ struct BouquetView: View {
                         .frame(width: 62 * bouquet.letter.scale * unit,
                                height: 45 * bouquet.letter.scale * unit)
                         .rotationEffect(.degrees(bouquet.letter.rotation))
-                        .position(x: bouquet.letter.x * w, y: bouquet.letter.y * h)
+                        .position(x: bouquet.letter.x * size.width,
+                                  y: bouquet.letter.y * size.height)
                 }
             }
         }

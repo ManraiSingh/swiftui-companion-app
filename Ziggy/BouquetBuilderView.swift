@@ -28,6 +28,7 @@ struct BouquetBuilderView: View {
     @State private var sent = false
     @State private var errorText = ""
     @State private var showingDressing = false
+    @State private var showingLayers = false
 
     /// The stem under the finger, so aiming feels immediate.
     @State private var aiming: (id: String, rotation: Double, scale: Double)?
@@ -133,7 +134,8 @@ struct BouquetBuilderView: View {
     private var hint: String {
         if bouquet.stems.isEmpty { return "Tap a flower below to start" }
         if selected != nil       { return "Drag the bloom to aim it" }
-        return "\(bouquet.stems.count) stems · tap one to change it"
+        if showingLayers         { return "Tap a layer to edit it" }
+        return "\(bouquet.stems.count) stems · keep tapping to add"
     }
 
     // MARK: The bouquet
@@ -180,7 +182,7 @@ struct BouquetBuilderView: View {
     }
 
     private func unit(in size: CGSize) -> CGFloat {
-        min(size.width, size.height * 0.78) / 230
+        BouquetLayout.unit(size)
     }
 
     /// Where a stem's head lands, given how far it leans and how long it is.
@@ -188,11 +190,10 @@ struct BouquetBuilderView: View {
 
         let length = stem.flower.size.height * stem.scale * unit(in: size) * 0.78
         let radians = stem.rotation * .pi / 180
+        let tie = BouquetLayout.tie(size)
 
-        return CGPoint(
-            x: BouquetStem.tie.x * size.width + sin(radians) * length,
-            y: BouquetStem.tie.y * size.height - cos(radians) * length
-        )
+        return CGPoint(x: tie.x + sin(radians) * length,
+                       y: tie.y - cos(radians) * length)
     }
 
     private func stemHandle(_ stem: BouquetStem, in size: CGSize) -> some View {
@@ -228,11 +229,9 @@ struct BouquetBuilderView: View {
 
                 if selectedID != stem.id { selectedID = stem.id }
 
-                let tieX = BouquetStem.tie.x * size.width
-                let tieY = BouquetStem.tie.y * size.height
-
-                let dx = value.location.x - tieX
-                let dy = tieY - value.location.y
+                let tie = BouquetLayout.tie(size)
+                let dx = value.location.x - tie.x
+                let dy = tie.y - value.location.y
 
                 let angle = atan2(dx, max(dy, 1)) * 180 / .pi
                 let reach = sqrt(dx * dx + dy * dy)
@@ -303,6 +302,8 @@ struct BouquetBuilderView: View {
 
             if selected != nil {
                 stemControls
+            } else if showingLayers {
+                layersPanel
             } else if showingDressing {
                 dressingControls
             } else {
@@ -311,19 +312,18 @@ struct BouquetBuilderView: View {
 
             HStack(spacing: 10) {
 
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                        selectedID = nil
-                        showingDressing.toggle()
-                    }
-                } label: {
-                    Image(systemName: showingDressing ? "leaf.fill" : "paintpalette.fill")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(accent)
-                        .frame(width: 50, height: 50)
-                        .background(Circle().fill(.white.opacity(0.92)))
+                modeButton(showingDressing ? "leaf.fill" : "paintpalette.fill",
+                           on: showingDressing) {
+                    showingDressing.toggle()
+                    showingLayers = false
                 }
-                .buttonStyle(BubblePress())
+
+                modeButton("square.3.layers.3d", on: showingLayers) {
+                    showingLayers.toggle()
+                    showingDressing = false
+                }
+                .disabled(bouquet.stems.isEmpty)
+                .opacity(bouquet.stems.isEmpty ? 0.4 : 1)
 
                 Button { send() } label: {
                     HStack(spacing: 8) {
@@ -468,7 +468,11 @@ struct BouquetBuilderView: View {
                 stemAction("Copy", "plus.square.on.square") { duplicate() }
                 stemAction("Remove", "trash",
                            tint: Color(red: 0.85, green: 0.3, blue: 0.3)) { remove() }
-                stemAction("Done", "checkmark") { withAnimation { selectedID = nil } }
+                stemAction("Done", "checkmark") {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                        selectedID = nil
+                    }
+                }
             }
 
             if selected?.flower.takesColour == true {
@@ -492,6 +496,70 @@ struct BouquetBuilderView: View {
                         }
                     }
                 }
+            }
+        }
+        .frame(height: 82)
+    }
+
+    private func modeButton(
+        _ icon: String,
+        on: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                selectedID = nil
+                action()
+            }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(on ? .white : accent)
+                .frame(width: 50, height: 50)
+                .background(Circle().fill(on ? accent : .white.opacity(0.92)))
+        }
+        .buttonStyle(BubblePress())
+    }
+
+    /// Every stem, front of the bouquet first.
+    ///
+    /// Tapping one picks it up and swaps in the editing controls, the way
+    /// selecting a layer does in any design tool — Done drops it and comes
+    /// back here, so a whole bouquet can be tidied without hunting for
+    /// blooms hidden behind other blooms.
+    private var layersPanel: some View {
+
+        VStack(alignment: .leading, spacing: 5) {
+
+            Text("Layers · front to back")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(bouquet.stems.sorted { $0.z > $1.z }) { stem in
+                        Button {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                                selectedID = stem.id
+                            }
+                        } label: {
+                            stem.flower.view(tint: stem.tint)
+                                .frame(width: stem.flower.size.width,
+                                       height: stem.flower.size.height)
+                                .scaleEffect(0.60, anchor: .top)
+                                .frame(width: 56, height: 50, alignment: .top)
+                                .clipped()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(.white.opacity(0.92))
+                                )
+                        }
+                        .buttonStyle(BubblePress())
+                    }
+                }
+                .padding(.horizontal, 2)
             }
         }
         .frame(height: 82)
@@ -553,9 +621,12 @@ struct BouquetBuilderView: View {
         stem.scale = 1 - min(step * 0.045, 0.24)
         stem.z = count
 
+        // Deliberately not selected. Selecting swapped the flower strip for
+        // the editing controls, so every single flower had to be added, then
+        // dismissed with Done, before the next one could be picked. Tap a
+        // bloom on the canvas when you actually want to change it.
         withAnimation(.spring(response: 0.44, dampingFraction: 0.7)) {
             bouquet.stems.append(stem)
-            selectedID = stem.id
         }
     }
 
