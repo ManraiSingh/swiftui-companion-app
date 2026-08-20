@@ -66,6 +66,9 @@ struct ScrapbookCanvasView: View {
     /// place a new one.
     @State private var replacingID: String?
 
+    /// The element a delete has been asked about but not yet confirmed.
+    @State private var pendingDelete: ScrapbookElement?
+
     /// Set while the picker is open to put the chosen picture inside a sticker
     /// — the stamp, the frame, the bubble, the film — rather than on the page.
     @State private var fillingID: String?
@@ -144,6 +147,24 @@ struct ScrapbookCanvasView: View {
         .fullScreenCover(isPresented: $showingCamera) {
             ScrapbookCameraPicker { image in addPhoto(image) }
                 .ignoresSafeArea()
+        }
+        .confirmationDialog(
+            pendingDelete.map(describe) ?? "Delete this?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+
+            Button("Delete", role: .destructive) {
+                if let pendingDelete { remove(pendingDelete) }
+            }
+
+            Button("Keep it", role: .cancel) { pendingDelete = nil }
+
+        } message: {
+            Text("This can't be undone.")
         }
     }
 
@@ -936,9 +957,51 @@ struct ScrapbookCanvasView: View {
         selectedID = copy.id
     }
 
+    /// Removes an element, asking first when it holds something that cannot
+    /// simply be tapped back into place.
+    ///
+    /// There is no undo anywhere in this editor, so Delete is final. A photo
+    /// was imported, framed, turned and sized, and words were written — losing
+    /// either to a mis-tap means doing all of it again. A sticker or a brush
+    /// stroke is one tap to recreate, and asking every time would only teach
+    /// people to dismiss the question without reading it.
     private func deleteSelected(_ element: ScrapbookElement) {
+
+        if worthConfirming(element) {
+            pendingDelete = element
+        } else {
+            remove(element)
+        }
+    }
+
+    private func worthConfirming(_ element: ScrapbookElement) -> Bool {
+
+        switch element.kind {
+        case .photo:
+            return true
+        case .text:
+            return !element.payload.isEmpty
+        case .sticker:
+            return !element.imagePayload.isEmpty
+        case .stroke:
+            return false
+        }
+    }
+
+    /// What the question calls the thing being removed.
+    private func describe(_ element: ScrapbookElement) -> String {
+
+        switch element.kind {
+        case .photo:  return "Delete this photo?"
+        case .text:   return "Delete these words?"
+        default:      return "Delete the picture inside this?"
+        }
+    }
+
+    private func remove(_ element: ScrapbookElement) {
         manager.delete(element.id, bookID: book.id, pageID: page.id)
         selectedID = nil
+        pendingDelete = nil
     }
 
     // MARK: Toolbar
