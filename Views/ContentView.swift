@@ -1182,6 +1182,15 @@ struct ContentView: View {
             loveBadge
         }
         .padding(.horizontal, 4)
+        // Sits the title, the store and the love score down off the status
+        // bar, which they were pressed right up against.
+        //
+        // Inside the measured height on purpose. The header reports its size
+        // and Ziggy is then given whatever is left, so this comes out of his
+        // card rather than pushing the daily question, the tiles and the
+        // message panel down with it — everything below stays exactly where
+        // it was.
+        .padding(.top, 12)
     }
 
     /// The love score, as a pill rather than a dial.
