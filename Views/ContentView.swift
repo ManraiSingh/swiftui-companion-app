@@ -1205,6 +1205,10 @@ struct ContentView: View {
     /// sound generous: feeding and finishing a game are worth 5, an instant
     /// 15, and a full quiet day costs 15. If those change in PetViewModel,
     /// change them here too — a guide that lies is worse than none.
+    ///
+    /// The pizza party fills the score outright, and is left out on purpose:
+    /// a guide that leads with the one thing that skips the whole system
+    /// teaches people to ignore everything else on the list.
     private var loveInfoPopup: some View {
 
         ZStack {
@@ -1246,7 +1250,6 @@ struct ContentView: View {
                     loveRow("🍗", "Feed \(petVM.pet.name)", "+5")
                     loveRow("🎮", "Finish a game together", "+5")
                     loveRow("📸", "Send an Instant", "+15")
-                    loveRow("🍕", "Throw a pizza party", "full")
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
