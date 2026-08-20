@@ -775,6 +775,7 @@ struct ContentView: View {
     @AppStorage("ziggy_widget_walkthrough_shown")
     private var hasShownWidgetWalkthrough = false
     @State private var showWidgetOnboarding = false
+    @State private var showStore = false
 
     @State private var showFeedView        = false
     @State private var showInstantView     = false
@@ -1166,39 +1167,61 @@ struct ContentView: View {
                 Text("You two & \(petVM.pet.name) 💞")
                     .font(.system(size: 22, weight: .black))
                     .foregroundStyle(.primary)
+                    // Held to one line. The header is measured and Ziggy is
+                    // given whatever height is left over, so a long pet name
+                    // wrapping here would quietly shrink him.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 Text(shortMoodMessage)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
+            storeButton
             loveBadge
         }
         .padding(.horizontal, 4)
     }
 
+    /// The love score, as a pill rather than a dial.
+    ///
+    /// It used to be a 62pt ring with a gradient progress arc, which was the
+    /// only circle on a screen otherwise made of rounded cards and pills — and
+    /// the heaviest thing in a header meant to be quiet. A heart and a number
+    /// says the same thing and sits in the same visual family as everything
+    /// below it.
     private var loveBadge: some View {
-        ZStack {
-            Circle().fill(.white.opacity(0.7)).frame(width: 62, height: 62)
-            Circle().stroke(Color.white.opacity(0.85), lineWidth: 7).frame(width: 62, height: 62)
-            Circle()
-                .trim(from: 0, to: CGFloat(petVM.pet.loveScore) / 100)
-                .stroke(
-                    LinearGradient(
-                        colors: [.orange, .pink, .mint],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: 7, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .frame(width: 62, height: 62)
-            VStack(spacing: -2) {
-                Text("\(petVM.pet.loveScore)").font(.system(size: 18, weight: .black))
-                Text("love").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
-            }
+        HStack(spacing: 5) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
+            Text("\(petVM.pet.loveScore)")
+                .font(.system(size: 17, weight: .black))
+                .foregroundStyle(.primary)
+                .contentTransition(.numericText())
         }
+        .padding(.horizontal, 13)
+        .frame(height: 40)
+        .background(Capsule().fill(.white.opacity(0.9)))
         .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: petVM.pet.loveScore)
+    }
+
+    private var storeButton: some View {
+        Button {
+            showStore = true
+        } label: {
+            Image(systemName: "bag.fill")
+                .font(.system(size: 15, weight: .bold))
+                // Warm rather than near-black: it sits in a pastel header,
+                // and the dark version was the only heavy thing up there.
+                .foregroundStyle(Color(red: 0.95, green: 0.62, blue: 0.25))
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.white.opacity(0.9)))
+                .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Ziggy Hero
