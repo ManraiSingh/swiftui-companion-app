@@ -776,6 +776,7 @@ struct ContentView: View {
     private var hasShownWidgetWalkthrough = false
     @State private var showWidgetOnboarding = false
     @State private var showStore = false
+    @State private var showLoveInfo = false
 
     @State private var showFeedView        = false
     @State private var showInstantView     = false
@@ -1077,6 +1078,11 @@ struct ContentView: View {
                     }
             }
 
+            if showLoveInfo {
+                loveInfoPopup
+                    .zIndex(11)
+            }
+
             if showEmotionPopup {
                 emotionPopup
                     .zIndex(10)
@@ -1193,6 +1199,126 @@ struct ContentView: View {
         .padding(.top, 12)
     }
 
+    /// What the love score is and how to move it.
+    ///
+    /// The numbers here are read off the real rules rather than written to
+    /// sound generous: feeding and finishing a game are worth 5, an instant
+    /// 15, and a full quiet day costs 15. If those change in PetViewModel,
+    /// change them here too — a guide that lies is worse than none.
+    private var loveInfoPopup: some View {
+
+        ZStack {
+
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { dismissLoveInfo() }
+
+            VStack(spacing: 0) {
+
+                VStack(spacing: 6) {
+
+                    HStack(spacing: 7) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
+                        Text("\(petVM.pet.loveScore)")
+                            .font(.system(size: 34, weight: .black))
+                    }
+
+                    Text(petVM.pet.mood)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 22)
+                .padding(.bottom, 16)
+
+                Divider().padding(.horizontal, 20)
+
+                VStack(spacing: 13) {
+
+                    Text("How love grows")
+                        .font(.caption)
+                        .fontWeight(.black)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    loveRow("🍗", "Feed \(petVM.pet.name)", "+5")
+                    loveRow("🎮", "Finish a game together", "+5")
+                    loveRow("📸", "Send an Instant", "+15")
+                    loveRow("🍕", "Throw a pizza party", "full")
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+
+                Divider().padding(.horizontal, 20)
+
+                HStack(spacing: 9) {
+                    Text("💔").font(.system(size: 17))
+                    Text("Every whole day you both stay quiet takes 15 away.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+
+                Button { dismissLoveInfo() } label: {
+                    Text("Got it")
+                        .font(.subheadline)
+                        .fontWeight(.black)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(BubblePress())
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.white)
+            )
+            .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
+            .padding(.horizontal, 34)
+            // Grown out of the badge in the top-right rather than appearing
+            // in the middle of nowhere, which is what makes it read as the
+            // score opening up rather than a dialog arriving.
+            .transition(
+                .scale(scale: 0.82, anchor: .topTrailing)
+                    .combined(with: .opacity)
+            )
+        }
+    }
+
+    private func loveRow(_ emoji: String, _ title: String, _ amount: String) -> some View {
+        HStack(spacing: 12) {
+            Text(emoji).font(.system(size: 19))
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 8)
+            Text(amount)
+                .font(.system(size: 14, weight: .black))
+                .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
+        }
+    }
+
+    private func dismissLoveInfo() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            showLoveInfo = false
+        }
+    }
+
     /// The love score, as a pill rather than a dial.
     ///
     /// It used to be a 62pt ring with a gradient progress arc, which was the
@@ -1201,6 +1327,11 @@ struct ContentView: View {
     /// says the same thing and sits in the same visual family as everything
     /// below it.
     private var loveBadge: some View {
+        Button {
+            withAnimation(.spring(response: 0.36, dampingFraction: 0.7)) {
+                showLoveInfo = true
+            }
+        } label: {
         HStack(spacing: 5) {
             Image(systemName: "heart.fill")
                 .font(.system(size: 13, weight: .bold))
@@ -1215,6 +1346,8 @@ struct ContentView: View {
         .background(Capsule().fill(.white.opacity(0.9)))
         .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: petVM.pet.loveScore)
+        }
+        .buttonStyle(BubblePress())
     }
 
     private var storeButton: some View {
@@ -3015,4 +3148,18 @@ func actionCard(
 
 #Preview {
     ContentView()
+}
+
+/// A press that squashes slightly and springs back.
+///
+/// The plain button style flashes opacity, which on a soft, rounded screen
+/// reads as a glitch rather than a press. A little give makes a tap feel like
+/// touching something physical.
+struct BubblePress: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.93 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.6),
+                       value: configuration.isPressed)
+    }
 }
