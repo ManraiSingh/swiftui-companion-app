@@ -22,12 +22,28 @@ struct BouquetStem: Identifiable, Equatable {
     var y: Double = 0.5
 
     /// Turned about its cut end, so a stem fans out from the tie rather than
-    /// spinning on the spot.
+    /// spinning on the spot. Bounded: past this the head swings clear of the
+    /// bouquet altogether and reads as a flower lying beside it.
     var rotation: Double = 0
     var scale: Double = 1
     var z: Int = 0
 
+    /// Empty means the flower's own colour.
+    var tintHex: String = ""
+
     var flower: BouquetFlower { BouquetFlower(rawValue: kind) ?? .whiteDaisy }
+
+    var tint: Color? {
+        tintHex.isEmpty ? nil : Color(scrapbookHex: tintHex)
+    }
+
+    /// Where every stem's cut end sits, as a fraction of the canvas.
+    ///
+    /// Fixed rather than per-stem. Letting a base be dragged is what let a
+    /// flower be pulled clean out of the bouquet, and what made a tilted stem
+    /// swing its stalk outside the wrap. A stem is aimed, not moved.
+    static let tie = CGPoint(x: 0.5, y: 0.80)
+    static let maxLean: Double = 52
 }
 
 /// The note tucked in among the flowers.
@@ -75,7 +91,8 @@ struct Bouquet: Identifiable, Equatable {
                     "y": stem.y,
                     "r": stem.rotation,
                     "s": stem.scale,
-                    "z": stem.z
+                    "z": stem.z,
+                    "t": stem.tintHex
                 ] as [String: Any]
             },
             "wrap": wrapIndex,
@@ -101,7 +118,8 @@ struct Bouquet: Identifiable, Equatable {
                 y: raw["y"] as? Double ?? 0.5,
                 rotation: raw["r"] as? Double ?? 0,
                 scale: raw["s"] as? Double ?? 1,
-                z: raw["z"] as? Int ?? 0
+                z: raw["z"] as? Int ?? 0,
+                tintHex: raw["t"] as? String ?? ""
             )
         }
 
@@ -275,26 +293,28 @@ struct BouquetView: View {
             // height stretched it into a totally different shape in each, and
             // in the builder it overflowed the card entirely.
             let stage = min(w, h * 0.78)
-            let unit = stage / 280
+            let unit = stage / 230
 
             ZStack {
 
+                // Every cut end at the tie, every stem turned about it. The
+                // frame is placed so its bottom lands on the tie, then the
+                // rotation pivots there — which is what makes the stalks
+                // gather into the wrap instead of splaying below it.
                 ForEach(bouquet.stems.sorted { $0.z < $1.z }) { stem in
 
                     let sh = stem.flower.size.height * stem.scale * unit
 
-                    stem.flower.view
+                    stem.flower.view(tint: stem.tint)
                         .frame(
                             width: stem.flower.size.width * stem.scale * unit,
                             height: sh
                         )
                         .rotationEffect(.degrees(stem.rotation), anchor: .bottom)
-                        // `x` and `y` are where the *cut end* sits, not the
-                        // middle. Positioning by the centre meant a turned
-                        // stem swung its base away from the tie, so the
-                        // stalks splayed out below the wrap instead of
-                        // gathering into it.
-                        .position(x: stem.x * w, y: stem.y * h - sh / 2)
+                        .position(
+                            x: BouquetStem.tie.x * w,
+                            y: BouquetStem.tie.y * h - sh / 2
+                        )
                 }
 
                 // No flowers, no wrapping. An empty cone hanging in the

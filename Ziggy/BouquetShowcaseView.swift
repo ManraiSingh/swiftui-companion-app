@@ -54,7 +54,7 @@ struct BouquetShowcaseView: View {
 
                 BouquetView(bouquet: bouquet)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 380)
+                    .frame(height: 430)
                     .scaleEffect(risen ? 1 : 0.82)
                     .opacity(risen ? 1 : 0)
                     .padding(.horizontal, 20)
