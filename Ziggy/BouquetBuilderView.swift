@@ -30,6 +30,10 @@ struct BouquetBuilderView: View {
     @State private var showingDressing = false
     @State private var showingLayers = false
 
+    /// The layer being dragged along the strip, and how far it has moved.
+    @State private var draggingLayer: String?
+    @State private var layerShift: CGFloat = 0
+
     /// The stem under the finger, so aiming feels immediate.
     @State private var aiming: (id: String, rotation: Double, scale: Double)?
     @State private var draggingLetter = false
@@ -160,6 +164,8 @@ struct BouquetBuilderView: View {
                 ForEach(bouquet.stems.sorted { $0.z < $1.z }) { stem in
                     stemHandle(stem, in: size)
                 }
+
+                noteButton
             }
             .contentShape(Rectangle())
             .onTapGesture { withAnimation { selectedID = nil } }
@@ -280,6 +286,30 @@ struct BouquetBuilderView: View {
                     }
                     .onEnded { _ in draggingLetter = false }
             )
+    }
+
+    /// Writing the note, offered on the bouquet itself.
+    ///
+    /// It used to live behind the wrapping-paper toggle, which meant finding
+    /// it required already knowing it was there — and a note is half the
+    /// point of sending flowers.
+    private var noteButton: some View {
+
+        Button { writingLetter = true } label: {
+            HStack(spacing: 5) {
+                Image(systemName: bouquet.letter.isEmpty ? "envelope" : "envelope.open.fill")
+                Text(bouquet.letter.isEmpty ? "Add a note" : "Edit note")
+            }
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(accent)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(Capsule().fill(.white.opacity(0.95)))
+            .shadow(color: .black.opacity(0.07), radius: 5, y: 2)
+        }
+        .buttonStyle(BubblePress())
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
     }
 
     private var emptyHint: some View {
@@ -409,18 +439,10 @@ struct BouquetBuilderView: View {
 
             HStack(spacing: 8) {
 
-                Button { writingLetter = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "envelope.fill")
-                        Text(bouquet.letter.isEmpty ? "Add a note" : "Edit note")
-                    }
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(Capsule().fill(accent))
-                }
-                .buttonStyle(BubblePress())
+                Text("Paper")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 46, alignment: .leading)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -525,44 +547,109 @@ struct BouquetBuilderView: View {
     /// Every stem, front of the bouquet first.
     ///
     /// Tapping one picks it up and swaps in the editing controls, the way
-    /// selecting a layer does in any design tool — Done drops it and comes
-    /// back here, so a whole bouquet can be tidied without hunting for
-    /// blooms hidden behind other blooms.
+    /// selecting a layer does in any design tool. Dragging one along the strip
+    /// reorders it, so a bloom can be brought in front of another without
+    /// nudging Front repeatedly and counting.
     private var layersPanel: some View {
 
-        VStack(alignment: .leading, spacing: 5) {
+        let ordered = bouquet.stems.sorted { $0.z > $1.z }
 
-            Text("Layers · front to back")
+        return VStack(alignment: .leading, spacing: 5) {
+
+            Text("Layers · drag to reorder, tap to edit")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .padding(.leading, 4)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(bouquet.stems.sorted { $0.z > $1.z }) { stem in
-                        Button {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                                selectedID = stem.id
-                            }
-                        } label: {
-                            stem.flower.view(tint: stem.tint)
-                                .frame(width: stem.flower.size.width,
-                                       height: stem.flower.size.height)
-                                .scaleEffect(0.60, anchor: .top)
-                                .frame(width: 56, height: 50, alignment: .top)
-                                .clipped()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(.white.opacity(0.92))
-                                )
-                        }
-                        .buttonStyle(BubblePress())
+                HStack(spacing: Self.layerGap) {
+                    ForEach(Array(ordered.enumerated()), id: \.element.id) { index, stem in
+                        layerChip(stem, at: index, of: ordered.count)
                     }
                 }
                 .padding(.horizontal, 2)
             }
         }
         .frame(height: 82)
+    }
+
+    private static let layerWidth: CGFloat = 56
+    private static let layerGap: CGFloat = 8
+
+    private func layerChip(_ stem: BouquetStem, at index: Int, of count: Int) -> some View {
+
+        let lifted = draggingLayer == stem.id
+
+        return stem.flower.view(tint: stem.tint)
+            .frame(width: stem.flower.size.width, height: stem.flower.size.height)
+            .scaleEffect(0.60, anchor: .top)
+            .frame(width: Self.layerWidth, height: 50, alignment: .top)
+            .clipped()
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.white.opacity(0.95))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(stem.id == selectedID ? accent : .clear, lineWidth: 2)
+                    )
+            )
+            .scaleEffect(lifted ? 1.1 : 1)
+            .shadow(color: .black.opacity(lifted ? 0.2 : 0), radius: 8, y: 4)
+            .offset(x: lifted ? layerShift : 0)
+            .zIndex(lifted ? 1 : 0)
+            .onTapGesture {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                    selectedID = stem.id
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 6)
+                    .onChanged { value in
+                        if draggingLayer != stem.id {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                draggingLayer = stem.id
+                            }
+                        }
+                        layerShift = value.translation.width
+                    }
+                    .onEnded { value in
+
+                        // How many places it travelled, from how far it moved
+                        // against the width of one chip.
+                        let step = Self.layerWidth + Self.layerGap
+                        let moved = Int((value.translation.width / step).rounded())
+
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                            reorder(stem.id, by: moved, within: count)
+                            draggingLayer = nil
+                            layerShift = 0
+                        }
+                    }
+            )
+    }
+
+    /// Moves a stem through the running order and rewrites every z from it.
+    ///
+    /// The list runs front-first, so index 0 is the top of the pile — dragging
+    /// left brings a bloom forward and right pushes it behind.
+    private func reorder(_ id: String, by steps: Int, within count: Int) {
+
+        guard steps != 0 else { return }
+
+        var ordered = bouquet.stems.sorted { $0.z > $1.z }
+        guard let from = ordered.firstIndex(where: { $0.id == id }) else { return }
+
+        let to = min(max(from + steps, 0), count - 1)
+        guard to != from else { return }
+
+        let moving = ordered.remove(at: from)
+        ordered.insert(moving, at: to)
+
+        for (place, stem) in ordered.enumerated() {
+            if let index = bouquet.stems.firstIndex(where: { $0.id == stem.id }) {
+                bouquet.stems[index].z = ordered.count - place
+            }
+        }
     }
 
     private func swatch(_ colour: Color, on: Bool, action: @escaping () -> Void) -> some View {
