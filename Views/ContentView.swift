@@ -778,6 +778,16 @@ struct ContentView: View {
     @State private var showStore = false
     @State private var showLoveInfo = false
 
+    /// Bouquets the two of you have exchanged, and the one waiting to be seen.
+    @State private var bouquets: [Bouquet] = []
+    @State private var arriving: Bouquet?
+    @State private var openBouquet: Bouquet?
+
+    /// The newest bouquet already shown, so a popup appears once rather than
+    /// every time the home screen comes back.
+    @AppStorage("ziggy_seen_bouquet")
+    private var seenBouquetID = ""
+
     @State private var showFeedView        = false
     @State private var showInstantView     = false
     @State private var showDrawingGameView = false
@@ -885,8 +895,15 @@ struct ContentView: View {
                         .set(Date(), forKey: "last_app_open_time")
                     checkForRatingPrompt()
                     watchForBothConnected()
+                    watchForBouquets()
                 }
             }
+        }
+        .fullScreenCover(isPresented: $showStore) {
+            BouquetBuilderView()
+        }
+        .fullScreenCover(item: $openBouquet) { bouquet in
+            BouquetShowcaseView(bouquet: bouquet)
         }
         .onOpenURL { url in
             handleInviteURL(url)
@@ -904,6 +921,28 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 petVM.refreshFeedReminder()
+            }
+        }
+    }
+
+    /// Watches for flowers.
+    ///
+    /// Only a bouquet somebody else sent, and only one that hasn't been shown
+    /// before — otherwise your own would pop up at you the moment you sent it,
+    /// and hers would reappear every time you came back to the home screen.
+    private func watchForBouquets() {
+
+        FirestoreManager.shared.startBouquets { all in
+
+            bouquets = all
+
+            guard let newest = all.first,
+                  !FirestoreManager.shared.isMine(newest),
+                  newest.id != seenBouquetID
+            else { return }
+
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                arriving = newest
             }
         }
     }
@@ -1081,6 +1120,24 @@ struct ContentView: View {
             if showLoveInfo {
                 loveInfoPopup
                     .zIndex(11)
+            }
+
+            if let arriving {
+                BouquetArrivalPopup(
+                    bouquet: arriving,
+                    onOpen: {
+                        seenBouquetID = arriving.id
+                        openBouquet = arriving
+                        withAnimation(.easeOut(duration: 0.2)) { self.arriving = nil }
+                    },
+                    onClose: {
+                        seenBouquetID = arriving.id
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            self.arriving = nil
+                        }
+                    }
+                )
+                .zIndex(12)
             }
 
             if showEmotionPopup {

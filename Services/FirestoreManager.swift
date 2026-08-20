@@ -153,7 +153,7 @@ class FirestoreManager {
             eventsListener, airHockeyListener, traceGameListener,
             scoresListener, ticTacToeListener, dotsAndBoxesListener,
             connectFourListener, memoryMatchListener, instantBadgeListener,
-            instantViewListener, instantArchiveListener,
+            instantViewListener, instantArchiveListener, bouquetListener,
             doodleViewListener, doodleWidgetListener
         ] {
             listener?.remove()
@@ -166,6 +166,7 @@ class FirestoreManager {
         dotsAndBoxesListener = nil;     connectFourListener = nil
         memoryMatchListener = nil;      instantBadgeListener = nil
         instantViewListener = nil;      instantArchiveListener = nil
+        bouquetListener = nil
         doodleViewListener = nil;       doodleWidgetListener = nil
     }
 
@@ -3192,6 +3193,7 @@ class FirestoreManager {
     // Full-image listener (InstantView) — only one ever active
     private var instantViewListener: ListenerRegistration?
     private var instantArchiveListener: ListenerRegistration?
+    private var bouquetListener: ListenerRegistration?
 
     func listenForInstant(
         completion: @escaping ([String: Any]?) -> Void
@@ -3234,6 +3236,79 @@ class FirestoreManager {
     func stopInstantViewListener() {
         instantViewListener?.remove()
         instantViewListener = nil
+    }
+
+    // MARK: - Bouquets
+
+    /// Gives a bouquet.
+    ///
+    /// One document, written once. A bouquet is composed privately — the
+    /// surprise is the point — so unlike a scrapbook page there is nothing to
+    /// sync while it is being made, and stems are only numbers, so the whole
+    /// arrangement fits comfortably in a single record.
+    func sendBouquet(_ bouquet: Bouquet, completion: @escaping (Bool) -> Void) {
+
+        guard !relationshipCode.isEmpty else { completion(false); return }
+
+        ensureRelationshipMembership { [weak self] canSync in
+
+            guard let self, canSync else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+
+            var payload = bouquet.payload
+            payload["sender"] = UserManager.shared.username
+            payload["senderDeviceID"] = self.deviceID
+            payload["sentAt"] = FieldValue.serverTimestamp()
+
+            self.db.collection("relationships")
+                .document(self.relationshipCode)
+                .collection("bouquets")
+                .document(bouquet.id)
+                .setData(payload) { error in
+                    DispatchQueue.main.async { completion(error == nil) }
+                }
+        }
+    }
+
+    /// Every bouquet the two of you have exchanged, newest first.
+    func startBouquets(_ completion: @escaping ([Bouquet]) -> Void) {
+
+        guard !relationshipCode.isEmpty else { completion([]); return }
+
+        bouquetListener?.remove()
+
+        bouquetListener = db.collection("relationships")
+            .document(relationshipCode)
+            .collection("bouquets")
+            .order(by: "sentAt", descending: true)
+            .limit(to: 40)
+            .addSnapshotListener { snapshot, error in
+
+                if let error {
+                    print("Bouquets failed:", error.localizedDescription)
+                }
+
+                let all = (snapshot?.documents ?? []).map { document -> Bouquet in
+                    Bouquet.from(
+                        id: document.documentID,
+                        data: document.data(),
+                        sentAt: (document.data()["sentAt"] as? Timestamp)?.dateValue() ?? Date()
+                    )
+                }
+
+                DispatchQueue.main.async { completion(all) }
+            }
+    }
+
+    func stopBouquets() {
+        bouquetListener?.remove()
+        bouquetListener = nil
+    }
+
+    func isMine(_ bouquet: Bouquet) -> Bool {
+        bouquet.senderDeviceID == deviceID
     }
 
     // MARK: - The instants that were kept

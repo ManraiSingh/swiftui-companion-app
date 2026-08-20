@@ -182,6 +182,8 @@ struct ActivityView: View {
 
     @State private var selectedTab = 0   // 0 = Moments, 1 = Questions
     @State private var showClearConfirm = false
+    @State private var bouquets: [Bouquet] = []
+    @State private var openBouquet: Bouquet?
 
     private let cream = LinearGradient(
         colors: [
@@ -214,6 +216,10 @@ struct ActivityView: View {
                 }
             }
             .navigationTitle("Our Memories 💕")
+            .onAppear { FirestoreManager.shared.startBouquets { bouquets = $0 } }
+            .fullScreenCover(item: $openBouquet) { bouquet in
+                BouquetShowcaseView(bouquet: bouquet)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if selectedTab == 0 && !petVM.pet.events.isEmpty {
@@ -287,6 +293,8 @@ struct ActivityView: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
+                        bouquetSection
+
                         ForEach(petVM.pet.events) { event in
                             eventCard(event)
                         }
@@ -298,6 +306,69 @@ struct ActivityView: View {
             }
         }
     }
+
+    // MARK: - Bouquets
+
+    /// Flowers you've given each other, kept where they can be opened again.
+    ///
+    /// A bouquet is the one thing here worth returning to, so it gets a
+    /// heading of its own rather than a line in the timeline that scrolls
+    /// away under a week of feeding and games.
+    @ViewBuilder
+    private var bouquetSection: some View {
+
+        if !bouquets.isEmpty {
+
+            VStack(alignment: .leading, spacing: 10) {
+
+                HStack(spacing: 6) {
+                    Text("Bouquets").font(.subheadline).fontWeight(.black)
+                    Text("\u{1F490}").font(.caption)
+                    Spacer()
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(bouquets) { bouquet in
+                            bouquetCard(bouquet)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .padding(.bottom, 6)
+        }
+    }
+
+    private func bouquetCard(_ bouquet: Bouquet) -> some View {
+
+        let mine = FirestoreManager.shared.isMine(bouquet)
+
+        return Button { openBouquet = bouquet } label: {
+            VStack(spacing: 6) {
+
+                BouquetView(bouquet: bouquet)
+                    .frame(width: 104, height: 128)
+
+                VStack(spacing: 1) {
+                    Text(mine ? "You gave" : "For you")
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .foregroundStyle(accent)
+                    Text(bouquet.sentAt, format: .dateTime.day().month(.abbreviated))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 10)
+            .frame(width: 126)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.white.opacity(0.75))
+            )
+        }
+        .buttonStyle(BubblePress())
+    }
+
 
     private func eventCard(_ event: Event) -> some View {
         // Prefer device-ID comparison — two partners can share the same
