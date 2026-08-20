@@ -75,6 +75,7 @@ struct DoodleView: View {
     @State private var toastMessage = "Sent 🎉"
     @State private var showPinPrompt = false
     @State private var showPartnerDoodlePopup = false
+    @State private var showClearConfirm = false
 
     @State private var textItems: [DoodleTextItem] = []
     @State private var emojiItems: [DoodleEmojiItem] = []
@@ -185,6 +186,38 @@ struct DoodleView: View {
         .onDisappear {
             FirestoreManager.shared.stopDoodleListener()
         }
+        .confirmationDialog(
+            "Clear this doodle?",
+            isPresented: $showClearConfirm,
+            titleVisibility: .visible
+        ) {
+
+            Button("Clear it", role: .destructive) { clearCanvas() }
+
+            Button("Keep drawing", role: .cancel) {}
+
+        } message: {
+            Text("Your drawing, stickers and background will all go. This can't be undone.")
+        }
+    }
+
+    /// Whether there is anything on the canvas worth confirming before it goes.
+    private var hasSomethingToLose: Bool {
+        !canvasView.drawing.strokes.isEmpty
+            || !textItems.isEmpty
+            || !emojiItems.isEmpty
+            || canvasBGHex.uppercased() != "#FFFFFF"
+    }
+
+    private func clearCanvas() {
+        canvasView.drawing = PKDrawing()
+        textItems.removeAll()
+        emojiItems.removeAll()
+        selectedItemID = nil
+        editingTextID = nil
+        editingEmojiID = nil
+        canvasTextFocused = false
+        canvasBGHex = "#FFFFFF"
     }
 
     // MARK: - Header
@@ -1034,14 +1067,19 @@ struct DoodleView: View {
                     canvasView.undoManager?.undo()
                 }
                 toolButton(system: "trash", active: false, tint: .red) {
-                    canvasView.drawing = PKDrawing()
-                    textItems.removeAll()
-                    emojiItems.removeAll()
-                    selectedItemID = nil
-                    editingTextID = nil
-                    editingEmojiID = nil
-                    canvasTextFocused = false
-                    canvasBGHex = "#FFFFFF"
+                    // Asked about first. This throws away the drawing, every
+                    // sticker and the background in one tap, and undo only
+                    // covers pen strokes — so a mis-tap next to the eraser
+                    // used to lose the whole doodle with nothing to recover
+                    // it from.
+                    //
+                    // Only worth asking when there is something to lose; on
+                    // an untouched canvas it just clears.
+                    if hasSomethingToLose {
+                        showClearConfirm = true
+                    } else {
+                        clearCanvas()
+                    }
                 }
             }
         }
