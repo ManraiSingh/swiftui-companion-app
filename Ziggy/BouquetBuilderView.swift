@@ -309,7 +309,7 @@ struct BouquetBuilderView: View {
         }
         .buttonStyle(BubblePress())
         .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
     private var emptyHint: some View {
