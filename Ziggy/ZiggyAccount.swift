@@ -48,6 +48,13 @@ final class ZiggyAccount: ObservableObject {
     private var nonce: String?
     private var authListener: AuthStateDidChangeListenerHandle?
 
+    /// Held only between confirming identity and deleting the account.
+    private var appleAuthCode: String?
+
+    /// `ASAuthorizationController` keeps no strong reference to its delegate,
+    /// so without this the sheet closes itself the moment the call returns.
+    private var reauthenticator: AppleReauthenticator?
+
     private init() {
 
         refresh()
@@ -393,9 +400,140 @@ final class ZiggyAccount: ObservableObject {
         }
     }
 
+    // MARK: - Deleting the account
+    //
+    // Apple requires an app that offers account creation to offer account
+    // deletion too, from inside the app, and requires the Apple token to be
+    // revoked rather than merely forgotten. Guideline 5.1.1(v).
+    //
+    // It happens in two steps because the order matters. Apple asks who you
+    // are first, and that sheet can be cancelled — so nothing is destroyed
+    // until identity is confirmed. The data goes next, while the account still
+    // exists and Firestore's rules still recognise it. The account goes last.
+
+    /// Step one. Asks Apple to confirm this is really the account holder.
+    ///
+    /// Firebase refuses to delete a user whose sign-in has gone stale, so this
+    /// is needed on its own terms as well as Apple's — and it gives us the
+    /// fresh authorisation code the revocation needs.
+    func reauthenticate(completion: @escaping (Bool) -> Void) {
+
+        guard let user = Auth.auth().currentUser else {
+            completion(false)
+            return
+        }
+
+        // An anonymous user has no Apple identity to confirm and nothing to
+        // revoke. Nobody else can be holding it, so there is nothing to check.
+        guard !user.isAnonymous else {
+            completion(true)
+            return
+        }
+
+        let raw = Self.randomNonce()
+        isWorking = true
+
+        let helper = AppleReauthenticator(rawNonce: raw) { [weak self] outcome in
+
+            MainActor.assumeIsolated {
+
+                guard let self else { return }
+
+                self.reauthenticator = nil
+
+                guard let outcome else {
+                    self.isWorking = false
+                    completion(false)
+                    return
+                }
+
+                user.reauthenticate(with: outcome.credential) { _, error in
+
+                    MainActor.assumeIsolated {
+
+                        self.isWorking = false
+
+                        guard error == nil else {
+                            self.lastError = "Could not confirm it's you. Please try again."
+                            completion(false)
+                            return
+                        }
+
+                        self.appleAuthCode = outcome.authorizationCode
+                        completion(true)
+                    }
+                }
+            }
+        }
+
+        reauthenticator = helper
+        helper.start()
+    }
+
+    /// Step two. Revokes the Apple token and deletes the Firebase account.
+    func deleteAccount(completion: @escaping (Bool) -> Void) {
+
+        guard let user = Auth.auth().currentUser else {
+            completion(true)
+            return
+        }
+
+        guard let code = appleAuthCode else {
+            finishDeletion(user, completion: completion)
+            return
+        }
+
+        appleAuthCode = nil
+
+        // Revoking is what actually severs Ziggy from the Apple ID — without
+        // it the app keeps showing under "Sign in with Apple" in iOS Settings
+        // long after the account it referred to has gone.
+        Auth.auth().revokeToken(withAuthorizationCode: code) { [weak self] _ in
+            MainActor.assumeIsolated {
+                // A failed revocation must not strand the user with an account
+                // they asked to be rid of, so the deletion goes ahead either
+                // way.
+                self?.finishDeletion(user, completion: completion)
+            }
+        }
+    }
+
+    private func finishDeletion(_ user: User, completion: @escaping (Bool) -> Void) {
+
+        user.delete { [weak self] error in
+
+            MainActor.assumeIsolated {
+
+                guard let self else { return }
+
+                guard error == nil else {
+                    self.lastError = "Could not delete your account. Please try again."
+                    completion(false)
+                    return
+                }
+
+                // The keychain outlives the app, and recovery reads it on the
+                // next launch. Left in place it would hand back the very
+                // relationship that was just deleted.
+                ZiggyKeychain.remove(ZiggyKeychain.relationshipKey)
+                ZiggyKeychain.remove(ZiggyKeychain.usernameKey)
+
+                // The app still needs somebody to be. A nil user fails every
+                // Firestore write until the next cold launch, which would look
+                // like deletion having broken the app.
+                Auth.auth().signInAnonymously { _, _ in
+                    MainActor.assumeIsolated { self.refresh() }
+                }
+
+                self.refresh()
+                completion(true)
+            }
+        }
+    }
+
     // MARK: - Nonce
 
-    private static func randomNonce(length: Int = 32) -> String {
+    fileprivate static func randomNonce(length: Int = 32) -> String {
 
         var bytes = [UInt8](repeating: 0, count: length)
         let status = SecRandomCopyBytes(kSecRandomDefault, length, &bytes)
@@ -411,7 +549,7 @@ final class ZiggyAccount: ObservableObject {
         return String(bytes.map { allowed[Int($0) % allowed.count] })
     }
 
-    private static func sha256(_ input: String) -> String {
+    fileprivate static func sha256(_ input: String) -> String {
         SHA256.hash(data: Data(input.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
@@ -427,5 +565,95 @@ final class ZiggyAccount: ObservableObject {
         return formatter
             .string(from: components)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+// MARK: - Confirming identity before deletion
+
+/// Runs a Sign in with Apple round trip purely to prove the person at the
+/// phone is the account holder.
+///
+/// Separate from `ZiggyAccount` because `ASAuthorizationController` wants an
+/// `NSObject` delegate and a presentation anchor, and neither belongs on an
+/// `ObservableObject` that the whole app holds a reference to.
+private final class AppleReauthenticator: NSObject,
+    ASAuthorizationControllerDelegate,
+    ASAuthorizationControllerPresentationContextProviding {
+
+    struct Outcome {
+        let credential: AuthCredential
+
+        /// Apple's single-use code, which is what Firebase revokes with. It
+        /// arrives only from a live authorisation, which is the real reason
+        /// this round trip cannot be skipped.
+        let authorizationCode: String
+    }
+
+    private let rawNonce: String
+    private let finished: (Outcome?) -> Void
+
+    init(rawNonce: String, finished: @escaping (Outcome?) -> Void) {
+        self.rawNonce = rawNonce
+        self.finished = finished
+    }
+
+    func start() {
+
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = ZiggyAccount.sha256(rawNonce)
+
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequests()
+    }
+
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithAuthorization authorization: ASAuthorization
+    ) {
+
+        guard
+            let apple = authorization.credential as? ASAuthorizationAppleIDCredential,
+            let tokenData = apple.identityToken,
+            let token = String(data: tokenData, encoding: .utf8),
+            let codeData = apple.authorizationCode,
+            let code = String(data: codeData, encoding: .utf8)
+        else {
+            finished(nil)
+            return
+        }
+
+        finished(
+            Outcome(
+                credential: OAuthProvider.appleCredential(
+                    withIDToken: token,
+                    rawNonce: rawNonce,
+                    fullName: apple.fullName
+                ),
+                authorizationCode: code
+            )
+        )
+    }
+
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithError error: Error
+    ) {
+        // Includes the user simply closing the sheet, which is a perfectly
+        // reasonable thing to do when the next step deletes everything.
+        finished(nil)
+    }
+
+    func presentationAnchor(
+        for controller: ASAuthorizationController
+    ) -> ASPresentationAnchor {
+
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+            ?? ASPresentationAnchor()
     }
 }

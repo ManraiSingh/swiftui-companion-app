@@ -13,6 +13,7 @@ struct SettingsView: View {
     @ObservedObject var petVM: PetViewModel
 
     @StateObject private var account = ZiggyAccount.shared
+    @StateObject private var subscription = ZiggySubscription.shared
 
     @AppStorage("ziggy_username")
     private var username = ""
@@ -27,6 +28,7 @@ struct SettingsView: View {
     @State private var isDeleting = false
     @State private var savedFlash = false
     @State private var copiedFlash = false
+    @State private var paywall: PaywallReason?
 
     private let cream = LinearGradient(
         colors: [
@@ -86,6 +88,19 @@ struct SettingsView: View {
                                 : "Keep Your Memories Safe"
                         ) {
                             accountCard
+                        }
+
+                        // Subscription
+                        //
+                        // Somewhere to subscribe on purpose. Every other way in
+                        // is a wall you walked into, which means a person who
+                        // simply wants to pay has nowhere to do it — and an App
+                        // Review reviewer has nothing to find.
+                        settingsCard(
+                            icon: subscription.isSubscribed ? "💐" : "✨",
+                            title: "Ziggy Forever"
+                        ) {
+                            subscriptionCard
                         }
 
                         // Pet
@@ -184,14 +199,20 @@ struct SettingsView: View {
                         }
 
                         // Privacy / data deletion
+                        //
+                        // Named for the account when there is one. A reviewer
+                        // looking for account deletion searches for that word,
+                        // and so does anybody who wants to be gone.
                         settingsCard(
                             icon: "🗑️",
-                            title: "Delete My Data"
+                            title: account.isSignedIn ? "Delete My Account" : "Delete My Data"
                         ) {
 
                             VStack(alignment: .leading, spacing: 12) {
 
-                                Text("Permanently delete your shared \(petVM.pet.name), photos and messages from our servers. This can't be undone.")
+                                Text(account.isSignedIn
+                                     ? "Permanently delete your account, along with your shared \(petVM.pet.name), photos and messages. Ziggy is removed from your Apple ID too. This can't be undone."
+                                     : "Permanently delete your shared \(petVM.pet.name), photos and messages from our servers. This can't be undone.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
 
@@ -227,6 +248,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .paywall($paywall)
             .confirmationDialog(
                 "Disconnect from your partner?",
                 isPresented: $showDisconnectConfirm,
@@ -256,7 +278,7 @@ struct SettingsView: View {
                 Text("Use this if your partner changed phone and can't get back in with your code. Nothing you've made together is affected — they just need the code again afterwards.")
             }
             .confirmationDialog(
-                "Delete all your data?",
+                account.isSignedIn ? "Delete your account?" : "Delete all your data?",
                 isPresented: $showDeleteConfirm,
                 titleVisibility: .visible
             ) {
@@ -268,7 +290,9 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
 
             } message: {
-                Text("This permanently removes your shared \(petVM.pet.name), photos and messages for both of you. This cannot be undone.")
+                Text(account.isSignedIn
+                     ? "This permanently removes your account and your shared \(petVM.pet.name), photos and messages for both of you. We'll ask Apple to confirm it's you first. This cannot be undone."
+                     : "This permanently removes your shared \(petVM.pet.name), photos and messages for both of you. This cannot be undone.")
             }
             .onAppear {
 
@@ -342,6 +366,95 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var subscriptionCard: some View {
+
+        if subscription.isSubscribed {
+
+            VStack(alignment: .leading, spacing: 12) {
+
+                HStack(spacing: 10) {
+
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundColor(.green.opacity(0.8))
+
+                    Text(activeLine)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+
+                // Apple's own page. A subscription must always be cancellable
+                // from inside the app that sold it, and this is where every
+                // iPhone user already expects to end up.
+                Link(destination: URL(string: "https://apps.apple.com/account/subscriptions")!) {
+                    Text("Manage subscription")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(.white.opacity(0.7))
+                        .foregroundColor(accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(.pink.opacity(0.3), lineWidth: 1)
+                        )
+                }
+            }
+
+        } else {
+
+            VStack(spacing: 12) {
+
+                Text("Unlimited books and pages, every instant kept, saving to Photos, unlimited bouquets, and printing the whole book. One subscription covers you both.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                fillButton(title: "See Ziggy Forever") { paywall = .general }
+
+                // Also on the paywall, but somebody reinstalling looks in
+                // Settings first and should not have to hit a wall to find it.
+                Button {
+                    Task { await subscription.restore() }
+                } label: {
+                    Text(subscription.isPurchasing ? "Restoring…" : "Restore purchases")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                }
+                .disabled(subscription.isPurchasing)
+
+                if let error = subscription.lastError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+    }
+
+    /// Who paid, and until when.
+    private var activeLine: String {
+
+        let until = subscription.activeUntil.map {
+            $0.formatted(.dateTime.day().month(.abbreviated).year())
+        }
+
+        let paidBy = subscription.paidBy
+        let mine = paidBy.isEmpty || paidBy == username
+
+        let who = mine ? "Ziggy Forever is active" : "\(paidBy) unlocked Ziggy Forever for you both"
+
+        guard let until else { return who + "." }
+        return "\(who). Renews \(until)."
+    }
+
     private func settingsCard<Content: View>(
         icon: String,
         title: String,
@@ -399,12 +512,30 @@ struct SettingsView: View {
 
         isDeleting = true
 
-        FirestoreManager.shared.deleteRelationshipData {
-            // Cloud data gone — now clear local state and sign out of the
-            // relationship (returns the user to the connect screen).
-            isDeleting = false
-            UserDefaults.standard.removeObject(forKey: "ziggy_pet_name")
-            RelationshipManager.shared.disconnect()
+        // Apple asks who you are before an account can go, and that sheet can
+        // be closed — so it comes first. Backing out here must leave every
+        // photo and message exactly where it was.
+        ZiggyAccount.shared.reauthenticate { confirmed in
+
+            guard confirmed else {
+                isDeleting = false
+                return
+            }
+
+            // The data goes while the account still exists, because Firestore's
+            // rules are what let this device touch it at all.
+            FirestoreManager.shared.deleteRelationshipData {
+
+                // Then the account itself. Apple requires an app offering
+                // sign-in to offer deletion from inside the app, and requires
+                // the Apple token to be revoked rather than just forgotten.
+                ZiggyAccount.shared.deleteAccount { _ in
+
+                    isDeleting = false
+                    UserDefaults.standard.removeObject(forKey: "ziggy_pet_name")
+                    RelationshipManager.shared.disconnect()
+                }
+            }
         }
     }
 }
