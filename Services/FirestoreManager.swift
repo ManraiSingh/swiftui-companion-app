@@ -3272,6 +3272,26 @@ class FirestoreManager {
         }
     }
 
+    /// How many bouquets have been sent in this relationship.
+    ///
+    /// An aggregate count rather than a fetch — the free tier only needs the
+    /// number, and pulling forty documents with their flowers in to arrive at
+    /// "five" would be a slow way to ask a small question.
+    func countBouquets(_ completion: @escaping (Int) -> Void) {
+
+        guard !relationshipCode.isEmpty else { completion(0); return }
+
+        db.collection("relationships")
+            .document(relationshipCode)
+            .collection("bouquets")
+            .count
+            .getAggregation(source: .server) { snapshot, _ in
+                DispatchQueue.main.async {
+                    completion(snapshot?.count.intValue ?? 0)
+                }
+            }
+    }
+
     /// Every bouquet the two of you have exchanged, newest first.
     func startBouquets(_ completion: @escaping ([Bouquet]) -> Void) {
 

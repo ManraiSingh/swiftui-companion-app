@@ -776,6 +776,7 @@ struct ContentView: View {
     private var hasShownWidgetWalkthrough = false
     @State private var showWidgetOnboarding = false
     @State private var showStore = false
+    @State private var paywall: PaywallReason?
     @State private var showLoveInfo = false
 
     /// Bouquets the two of you have exchanged, and the one waiting to be seen.
@@ -896,12 +897,14 @@ struct ContentView: View {
                     checkForRatingPrompt()
                     watchForBothConnected()
                     watchForBouquets()
+                    ZiggySubscription.shared.start()
                 }
             }
         }
         .fullScreenCover(isPresented: $showStore) {
             BouquetBuilderView()
         }
+        .paywall($paywall)
         .fullScreenCover(item: $openBouquet) { bouquet in
             BouquetShowcaseView(bouquet: bouquet)
         }
@@ -1410,9 +1413,27 @@ struct ContentView: View {
         .buttonStyle(BubblePress())
     }
 
+    /// Asks the server how many bouquets have gone before opening the builder,
+    /// so nobody arranges flowers for ten minutes and is refused at the end.
+    private func openStore() {
+
+        guard !ZiggySubscription.shared.isSubscribed else {
+            showStore = true
+            return
+        }
+
+        FirestoreManager.shared.countBouquets { sentSoFar in
+            if ZiggySubscription.shared.canSendBouquet(sentSoFar: sentSoFar) {
+                showStore = true
+            } else {
+                paywall = .bouquets
+            }
+        }
+    }
+
     private var storeButton: some View {
         Button {
-            showStore = true
+            openStore()
         } label: {
             Image(systemName: "bag.fill")
                 .font(.system(size: 15, weight: .bold))

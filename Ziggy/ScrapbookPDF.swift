@@ -29,7 +29,8 @@ enum ScrapbookPDF {
     static func write(
         book: ScrapbookBook,
         pages: [ScrapbookPage],
-        elements: [String: [ScrapbookElement]]
+        elements: [String: [ScrapbookElement]],
+        watermark: Bool = false
     ) -> URL? {
 
         guard !pages.isEmpty else { return nil }
@@ -75,6 +76,8 @@ enum ScrapbookPDF {
                     cg.scaleBy(x: 1, y: -1)
                     renderer.render { _, draw in draw(cg) }
                     cg.restoreGState()
+
+                    if watermark { stamp() }
                 }
             }
 
@@ -87,6 +90,34 @@ enum ScrapbookPDF {
         } catch {
             return nil
         }
+    }
+
+    /// The line a free export carries.
+    ///
+    /// Small, at the very foot of the page, in the same grey the dates are set
+    /// in. A free page is meant to be worth sending to somebody, because a page
+    /// somebody sends on is an advert and a page they are too embarrassed to
+    /// send is nothing at all — so this reads as a colophon, not a stamp across
+    /// the middle of the work.
+    private static func stamp() {
+
+        let text = "Made in Ziggy"
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 9, weight: .semibold),
+            .foregroundColor: UIColor.black.withAlphaComponent(0.28),
+            .kern: 1.2
+        ]
+
+        let size = (text as NSString).size(withAttributes: attributes)
+
+        (text as NSString).draw(
+            at: CGPoint(
+                x: (pageSize.width - size.width) / 2,
+                y: pageSize.height - size.height - 18
+            ),
+            withAttributes: attributes
+        )
     }
 
     /// A filename that reads like the book, with anything a file system would

@@ -6,12 +6,16 @@ import {
   onDocumentCreated,
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
+import {onRequest} from "firebase-functions/v2/https";
 
 admin.initializeApp();
 
 const apnsKey = defineSecret("APNS_AUTH_KEY");
 const apnsKeyID = defineSecret("APNS_KEY_ID");
 const apnsTeamID = defineSecret("APNS_TEAM_ID");
+
+/** The shared secret RevenueCat sends in the Authorization header. */
+const revenueCatAuth = defineSecret("REVENUECAT_AUTH");
 
 const bundleID = "com.Manrai.Ziggy";
 const region = "asia-south1";
@@ -481,3 +485,95 @@ function gameName(gameId?: string): string {
     return "with Ziggy";
   }
 }
+
+// MARK: - Ziggy Forever
+
+/**
+ * RevenueCat's webhook.
+ *
+ * The app writes the entitlement itself the moment a purchase goes through, so
+ * the unlock is instant. This is what keeps that record honest afterwards —
+ * renewals, cancellations, refunds and billing failures all happen when nobody
+ * has the app open, and none of them would ever reach Firestore otherwise.
+ *
+ * The RevenueCat app user ID is the relationship code, which is what makes one
+ * subscription cover both partners: whichever of them paid, the entitlement
+ * lands on the document they share.
+ */
+export const revenueCatWebhook = onRequest(
+  {region, secrets: [revenueCatAuth], cors: false},
+  async (request, response) => {
+    // RevenueCat sends whatever Authorization header you configure. Without
+    // this check anyone who found the URL could grant themselves a
+    // subscription with a single curl.
+    if (request.get("Authorization") !== revenueCatAuth.value()) {
+      logger.warn("Rejected a webhook with a bad Authorization header");
+      response.status(401).send("Unauthorized");
+      return;
+    }
+
+    const event = request.body?.event;
+
+    if (!event) {
+      response.status(400).send("No event");
+      return;
+    }
+
+    const code: string = event.app_user_id ?? "";
+    const type: string = event.type ?? "";
+
+    // An anonymous RevenueCat ID means the purchase happened before the app
+    // knew which relationship it belonged to. Nothing to write it onto.
+    if (!code || code.startsWith("$RCAnonymousID:")) {
+      logger.info("Webhook for an unpaired user, ignoring", {type});
+      response.status(200).send("OK");
+      return;
+    }
+
+    const document = admin.firestore().collection("relationships").doc(code);
+
+    // TRANSFER moves a subscription to another account, so this relationship
+    // no longer has it. Everything made stays; only new work is gated.
+    if (type === "TRANSFER") {
+      await document.set({activeUntil: null, plan: ""}, {merge: true});
+      logger.info("Subscription transferred away", {code});
+      response.status(200).send("OK");
+      return;
+    }
+
+    // A refund or a revocation ends access now rather than at period end.
+    if (type === "CANCELLATION" && event.cancel_reason === "CUSTOMER_SUPPORT") {
+      await document.set({activeUntil: null, plan: ""}, {merge: true});
+      response.status(200).send("OK");
+      return;
+    }
+
+    // A plain CANCELLATION is somebody switching off auto-renew. They keep
+    // what they paid for until the period runs out, so it is not acted on
+    // here — expiry arrives on its own as an EXPIRATION event.
+    if (type === "EXPIRATION") {
+      await document.set({activeUntil: null, plan: ""}, {merge: true});
+      logger.info("Subscription expired", {code});
+      response.status(200).send("OK");
+      return;
+    }
+
+    const expiry: number | undefined =
+      event.expiration_at_ms ?? undefined;
+
+    if (!expiry) {
+      response.status(200).send("OK");
+      return;
+    }
+
+    const product: string = event.product_id ?? "";
+
+    await document.set({
+      activeUntil: admin.firestore.Timestamp.fromMillis(expiry),
+      plan: product.includes("yearly") ? "yearly" : "monthly",
+    }, {merge: true});
+
+    logger.info("Entitlement written", {code, type, expiry});
+    response.status(200).send("OK");
+  }
+);

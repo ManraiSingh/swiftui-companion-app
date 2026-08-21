@@ -37,6 +37,8 @@ struct ScrapbookBookView: View {
     /// The finished PDF, waiting to be handed on.
     @State private var exportedPDF: ScrapbookExportFile?
     @State private var exporting = false
+    @State private var askingExport = false
+    @State private var paywall: PaywallReason?
 
     private var cover: ScrapbookStyle.Cover { ScrapbookStyle.cover(book.coverIndex) }
 
@@ -94,6 +96,20 @@ struct ScrapbookBookView: View {
         }
         .sheet(item: $exportedPDF) { file in
             ScrapbookShareSheet(url: file.url)
+        }
+        .paywall($paywall)
+        // Said before the export rather than discovered inside the file, so
+        // nobody sends one page to their mother thinking it was the book.
+        .confirmationDialog(
+            "Free exports are a single page",
+            isPresented: $askingExport,
+            titleVisibility: .visible
+        ) {
+            Button("Export this page") { runExport(whole: false) }
+            Button("See Ziggy Forever") { paywall = .wholeBook }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You'll get the page you're looking at, with a small Ziggy line at the foot. Ziggy Forever prints the whole book, clean.")
         }
         .sheet(isPresented: $showingPaper) {
             PaperPicker(selected: currentPage?.paperIndex ?? 0) { index in
@@ -378,6 +394,11 @@ struct ScrapbookBookView: View {
             // the page arrives.
             let landing = manager.pages.count
 
+            guard ZiggySubscription.shared.canAddPage(existing: landing) else {
+                paywall = .pages
+                return
+            }
+
             manager.addPage(bookID: book.id) { _ in }
 
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -515,12 +536,36 @@ struct ScrapbookBookView: View {
 
         guard !exporting, !manager.pages.isEmpty else { return }
 
+        if ZiggySubscription.shared.canExportWholeBook {
+            runExport(whole: true)
+        } else {
+            askingExport = true
+        }
+    }
+
+    /// A free export is the open page alone, with a line at the foot. It is
+    /// meant to be worth sending on — a page somebody forwards is an advert,
+    /// where a page ruined by a stamp across the middle is just a lost reader.
+    private func runExport(whole: Bool) {
+
+        guard !exporting, !manager.pages.isEmpty else { return }
+
         exporting = true
-        let pages = manager.pages
+
+        // `clampedIndex` allows one past the end — that slot is the "add a
+        // page" leaf, not a page, so it must not be reached for here.
+        let open = min(max(pageIndex, 0), manager.pages.count - 1)
+
+        let pages: [ScrapbookPage] = whole ? manager.pages : [manager.pages[open]]
 
         manager.fetchEveryPage(bookID: book.id, pageIDs: pages.map(\.id)) { elements in
 
-            let url = ScrapbookPDF.write(book: book, pages: pages, elements: elements)
+            let url = ScrapbookPDF.write(
+                book: book,
+                pages: pages,
+                elements: elements,
+                watermark: !whole
+            )
 
             exporting = false
             if let url { exportedPDF = ScrapbookExportFile(url: url) }

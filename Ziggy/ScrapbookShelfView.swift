@@ -105,6 +105,7 @@ struct ScrapbookShelfView: View {
 
     @State private var openBook: ScrapbookBook?
     @State private var showingNewBook = false
+    @State private var paywall: PaywallReason?
     @State private var renaming: ScrapbookBook?
     @State private var draftTitle = ""
     @State private var pendingDelete: ScrapbookBook?
@@ -286,6 +287,7 @@ struct ScrapbookShelfView: View {
             }
             .presentationDetents([.height(560)])
         }
+        .paywall($paywall)
         .alert("Rename book", isPresented: Binding(
             get: { renaming != nil },
             set: { if !$0 { renaming = nil } }
@@ -480,7 +482,13 @@ struct ScrapbookShelfView: View {
 
         case .addSlot:
             AddSlot(width: metrics.addSlot, unit: metrics.unit,
-                    icon: "plus", label: "Book") { showingNewBook = true }
+                    icon: "plus", label: "Book") {
+                if ZiggySubscription.shared.canAddBook(existing: manager.books.count) {
+                    showingNewBook = true
+                } else {
+                    paywall = .books
+                }
+            }
 
         case .addOrnament:
             AddSlot(width: metrics.addSlot, unit: metrics.unit,

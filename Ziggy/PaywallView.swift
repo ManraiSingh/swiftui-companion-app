@@ -35,7 +35,9 @@ struct PaywallView: View {
             }
         }
 
-        var price: String {
+        /// Only used until the App Store answers. Every price the person
+        /// actually sees comes from `ZiggySubscription`, in their own currency.
+        var fallbackPrice: String {
             switch self {
             case .monthly: return "$5.99"
             case .yearly:  return "$29.99"
@@ -48,15 +50,33 @@ struct PaywallView: View {
             case .yearly:  return "per year"
             }
         }
+    }
 
-        /// The yearly plan carries the trial, which is what makes it the one
-        /// people take.
-        var note: String? {
-            switch self {
-            case .monthly: return nil
-            case .yearly:  return "7 days free, then $2.50 a month"
-            }
+    private func price(_ option: Plan) -> String {
+        switch option {
+        case .monthly: return subscription.monthlyPrice ?? option.fallbackPrice
+        case .yearly:  return subscription.yearlyPrice ?? option.fallbackPrice
         }
+    }
+
+    /// The yearly plan carries the trial, which is what makes it the one
+    /// people take — but only say so to somebody who is actually eligible.
+    private func note(_ option: Plan) -> String? {
+
+        guard option == .yearly else { return nil }
+
+        let perMonth = subscription.yearlyPerMonth.map { "\($0) a month" }
+
+        if let days = subscription.trialDays {
+            guard let perMonth else { return "\(days) days free" }
+            return "\(days) days free, then \(perMonth)"
+        }
+
+        return perMonth.map { "Works out at \($0)" }
+    }
+
+    private var trialing: Bool {
+        choice == .yearly && subscription.trialDays != nil
     }
 
     private let cream = LinearGradient(
@@ -104,6 +124,7 @@ struct PaywallView: View {
                 appeared = true
             }
         }
+        .task { await subscription.loadProducts() }
     }
 
     private var close: some View {
@@ -239,7 +260,7 @@ struct PaywallView: View {
                     Text(option.title)
                         .font(.system(size: 15, weight: .black, design: .rounded))
                         .foregroundStyle(accent)
-                    if let note = option.note {
+                    if let note = note(option) {
                         Text(note)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.55))
@@ -249,7 +270,7 @@ struct PaywallView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(option.price)
+                    Text(price(option))
                         .font(.system(size: 17, weight: .black, design: .rounded))
                         .foregroundStyle(accent)
                     Text(option.per)
@@ -279,13 +300,19 @@ struct PaywallView: View {
         VStack(spacing: 10) {
 
             Button {
-                // Wired to RevenueCat once the SDK is linked.
+                Task {
+                    if await subscription.purchase(yearlyPlan: choice == .yearly) {
+                        dismiss()
+                    }
+                }
             } label: {
                 HStack(spacing: 8) {
                     if subscription.isPurchasing {
                         ProgressView().tint(.white)
                     }
-                    Text(choice == .yearly ? "Start 7 days free" : "Subscribe")
+                    Text(trialing
+                         ? "Start \(subscription.trialDays ?? 7) days free"
+                         : "Subscribe")
                         .font(.system(size: 16, weight: .black, design: .rounded))
                 }
                 .foregroundStyle(.white)
@@ -310,13 +337,16 @@ struct PaywallView: View {
             }
 
             Button {
-                // Restore, wired with the SDK.
+                Task {
+                    if await subscription.restore() { dismiss() }
+                }
             } label: {
                 Text("Restore purchases")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .disabled(subscription.isPurchasing)
         }
     }
 
@@ -326,9 +356,9 @@ struct PaywallView: View {
 
         VStack(spacing: 8) {
 
-            Text(choice == .yearly
-                 ? "7 days free, then $29.99 a year. Renews until cancelled."
-                 : "$5.99 a month. Renews until cancelled.")
+            Text(trialing
+                 ? "\(subscription.trialDays ?? 7) days free, then \(price(.yearly)) a year. Renews until cancelled."
+                 : "\(price(choice)) \(choice == .yearly ? "a year" : "a month"). Renews until cancelled.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

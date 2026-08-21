@@ -18,11 +18,19 @@
 @preconcurrency import FirebaseFirestore
 import SwiftUI
 import Combine
+import RevenueCat
 
 @MainActor
 final class ZiggySubscription: ObservableObject {
 
     static let shared = ZiggySubscription()
+
+    /// RevenueCat's public SDK key. Safe to ship — it can only read offerings
+    /// and make purchases, never issue entitlements.
+    private static let apiKey = "appl_wOxMzjLKnWkibsUATMIqZZGGpKH"
+
+    /// The entitlement identifier configured in RevenueCat.
+    private static let entitlement = "forever"
 
     /// Whether this relationship is on Ziggy Forever right now.
     @Published private(set) var isSubscribed = false
@@ -38,10 +46,204 @@ final class ZiggySubscription: ObservableObject {
     @Published var isPurchasing = false
     @Published var lastError: String?
 
+    // Prices come from the App Store rather than being written into the app,
+    // so somebody in Berlin sees euros and somebody in Toronto sees Canadian
+    // dollars. Apple rejects paywalls that quote the wrong currency, and most
+    // of these people are not in the United States.
+    @Published private(set) var monthlyPrice: String?
+    @Published private(set) var yearlyPrice: String?
+
+    /// The yearly price divided by twelve, formatted in the same currency.
+    @Published private(set) var yearlyPerMonth: String?
+
+    /// Length of the free trial on the yearly plan, when one is being offered
+    /// to this person. Nil means no trial — they have used it already, or the
+    /// product has none.
+    @Published private(set) var trialDays: Int?
+
     private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
 
+    private var monthly: Package?
+    private var yearly: Package?
+
     private init() {}
+
+    // MARK: - RevenueCat
+
+    /// Called once at launch, before anything asks about subscriptions.
+    static func configure() {
+        Purchases.logLevel = .warn
+        Purchases.configure(withAPIKey: apiKey)
+    }
+
+    /// Points RevenueCat at the relationship rather than the device.
+    ///
+    /// Both phones in a couple identify as the same customer, which is the
+    /// whole point: one of them pays and the other one is simply already
+    /// subscribed. It also gives the renewal webhook the relationship code for
+    /// free, since that is what arrives as the app user ID.
+    private func identify() async {
+
+        let code = RelationshipManager.shared.relationshipCode
+        guard !code.isEmpty, Purchases.isConfigured else { return }
+        guard Purchases.shared.appUserID != code else { return }
+
+        _ = try? await Purchases.shared.logIn(code)
+    }
+
+    /// Loads the current offering so the paywall can show real prices.
+    func loadProducts() async {
+
+        guard Purchases.isConfigured else { return }
+
+        await identify()
+
+        guard let offering = try? await Purchases.shared.offerings().current else { return }
+
+        monthly = offering.monthly ?? offering.availablePackages
+            .first { $0.storeProduct.subscriptionPeriod?.unit == .month }
+        yearly = offering.annual ?? offering.availablePackages
+            .first { $0.storeProduct.subscriptionPeriod?.unit == .year }
+
+        monthlyPrice = monthly?.storeProduct.localizedPriceString
+        yearlyPrice = yearly?.storeProduct.localizedPriceString
+
+        if let product = yearly?.storeProduct {
+            let perMonth = product.price / 12
+            yearlyPerMonth = product.priceFormatter?
+                .string(from: perMonth as NSDecimalNumber)
+
+            if let intro = product.introductoryDiscount,
+               intro.paymentMode == .freeTrial {
+                trialDays = days(in: intro.subscriptionPeriod)
+            }
+        }
+    }
+
+    private func days(in period: SubscriptionPeriod) -> Int {
+        switch period.unit {
+        case .day:   return period.value
+        case .week:  return period.value * 7
+        case .month: return period.value * 30
+        case .year:  return period.value * 365
+        @unknown default: return period.value
+        }
+    }
+
+    // MARK: - Buying
+
+    /// Buys a plan and unlocks it for both partners.
+    ///
+    /// Returns true when the person is subscribed at the end of it, so the
+    /// paywall knows whether to close.
+    @discardableResult
+    func purchase(yearlyPlan: Bool) async -> Bool {
+
+        guard Purchases.isConfigured else {
+            lastError = "The store isn't ready yet. Please try again in a moment."
+            return false
+        }
+
+        if monthly == nil && yearly == nil { await loadProducts() }
+
+        guard let package = yearlyPlan ? yearly : monthly else {
+            lastError = "That plan isn't available right now."
+            return false
+        }
+
+        lastError = nil
+        isPurchasing = true
+        defer { isPurchasing = false }
+
+        do {
+            let result = try await Purchases.shared.purchase(package: package)
+            guard !result.userCancelled else { return false }
+            return unlock(from: result.customerInfo, plan: yearlyPlan ? "yearly" : "monthly")
+        } catch {
+            // A cancelled purchase is not a failure and should not be shouted at.
+            if (error as? ErrorCode) != .purchaseCancelledError {
+                lastError = friendly(error)
+            }
+            return false
+        }
+    }
+
+    /// For a new phone, or the partner who did not pay.
+    @discardableResult
+    func restore() async -> Bool {
+
+        guard Purchases.isConfigured else { return false }
+
+        lastError = nil
+        isPurchasing = true
+        defer { isPurchasing = false }
+
+        await identify()
+
+        do {
+            let info = try await Purchases.shared.restorePurchases()
+            let restored = unlock(from: info, plan: plan(from: info))
+
+            if !restored {
+                lastError = "We couldn't find a subscription on this Apple Account."
+            }
+            return restored
+        } catch {
+            lastError = friendly(error)
+            return false
+        }
+    }
+
+    /// Quietly checks with Apple at launch, so a renewal or a cancellation
+    /// lands even if the webhook never arrives.
+    func refreshEntitlement() async {
+
+        guard Purchases.isConfigured else { return }
+
+        await identify()
+
+        guard let info = try? await Purchases.shared.customerInfo() else { return }
+        _ = unlock(from: info, plan: plan(from: info))
+    }
+
+    private func plan(from info: CustomerInfo) -> String {
+        guard let entitlement = info.entitlements[Self.entitlement] else { return "" }
+        return entitlement.productIdentifier.contains("yearly") ? "yearly" : "monthly"
+    }
+
+    /// Writes an active entitlement through to the relationship.
+    private func unlock(from info: CustomerInfo, plan: String) -> Bool {
+
+        guard let entitlement = info.entitlements[Self.entitlement],
+              entitlement.isActive else { return false }
+
+        // A lifetime or sandbox entitlement can have no expiry date.
+        let until = entitlement.expirationDate
+            ?? Calendar.current.date(byAdding: .year, value: 10, to: Date())!
+
+        // Show it immediately rather than waiting for Firestore to echo back.
+        activeUntil = until
+        isSubscribed = true
+
+        record(until: until, plan: plan)
+        return true
+    }
+
+    private func friendly(_ error: Error) -> String {
+        switch error as? ErrorCode {
+        case .networkError:
+            return "No connection. Check your internet and try again."
+        case .paymentPendingError:
+            return "Your payment is pending approval. We'll unlock it as soon as it goes through."
+        case .productNotAvailableForPurchaseError:
+            return "That plan isn't available in your region yet."
+        case .storeProblemError:
+            return "The App Store is having trouble. Please try again shortly."
+        default:
+            return (error as NSError).localizedDescription
+        }
+    }
 
     // MARK: - The free tier
     //
@@ -78,6 +280,10 @@ final class ZiggySubscription: ObservableObject {
                     self?.apply(snapshot?.data() ?? [:])
                 }
             }
+
+        // Firestore is the fast answer; Apple is the true one. Asking both
+        // means a renewal or a cancellation lands even if the webhook doesn't.
+        Task { await refreshEntitlement() }
     }
 
     func stop() {

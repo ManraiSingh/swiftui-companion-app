@@ -115,6 +115,8 @@ struct ZiggyApp: App {
         if Auth.auth().currentUser == nil {
             Auth.auth().signInAnonymously()
         }
+
+        ZiggySubscription.configure()
     }
 
     var body: some Scene {

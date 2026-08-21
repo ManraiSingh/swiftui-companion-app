@@ -66,6 +66,19 @@ struct InstantArchiveView: View {
     @State private var kept: [ArchivedInstant] = []
     @State private var opened: ArchivedInstant?
     @State private var isLoading = true
+    @State private var paywall: PaywallReason?
+
+    @StateObject private var subscription = ZiggySubscription.shared
+
+    /// Whether this one is past the free tier's reach.
+    ///
+    /// Old instants stay in the grid, frosted, rather than disappearing. A
+    /// photograph you can see but not open is an argument for subscribing;
+    /// a photograph quietly removed just reads as the app having lost it.
+    private func locked(_ instant: ArchivedInstant) -> Bool {
+        guard let horizon = subscription.instantHorizon else { return false }
+        return instant.sentAt < horizon
+    }
 
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: 8)]
 
@@ -115,6 +128,7 @@ struct InstantArchiveView: View {
         .fullScreenCover(item: $opened) { instant in
             InstantDetailView(instant: instant)
         }
+        .paywall($paywall)
     }
 
     private var header: some View {
@@ -164,7 +178,13 @@ struct InstantArchiveView: View {
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(kept) { instant in
                     thumbnail(instant)
-                        .onTapGesture { opened = instant }
+                        .onTapGesture {
+                            if locked(instant) {
+                                paywall = .oldInstants
+                            } else {
+                                opened = instant
+                            }
+                        }
                 }
             }
             .padding(.horizontal, 14)
@@ -195,6 +215,18 @@ struct InstantArchiveView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 132)
             .clipped()
+            .blur(radius: locked(instant) ? 11 : 0)
+            .overlay {
+                if locked(instant) {
+                    ZStack {
+                        Color.white.opacity(0.28)
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    }
+                }
+            }
 
             // A date on every tile, because the whole point of looking back is
             // knowing when.
@@ -247,6 +279,7 @@ private struct InstantDetailView: View {
 
     @State private var toast = ""
     @State private var showingDeleteConfirm = false
+    @State private var paywall: PaywallReason?
 
     private var isMine: Bool { FirestoreManager.shared.isMine(instant) }
 
@@ -323,6 +356,7 @@ private struct InstantDetailView: View {
         } message: {
             Text("It will be gone for both of you.")
         }
+        .paywall($paywall)
     }
 
     private var displaySender: String {
@@ -337,6 +371,10 @@ private struct InstantDetailView: View {
 
             action("Save", "square.and.arrow.down") {
                 guard let image else { return }
+                guard ZiggySubscription.shared.canSaveToPhotos else {
+                    paywall = .savePhoto
+                    return
+                }
                 ZiggyPhotoSaver.save(image) { outcome in
                     switch outcome {
                     case .saved:  flash("Saved to Photos 📸")

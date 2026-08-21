@@ -76,6 +76,7 @@ struct DoodleView: View {
     @State private var showPinPrompt = false
     @State private var showPartnerDoodlePopup = false
     @State private var showClearConfirm = false
+    @State private var paywall: PaywallReason?
 
     @State private var textItems: [DoodleTextItem] = []
     @State private var emojiItems: [DoodleEmojiItem] = []
@@ -199,6 +200,7 @@ struct DoodleView: View {
         } message: {
             Text("Your drawing, stickers and background will all go. This can't be undone.")
         }
+        .paywall($paywall)
     }
 
     /// Whether there is anything on the canvas worth confirming before it goes.
@@ -419,6 +421,11 @@ struct DoodleView: View {
     /// without this the only way to keep one you liked drawing was a
     /// screenshot with the toolbar in it.
     private func saveToPhotos(_ image: UIImage) {
+
+        guard ZiggySubscription.shared.canSaveToPhotos else {
+            paywall = .savePhoto
+            return
+        }
 
         ZiggyPhotoSaver.save(image) { outcome in
             switch outcome {

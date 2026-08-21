@@ -30,6 +30,7 @@
 		B57A3A402FDE1A3800332034 /* WidgetDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A3C2FDE156700332034 /* WidgetDataManager.swift */; };
 		B57A3A432FDE21FB00332034 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A422FDE21FB00332034 /* ActivityView.swift */; };
 		B57A3A452FDE281100332034 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A442FDE281100332034 /* NotificationManager.swift */; };
+		B5A63FC53038CE540086B36B /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = B5A63FC43038CE540086B36B /* RevenueCat */; };
 		B5AD651E2FE0A3C5007BFF84 /* RelationshipManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */; };
 		B5AD65202FE15315007BFF84 /* RelationshipSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */; };
 		B5AD65222FE17C0D007BFF84 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65212FE17C0D007BFF84 /* FeedView.swift */; };
@@ -137,6 +138,7 @@
 			files = (
 				B54457AA2FDEC2A700A6F47A /* FirebaseCore in Frameworks */,
 				B54457AC2FDEC2B600A6F47A /* FirebaseFirestore in Frameworks */,
+				B5A63FC53038CE540086B36B /* RevenueCat in Frameworks */,
 				B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */,
 				6F285DD6E8644AFE8CAF1B89 /* FirebaseAnalytics in Frameworks */,
 			);
@@ -254,6 +256,7 @@
 				B54457AB2FDEC2B600A6F47A /* FirebaseFirestore */,
 				B5FAE0A10000000000000A22 /* FirebaseAuth */,
 				965D49BE67E748EB9AE57C8D /* FirebaseAnalytics */,
+				B5A63FC43038CE540086B36B /* RevenueCat */,
 			);
 			productName = Ziggy;
 			productReference = B51F069A2FAE888F009B8146 /* Ziggy.app */;
@@ -310,6 +313,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				B5A63FC33038CE540086B36B /* XCRemoteSwiftPackageReference "purchases-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B51F069B2FAE888F009B8146 /* Products */;
@@ -728,6 +732,14 @@
 				minimumVersion = 12.14.0;
 			};
 		};
+		B5A63FC33038CE540086B36B /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.85.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -745,6 +757,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		B5A63FC43038CE540086B36B /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5A63FC33038CE540086B36B /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
 		};
 		B5FAE0A10000000000000A22 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;

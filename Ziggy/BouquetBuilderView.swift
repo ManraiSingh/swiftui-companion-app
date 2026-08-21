@@ -29,6 +29,7 @@ struct BouquetBuilderView: View {
     @State private var errorText = ""
     @State private var showingDressing = false
     @State private var showingLayers = false
+    @State private var paywall: PaywallReason?
 
     /// The layer being dragged along the strip, and how far it has moved.
     @State private var draggingLayer: String?
@@ -82,6 +83,7 @@ struct BouquetBuilderView: View {
 
             if sent { sentOverlay.zIndex(20) }
         }
+        .paywall($paywall)
     }
 
     // MARK: Header
@@ -759,6 +761,29 @@ struct BouquetBuilderView: View {
         isSending = true
         errorText = ""
         selectedID = nil
+
+        // The wall is really put up at the shop button, so nobody spends ten
+        // minutes arranging flowers they are then refused. This is the backstop
+        // for the case where the count moved underneath us — the partner sent
+        // one while this bouquet was being made.
+        guard !ZiggySubscription.shared.isSubscribed else {
+            deliver()
+            return
+        }
+
+        FirestoreManager.shared.countBouquets { sentSoFar in
+
+            guard ZiggySubscription.shared.canSendBouquet(sentSoFar: sentSoFar) else {
+                isSending = false
+                paywall = .bouquets
+                return
+            }
+
+            deliver()
+        }
+    }
+
+    private func deliver() {
 
         FirestoreManager.shared.sendBouquet(bouquet) { ok in
 
