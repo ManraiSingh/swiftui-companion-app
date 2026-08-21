@@ -41,6 +41,17 @@ struct SettingsView: View {
 
     private let accent = Color(red: 0.27, green: 0.24, blue: 0.21)
 
+    // Ziggy Forever's own palette. Real gold is warm and slightly dirty —
+    // pure yellow reads as a highlighter pen, not as something you paid for.
+    private let gold = Color(red: 0.83, green: 0.68, blue: 0.36)
+    private let goldBright = Color(red: 0.97, green: 0.89, blue: 0.66)
+    private let ink = Color(red: 0.07, green: 0.07, blue: 0.08)
+
+    /// Body copy on the dark card. Gold at low opacity looks handsome and
+    /// reads badly, so the sentences are champagne and the gold is kept for
+    /// the things that should catch the eye.
+    private let champagne = Color(red: 0.91, green: 0.87, blue: 0.79)
+
     var body: some View {
 
         NavigationStack {
@@ -96,7 +107,7 @@ struct SettingsView: View {
                         // is a wall you walked into, which means a person who
                         // simply wants to pay has nowhere to do it — and an App
                         // Review reviewer has nothing to find.
-                        settingsCard(
+                        premiumCard(
                             icon: subscription.isSubscribed ? "💐" : "✨",
                             title: "Ziggy Forever"
                         ) {
@@ -376,11 +387,11 @@ struct SettingsView: View {
                 HStack(spacing: 10) {
 
                     Image(systemName: "checkmark.seal.fill")
-                        .foregroundColor(.green.opacity(0.8))
+                        .foregroundColor(gold)
 
                     Text(activeLine)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(champagne.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
 
                     Spacer(minLength: 0)
@@ -395,12 +406,12 @@ struct SettingsView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
-                        .background(.white.opacity(0.7))
-                        .foregroundColor(accent)
+                        .foregroundColor(gold)
+                        .background(.white.opacity(0.05))
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(.pink.opacity(0.3), lineWidth: 1)
+                                .stroke(gold.opacity(0.4), lineWidth: 1)
                         )
                 }
             }
@@ -411,11 +422,28 @@ struct SettingsView: View {
 
                 Text("Unlimited books and pages, every instant kept, saving to Photos, unlimited bouquets, and printing the whole book. One subscription covers you both.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(champagne.opacity(0.72))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                fillButton(title: "See Ziggy Forever") { paywall = .general }
+                // Gold on black, with the text knocked out dark. The one solid
+                // bright thing on the card, so there is no doubt what to press.
+                Button { paywall = .general } label: {
+                    Text("See Ziggy Forever")
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                colors: [goldBright, gold],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .foregroundColor(ink)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .shadow(color: gold.opacity(0.3), radius: 8, y: 3)
+                }
 
                 // Also on the paywall, but somebody reinstalling looks in
                 // Settings first and should not have to hit a wall to find it.
@@ -425,14 +453,14 @@ struct SettingsView: View {
                     Text(subscription.isPurchasing ? "Restoring…" : "Restore purchases")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(gold.opacity(0.75))
                 }
                 .disabled(subscription.isPurchasing)
 
                 if let error = subscription.lastError {
                     Text(error)
                         .font(.caption)
-                        .foregroundColor(.red.opacity(0.8))
+                        .foregroundColor(Color(red: 1, green: 0.55, blue: 0.5))
                         .multilineTextAlignment(.center)
                 }
             }
@@ -453,6 +481,81 @@ struct SettingsView: View {
 
         guard let until else { return who + "." }
         return "\(who). Renews \(until)."
+    }
+
+    /// The one dark card in a stack of cream ones.
+    ///
+    /// Deliberately the odd one out: it is the only thing on this screen that
+    /// costs money, and a card that looks like all the others reads as another
+    /// setting rather than as an offer.
+    ///
+    /// Kept separate from `settingsCard` rather than adding a flag to it, so
+    /// nothing else on this screen can be changed by accident.
+    private func premiumCard<Content: View>(
+        icon: String,
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+
+        VStack(alignment: .leading, spacing: 14) {
+
+            HStack(spacing: 10) {
+
+                Text(icon)
+                    .font(.title2)
+
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [goldBright, gold],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+
+            content()
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.17, green: 0.15, blue: 0.14),
+                            Color(red: 0.05, green: 0.05, blue: 0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                // A soft warm light falling across the top corner, so the
+                // black reads as a surface rather than a hole in the screen.
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(
+                            RadialGradient(
+                                colors: [gold.opacity(0.16), gold.opacity(0)],
+                                center: .topLeading,
+                                startRadius: 0,
+                                endRadius: 260
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(
+                            LinearGradient(
+                                colors: [gold.opacity(0.55), gold.opacity(0.12)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .shadow(color: .black.opacity(0.3), radius: 14, y: 7)
     }
 
     private func settingsCard<Content: View>(
