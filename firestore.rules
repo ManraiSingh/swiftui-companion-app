@@ -50,7 +50,24 @@ service cloud.firestore {
           : [];
       }
 
-      allow get, list: if signedIn() && request.auth.uid in current();
+      // Reading a relationship that isn't there yet.
+      //
+      // Claiming a code is a transaction: look, and write only if nobody
+      // holds it. Without this clause that look is denied — `resource` is
+      // null for a document that does not exist, `current()` is therefore
+      // empty, and nobody is ever in an empty list. The rule that was meant
+      // to protect relationships would instead stop anyone from starting one,
+      // and every new couple would meet "Could not create invite".
+      //
+      // Nothing is exposed by allowing it. A document that does not exist has
+      // no contents to read, so this says only whether a code is free — which
+      // a guesser could already learn by trying to join one.
+      allow get: if signedIn()
+                 && (resource == null || request.auth.uid in current());
+
+      // Querying is a different matter: it runs over documents that do exist,
+      // so it stays members-only and gains no exemption.
+      allow list: if signedIn() && request.auth.uid in current();
 
       // Starting a relationship: you may put yourself in, and only yourself.
       allow create: if signedIn()
@@ -89,12 +106,27 @@ service cloud.firestore {
                        && proposed().hasOnly(current().concat([request.auth.uid])))
                     );
 
-      // Nothing deletes a relationship. Leaving is a local act — the app
-      // forgets the code — and the memories stay for the other person.
-      allow delete: if false;
+      // Deleting is what "Delete Everything" in Settings does, and Apple
+      // requires an app offering accounts to offer it. It takes the shared
+      // relationship with it — which is why the app says so plainly before
+      // asking, twice.
+      //
+      // Only somebody already inside may do it. A guessed code cannot destroy
+      // a couple's memories.
+      allow delete: if signedIn() && request.auth.uid in current();
 
       // Everything inside: the pet, the games, the scrapbook, all of it.
-      match /{path=**} {
+      //
+      // Written as `{collection}/{document=**}` rather than `{path=**}`,
+      // because a recursive wildcard on its own also matches zero segments —
+      // that is, the relationship document itself. It did, and being a broader
+      // rule it quietly won: a member could sidestep the two-member cap above
+      // and delete the relationship outright, both of which these rules exist
+      // to decide deliberately rather than by accident.
+      //
+      // Requiring a collection name first means this covers everything under
+      // the relationship and nothing above it.
+      match /{collection}/{document=**} {
         allow read, write: if isMember(code);
       }
     }

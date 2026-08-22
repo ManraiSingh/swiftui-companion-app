@@ -42,3 +42,4 @@ GoogleService-Info.plist
 ## Secrets / env
 *.env
 secrets.plist
+firestore-debug.log

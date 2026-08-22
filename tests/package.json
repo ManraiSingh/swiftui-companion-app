@@ -1,0 +1,12 @@
+{
+  "name": "ziggy-rules-tests",
+  "private": true,
+  "description": "Security rule tests, run against the Firestore emulator.",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project ziggy-rules-test \"node firestore-rules.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^12.0.0"
+  }
+}
