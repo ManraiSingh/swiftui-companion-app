@@ -181,8 +181,32 @@ final class ZiggySubscription: ObservableObject {
 
         do {
             let result = try await Purchases.shared.purchase(package: package)
+
             guard !result.userCancelled else { return false }
-            return unlock(from: result.customerInfo, plan: yearlyPlan ? "yearly" : "monthly")
+
+            if unlock(from: result.customerInfo, plan: yearlyPlan ? "yearly" : "monthly") {
+                return true
+            }
+
+            // Paid, and still not entitled.
+            //
+            // This used to return quietly, which left the paywall sitting there
+            // as though the button had done nothing — the worst possible
+            // outcome for somebody who has just been charged. It happens when
+            // the store took the money but the entitlement hasn't come back
+            // yet: a receipt still being validated, or a payment held for
+            // approval. Restoring a moment later picks it up, and nobody is
+            // charged twice for asking.
+            #if DEBUG
+            print("Purchase finished with no active entitlement.")
+            print("  active:", result.customerInfo.entitlements.active.keys.sorted())
+            print("  all:   ", result.customerInfo.entitlements.all.keys.sorted())
+            #endif
+
+            lastError = "The purchase went through, but we couldn't unlock it yet. "
+                      + "Give it a moment and tap Restore purchases — you won't be charged twice."
+            return false
+
         } catch {
             // A cancelled purchase is not a failure and should not be shouted at.
             if (error as? ErrorCode) != .purchaseCancelledError {
