@@ -114,11 +114,34 @@ final class ZiggySubscription: ObservableObject {
             yearlyPerMonth = product.priceFormatter?
                 .string(from: perMonth as NSDecimalNumber)
 
-            if let intro = product.introductoryDiscount,
-               intro.paymentMode == .freeTrial {
-                trialDays = days(in: intro.subscriptionPeriod)
-            }
+            trialDays = await freeTrialDays(on: product)
         }
+    }
+
+    /// The trial to advertise to *this* person, or nil.
+    ///
+    /// A product carrying a free trial is not the same as a person entitled to
+    /// one. Apple gives each Apple ID a single trial per subscription group
+    /// ever, so somebody who tried Ziggy Forever last year, cancelled and came
+    /// back would be shown "Start 7 days free" and then charged the full year
+    /// immediately. That is a bad surprise on its own terms and something App
+    /// Review looks for.
+    ///
+    /// Anything short of a definite yes is treated as no. Being charged after
+    /// being promised a free week is far worse than being offered a free week
+    /// you did not expect — and StoreKit still applies the trial at purchase
+    /// if it turns out they were eligible after all.
+    private func freeTrialDays(on product: StoreProduct) async -> Int? {
+
+        guard let intro = product.introductoryDiscount,
+              intro.paymentMode == .freeTrial else { return nil }
+
+        let eligibility = await Purchases.shared
+            .checkTrialOrIntroDiscountEligibility(product: product)
+
+        guard eligibility == .eligible else { return nil }
+
+        return days(in: intro.subscriptionPeriod)
     }
 
     private func days(in period: SubscriptionPeriod) -> Int {
