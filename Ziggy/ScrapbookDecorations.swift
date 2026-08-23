@@ -76,7 +76,7 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .tornStrip:    return CGSize(width: 120, height: 40)
         case .star:         return CGSize(width: 64, height: 64)
         case .sparkle:      return CGSize(width: 56, height: 56)
-        case .arrow:        return CGSize(width: 96, height: 48)
+        case .arrow:        return CGSize(width: 100, height: 60)
         case .banner:       return CGSize(width: 124, height: 46)
         case .paperClip:    return CGSize(width: 40, height: 76)
         case .stamp:        return CGSize(width: 70, height: 78)
@@ -135,7 +135,7 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .tornStrip:    TornStrip(tint: tint, zoom: zoom)
         case .star:         StarBurst(tint: tint, zoom: zoom)
         case .sparkle:      Sparkle(tint: tint, zoom: zoom)
-        case .arrow:        HandArrow(tint: tint)
+        case .arrow:        HandArrow(tint: tint, zoom: zoom)
         case .banner:       Banner(tint: tint, zoom: zoom)
         case .paperClip:    PaperClip(tint: tint)
         case .stamp:        Stamp(tint: tint, zoom: zoom)
@@ -158,17 +158,49 @@ private struct WashiTape: View {
     var zoom: CGFloat = 1
 
     var body: some View {
-        Rectangle()
-            .fill(tint.opacity(0.62))
-            .overlay(
-                // The faint stripes real washi tape has.
-                HStack(spacing: 7 * zoom) {
-                    ForEach(0..<9, id: \.self) { _ in
-                        Rectangle().fill(.white.opacity(0.35)).frame(width: 3 * zoom)
-                    }
-                }
+        ZStack {
+
+            // Tape is translucent, and that is most of why it reads as tape
+            // rather than a painted bar — the page carries on underneath it.
+            Rectangle().fill(tint.opacity(0.58))
+
+            // Stripes measured off the strip's own width, so a long piece is
+            // striped end to end instead of running out after nine of them.
+            Stripes(count: 12).fill(.white.opacity(0.22))
+
+            // The sheen along the top edge of a strip pressed down flat.
+            LinearGradient(
+                colors: [.white.opacity(0.20), .white.opacity(0.02)],
+                startPoint: .top,
+                endPoint: .bottom
             )
-            .clipShape(TornEdges(teeth: 7, depth: 3 * zoom))
+        }
+        .clipShape(TornEdges(teeth: 9, depth: 3 * zoom))
+    }
+}
+
+/// Evenly spaced vertical bands, proportional to whatever they are drawn in.
+private struct Stripes: Shape {
+
+    let count: Int
+
+    func path(in rect: CGRect) -> Path {
+
+        var path = Path()
+        let step = rect.width / CGFloat(max(count, 1))
+
+        for band in 0..<max(count, 1) {
+            path.addRect(
+                CGRect(
+                    x: CGFloat(band) * step,
+                    y: 0,
+                    width: step * 0.45,
+                    height: rect.height
+                )
+            )
+        }
+
+        return path
     }
 }
 
@@ -179,41 +211,62 @@ private struct TornStrip: View {
     let tint: Color
     var zoom: CGFloat = 1
 
+    private var edge: TornEdges { TornEdges(teeth: 13, depth: 5.5 * zoom) }
+
     var body: some View {
-        TornEdges(teeth: 11, depth: 5 * zoom)
-            .fill(tint.opacity(0.9))
+        edge
+            .fill(tint.opacity(0.88))
             .overlay(
-                TornEdges(teeth: 11, depth: 5 * zoom)
-                    .stroke(.black.opacity(0.08), lineWidth: zoom)
+                // The pale lip a tear leaves behind. Paper parts along its
+                // fibres and the torn face catches the light, which is what
+                // separates a torn strip from one cut with scissors.
+                edge
+                    .stroke(.white.opacity(0.45), lineWidth: 1.6 * zoom)
+                    .blur(radius: 0.5 * zoom)
             )
-            .shadow(color: .black.opacity(0.12), radius: 2 * zoom, y: zoom)
+            .shadow(color: .black.opacity(0.14), radius: 2.5 * zoom, y: 1.2 * zoom)
     }
 }
 
 /// A rectangle with ragged top and bottom, for tape and torn paper.
+///
+/// The raggedness is uneven on purpose. Alternating between two depths gives a
+/// perfectly regular zigzag, which is not what a tear looks like — it is what
+/// pinking shears look like. Paper tears in runs: a long pull, a short catch,
+/// another long one. These two lists are that, fixed rather than random so a
+/// strip does not reshuffle itself every time the page is redrawn.
 private struct TornEdges: Shape {
 
     let teeth: Int
     let depth: CGFloat
 
+    private static let upper: [CGFloat] =
+        [0.15, 0.85, 0.30, 1.00, 0.20, 0.70, 0.10, 0.95, 0.40, 0.75, 0.25, 0.90, 0.35]
+
+    private static let lower: [CGFloat] =
+        [0.90, 0.25, 0.75, 0.15, 0.95, 0.35, 0.80, 0.20, 1.00, 0.30, 0.70, 0.45, 0.85]
+
     func path(in rect: CGRect) -> Path {
 
         var path = Path()
-        let step = rect.width / CGFloat(max(teeth, 1))
+        let count = max(teeth, 1)
+        let step = rect.width / CGFloat(count)
 
-        path.move(to: CGPoint(x: 0, y: depth))
+        // The corners stay put; only the edge between them wanders, so the
+        // strip keeps its length however torn it looks.
+        path.move(to: CGPoint(x: 0, y: Self.upper[0] * depth))
 
-        for tooth in 0...teeth {
-            let x = CGFloat(tooth) * step
-            let y = tooth.isMultiple(of: 2) ? 0 : depth
+        for tooth in 0...count {
+            let x = min(CGFloat(tooth) * step, rect.maxX)
+            let y = Self.upper[tooth % Self.upper.count] * depth
             path.addLine(to: CGPoint(x: x, y: y))
         }
 
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - depth))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - Self.lower[0] * depth))
 
-        for tooth in stride(from: teeth, through: 0, by: -1) {
-            let x = CGFloat(tooth) * step
-            let y = tooth.isMultiple(of: 2) ? rect.maxY : rect.maxY - depth
+        for tooth in stride(from: count, through: 0, by: -1) {
+            let x = min(CGFloat(tooth) * step, rect.maxX)
+            let y = rect.maxY - Self.lower[tooth % Self.lower.count] * depth
             path.addLine(to: CGPoint(x: x, y: y))
         }
 
@@ -292,35 +345,50 @@ private struct SpikeStar: Shape {
 private struct HandArrow: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
         GeometryReader { proxy in
 
-            let width = proxy.size.width
-            let height = proxy.size.height
+            // Drawn in a fixed 100 × 60 space and scaled as a whole.
+            //
+            // It used to be laid out in fractions of its own box, which is
+            // twice as wide as it is tall — so every diagonal came out skewed
+            // by that ratio. The head was placed at an angle that looked right
+            // on paper and arrived on screen pointing somewhere the tail was
+            // not going, floating off the end of the sweep as a separate mark.
+            // A square unit keeps the two agreeing.
+            let unit = min(proxy.size.width / 100, proxy.size.height / 60)
+            let line = max(5 * unit, 1)
 
-            // Taken off the box rather than fixed, so the pen keeps its weight
-            // as the arrow is made bigger.
-            let line = max(width * 0.052, 1)
+            let insetX = (proxy.size.width - 100 * unit) / 2
+            let insetY = (proxy.size.height - 60 * unit) / 2
 
-            ZStack {
-                Path { path in
-                    path.move(to: CGPoint(x: width * 0.05, y: height * 0.72))
-                    path.addCurve(
-                        to: CGPoint(x: width * 0.88, y: height * 0.38),
-                        control1: CGPoint(x: width * 0.34, y: height * 0.92),
-                        control2: CGPoint(x: width * 0.62, y: height * 0.86)
-                    )
-                }
-                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round))
-
-                Path { path in
-                    path.move(to: CGPoint(x: width * 0.66, y: height * 0.20))
-                    path.addLine(to: CGPoint(x: width * 0.92, y: height * 0.36))
-                    path.addLine(to: CGPoint(x: width * 0.68, y: height * 0.60))
-                }
-                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+            let point: (CGFloat, CGFloat) -> CGPoint = { x, y in
+                CGPoint(x: insetX + x * unit, y: insetY + y * unit)
             }
+
+            Path { path in
+
+                // The sweep, arriving at the tip travelling up and to the right.
+                path.move(to: point(8, 44))
+                path.addCurve(
+                    to: point(88, 22),
+                    control1: point(30, 58),
+                    control2: point(60, 50)
+                )
+
+                // Both barbs measured back from that same tip, turned to the
+                // direction the sweep arrives from, so the head sits on the
+                // end of the line rather than beside it.
+                path.move(to: point(69, 28))
+                path.addLine(to: point(88, 22))
+                path.addLine(to: point(82, 41))
+            }
+            .stroke(
+                tint,
+                style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round)
+            )
         }
     }
 }
