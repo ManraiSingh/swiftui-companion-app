@@ -299,16 +299,41 @@ final class ZiggySubscription: ObservableObject {
     // a crippled set of tools makes the paid version look cheap too.
 
     enum Free {
-        static let books = 2
-        static let pages = 5
-        static let bouquets = 5
+
+        /// One book, a few pages. Enough to make something and want to keep
+        /// going, which is the only job the free tier has.
+        static let books = 1
+        static let pages = 3
+        static let bouquets = 2
 
         /// How far back the instant archive reaches without a subscription.
-        static let instantDays = 30
+        static let instantDays = 7
 
         /// A free export is one page, watermarked — enough to be worth sending
         /// on, which makes it advertising rather than a loss.
         static let pdfPages = 1
+
+        /// How many of the drawer's pieces are free.
+        ///
+        /// The ones that make a page work at all — tape, a torn strip, a star,
+        /// a heart, an arrow, a frame. What is behind the subscription is the
+        /// rest of the drawer, which is a different thing from a crippled one:
+        /// a free page can still be finished and still look like something.
+        static let stickers: Set<ScrapbookDecoration> = [
+            .washiTape, .tornStrip, .star, .sparkle,
+            .arrow, .heart, .dashedBox, .squiggle
+        ]
+
+        /// Pen and pencil. The other five are the ones worth having.
+        static let brushes: Set<Int> = [0, 3]
+    }
+
+    func canUse(_ sticker: ScrapbookDecoration) -> Bool {
+        isSubscribed || Free.stickers.contains(sticker)
+    }
+
+    func canUse(brush index: Int) -> Bool {
+        isSubscribed || Free.brushes.contains(index)
     }
 
     // MARK: - Watching
@@ -409,7 +434,8 @@ final class ZiggySubscription: ObservableObject {
 /// because "you've filled both books" lands and "Upgrade to Pro" does not.
 enum PaywallReason {
 
-    case books, pages, bouquets, savePhoto, wholeBook, oldInstants, general
+    case books, pages, bouquets, savePhoto, wholeBook, oldInstants
+    case sticker, brush, general
 
     var title: String {
         switch self {
@@ -419,6 +445,8 @@ enum PaywallReason {
         case .savePhoto:   return "Keep it in your photos"
         case .wholeBook:   return "Export the whole book"
         case .oldInstants: return "Every instant, kept"
+        case .sticker:     return "The whole drawer"
+        case .brush:       return "Every pen in the tin"
         case .general:     return "Ziggy Forever"
         }
     }
@@ -426,17 +454,21 @@ enum PaywallReason {
     var line: String {
         switch self {
         case .books:
-            return "You've filled both of your free books. Ziggy Forever gives you as many as you want."
+            return "Ziggy Forever gives you as many books as you want, instead of the one."
         case .pages:
-            return "This book is five pages full. Ziggy Forever lets a book run as long as you two do."
+            return "This book is full. Ziggy Forever lets a book run as long as you two do."
         case .bouquets:
-            return "You've sent your five free bouquets. Ziggy Forever makes them unlimited."
+            return "You've sent your free bouquets. Ziggy Forever makes them unlimited."
         case .savePhoto:
             return "Saving doodles and instants to your camera roll is part of Ziggy Forever."
         case .wholeBook:
             return "Free exports are a single page. Ziggy Forever prints the whole book, clean."
         case .oldInstants:
-            return "Free keeps the last 30 days. Ziggy Forever keeps every one, forever."
+            return "Free keeps the last \(ZiggySubscription.Free.instantDays) days. Ziggy Forever keeps every one, forever."
+        case .sticker:
+            return "This one is part of Ziggy Forever, along with the rest of the stickers."
+        case .brush:
+            return "Ziggy Forever opens every brush — fountain, marker, monoline, watercolour and crayon."
         case .general:
             return "Everything you two make together, kept for good."
         }

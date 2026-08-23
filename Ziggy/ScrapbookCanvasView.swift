@@ -58,6 +58,8 @@ struct ScrapbookCanvasView: View {
     @State private var inkCanvas = PKCanvasView()
     @State private var inkLoaded = false
 
+    @State private var paywall: PaywallReason?
+
     // Layers
     @State private var showingLayers = false
     @State private var draggingLayer: String?
@@ -157,6 +159,7 @@ struct ScrapbookCanvasView: View {
         .onChange(of: brushColor) { _, _ in configureInk() }
         .onChange(of: brushWidth) { _, _ in configureInk() }
         .onDisappear { saveInk() }
+        .paywall($paywall)
         // The moment Firestore reports an element where this phone already put
         // it, the local copy has nothing left to say and steps aside — so a
         // change your partner makes to the same element still comes through.
@@ -175,6 +178,7 @@ struct ScrapbookCanvasView: View {
             StickerPicker(
                 onEmoji: { addSticker($0) },
                 onDecoration: { addDecoration($0) },
+                onLocked: showStickerPaywall,
                 onLetter: { addLetter($0) },
                 onPet: { addPet($0) }
             )
@@ -266,7 +270,8 @@ struct ScrapbookCanvasView: View {
                 color: $brushColor,
                 width: $brushWidth,
                 brushIndex: $brushIndex,
-                isEraser: tool == .eraser
+                isEraser: tool == .eraser,
+                onLockedBrush: { paywall = .brush }
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
@@ -728,6 +733,10 @@ struct ScrapbookCanvasView: View {
     /// It goes in as an ordinary sticker, so it's draggable, resizable,
     /// turnable and lockable like everything else without the editor needing
     /// to know it's any different.
+    private func showStickerPaywall() {
+        paywall = .sticker
+    }
+
     private func addDecoration(_ decoration: ScrapbookDecoration) {
 
         var element = ScrapbookElement(id: UUID().uuidString, kind: .sticker)
@@ -1663,6 +1672,7 @@ private struct BrushBar: View {
     @Binding var width: Double
     @Binding var brushIndex: Int
     let isEraser: Bool
+    var onLockedBrush: () -> Void = {}
 
     var body: some View {
 
@@ -1674,10 +1684,15 @@ private struct BrushBar: View {
                     HStack(spacing: 8) {
                         ForEach(Array(ScrapbookStyle.brushes.enumerated()), id: \.offset) { index, brush in
                             Button {
+                                guard ZiggySubscription.shared.canUse(brush: index) else {
+                                    onLockedBrush()
+                                    return
+                                }
                                 brushIndex = index
                             } label: {
                                 VStack(spacing: 3) {
-                                    Image(systemName: brush.icon)
+                                    Image(systemName: ZiggySubscription.shared.canUse(brush: index)
+                                          ? brush.icon : "lock.fill")
                                         .font(.system(size: 15, weight: .bold))
                                     Text(brush.label)
                                         .font(.system(size: 10, weight: .bold, design: .rounded))
@@ -1829,6 +1844,7 @@ private struct StickerPicker: View {
 
     let onEmoji: (String) -> Void
     let onDecoration: (ScrapbookDecoration) -> Void
+    var onLocked: () -> Void = {}
     let onLetter: (String) -> Void
     let onPet: (String) -> Void
 
@@ -1939,8 +1955,26 @@ private struct StickerPicker: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.secondary.opacity(0.10))
         )
+        .overlay(alignment: .topTrailing) {
+            if !ZiggySubscription.shared.canUse(decoration) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(4)
+                    .background(Circle().fill(Color(red: 0.95, green: 0.45, blue: 0.55)))
+                    .padding(4)
+            }
+        }
+        // Shown rather than hidden. A drawer with holes in it teaches nobody
+        // what they are missing; a drawer with locks on it does.
+        .opacity(ZiggySubscription.shared.canUse(decoration) ? 1 : 0.5)
         .contentShape(Rectangle())
         .onTapGesture {
+            guard ZiggySubscription.shared.canUse(decoration) else {
+                dismiss()
+                onLocked()
+                return
+            }
             onDecoration(decoration)
             dismiss()
         }
