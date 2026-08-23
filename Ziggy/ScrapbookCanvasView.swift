@@ -53,6 +53,9 @@ struct ScrapbookCanvasView: View {
     /// round trip from what the eye sees.
     @State private var justMoved: [String: ScrapbookElement] = [:]
 
+    /// What each stroke has become under the eraser, before it is written down.
+    @State private var rubbedOut: [String: [ScrapbookElement]] = [:]
+
     // Layers
     @State private var showingLayers = false
     @State private var draggingLayer: String?
@@ -301,7 +304,7 @@ struct ScrapbookCanvasView: View {
 
             ScrapbookPaper(paperIndex: paperIndex)
 
-            ForEach(manager.elements) { element in
+            ForEach(onPage) { element in
                 ScrapbookElementView(
                     element: live(element),
                     canvasSize: canvasSize,
@@ -416,6 +419,35 @@ struct ScrapbookCanvasView: View {
         .foregroundStyle(ScrapbookStyle.defaultInk(onPaper: paperIndex).opacity(0.35))
         .padding(.horizontal, 40)
         .allowsHitTesting(false)
+    }
+
+    /// Everything the page is showing right now.
+    ///
+    /// Usually just what Firestore holds, but while the eraser is down a
+    /// stroke may already have become two or three pieces that nobody has
+    /// written anywhere yet. The page draws those instead, so rubbing out
+    /// looks like rubbing out rather than like nothing happening until the
+    /// finger lifts.
+    private var onPage: [ScrapbookElement] {
+
+        guard !rubbedOut.isEmpty else { return manager.elements }
+
+        // Deduplicated by id, because for a moment both sources hold the same
+        // thing: a stroke rubbed in two becomes a fragment kept here *and*, as
+        // soon as the write lands, a document of its own. Drawing the list
+        // naively would show that fragment twice, at double weight, until the
+        // local copy was dropped.
+        var seen = Set<String>()
+        var showing: [ScrapbookElement] = []
+
+        for element in manager.elements {
+            for piece in rubbedOut[element.id] ?? [element] where !seen.contains(piece.id) {
+                seen.insert(piece.id)
+                showing.append(piece)
+            }
+        }
+
+        return showing
     }
 
     /// The element with any in-flight gesture applied on top.
@@ -559,6 +591,11 @@ struct ScrapbookCanvasView: View {
             }
             .onEnded { _ in
 
+                if tool == .eraser {
+                    commitErasing()
+                    return
+                }
+
                 if tool == .select {
                     withAnimation { selectedID = nil }
                     return
@@ -594,23 +631,96 @@ struct ScrapbookCanvasView: View {
         // The eraser's reach, in the page's normalised units.
         let reach = (brushWidth / 2 + 6) / canvasSize.width
 
+        // Compared in page proportions rather than raw numbers — the page is
+        // taller than it is wide, so a plain distance would make the eraser
+        // reach further vertically than it looks.
+        let aspect = canvasSize.height / canvasSize.width
+
         for element in manager.elements where element.kind == .stroke && !element.locked {
 
-            let points = ScrapbookStroke.decode(element.payload)
+            // Whatever this stroke has already become under this finger, or
+            // the stroke itself if it is the first time it has been touched.
+            let current = rubbedOut[element.id] ?? [element]
+            var rebuilt: [ScrapbookElement] = []
+            var changed = false
 
-            // Compared in page proportions rather than raw numbers — the page
-            // is taller than it is wide, so a plain distance would make the
-            // eraser reach further vertically than it looks.
-            let aspect = canvasSize.height / canvasSize.width
+            for piece in current {
 
-            let touched = points.contains { sample in
-                let dx = sample.x - point.x
-                let dy = (sample.y - point.y) * aspect
-                return (dx * dx + dy * dy) <= reach * reach
+                let points = ScrapbookStroke.decode(piece.payload)
+
+                // Walk the line, dropping the samples under the eraser and
+                // keeping what survives in runs. A line rubbed through the
+                // middle comes back as two, which is the whole difference
+                // between erasing and deleting — this used to throw away the
+                // entire stroke the moment the eraser grazed any part of it.
+                var runs: [[CGPoint]] = []
+                var run: [CGPoint] = []
+
+                for sample in points {
+                    let dx = sample.x - point.x
+                    let dy = (sample.y - point.y) * aspect
+
+                    if (dx * dx + dy * dy) <= reach * reach {
+                        changed = true
+                        if run.count > 1 { runs.append(run) }
+                        run = []
+                    } else {
+                        run.append(sample)
+                    }
+                }
+
+                if run.count > 1 { runs.append(run) }
+
+                // A run of one point is a dot too short to see, and not worth
+                // a document of its own.
+                for (index, kept) in runs.enumerated() {
+                    var fragment = piece
+                    if index > 0 { fragment.id = UUID().uuidString }
+                    fragment.payload = ScrapbookStroke.encode(kept)
+                    rebuilt.append(fragment)
+                }
             }
 
-            if touched {
-                manager.delete(element.id, bookID: book.id, pageID: page.id)
+            if changed { rubbedOut[element.id] = rebuilt }
+        }
+    }
+
+    /// Writes the erasing down, once the finger lifts.
+    ///
+    /// Splitting a stroke is three writes — rewrite the first piece, add the
+    /// rest, or delete it outright — and the eraser reports a new position
+    /// every few milliseconds. Doing it as it happened would have been
+    /// hundreds of writes for one sweep, and the partner's page redrawing
+    /// through every one of them. The page shows the local answer while the
+    /// finger is down and Firestore hears about it at the end.
+    private func commitErasing() {
+
+        // Held a moment longer than the writes, so the page keeps showing the
+        // local answer until Firestore has caught up — dropping it the instant
+        // the writes go out is what made a dragged element flash back to where
+        // it started, and rubbing out would do the same.
+        defer {
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                rubbedOut = [:]
+            }
+        }
+
+        for (id, pieces) in rubbedOut {
+
+            guard let original = manager.elements.first(where: { $0.id == id }) else { continue }
+
+            guard let first = pieces.first else {
+                manager.delete(id, bookID: book.id, pageID: page.id)
+                continue
+            }
+
+            if first.payload != original.payload {
+                manager.update(first, bookID: book.id, pageID: page.id)
+            }
+
+            for extra in pieces.dropFirst() {
+                manager.add(extra, bookID: book.id, pageID: page.id)
             }
         }
     }
@@ -2133,7 +2243,25 @@ private struct LayerThumb: View {
                 .padding(4)
 
         case .sticker:
-            if let piece = ScrapbookDecoration.from(payload: element.payload) {
+            // Three families share this kind, told apart by their prefix, and
+            // in the same order the page itself tries them. Reading only the
+            // decorations left the other two showing their raw token — a
+            // cut-out J appeared in the layers row as "#L:J".
+            if let character = ScrapbookLetter.character(from: element.payload) {
+                ScrapbookLetterSticker(
+                    character: character,
+                    zoom: 0.42,
+                    paper: element.paperColorHex.isEmpty
+                        ? nil : Color(scrapbookHex: element.paperColorHex),
+                    ink: element.captionColorHex.isEmpty
+                        ? nil : Color(scrapbookHex: element.captionColorHex)
+                )
+            } else if let pose = ScrapbookPet.pose(from: element.payload) {
+                Image(pose)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 42, height: 42)
+            } else if let piece = ScrapbookDecoration.from(payload: element.payload) {
                 piece.view(tint: Color(scrapbookHex: element.colorHex))
                     .frame(width: piece.size.width, height: piece.size.height)
                     .scaleEffect(min(38 / piece.size.width, 38 / piece.size.height))
