@@ -22,6 +22,9 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
     case arrow, banner, paperClip, stamp
     case filmStrip, speechBubble, heart, dashedBox
     case heartOutline, doubleHeart, loopArrow
+    case bow, pushPin, flower, butterfly
+    case cloud, moonStar, tick, ringScribble
+    case squiggle, envelope, plane, crown
 
     var id: String { rawValue }
 
@@ -51,6 +54,18 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .heartOutline: return "Outline"
         case .doubleHeart:  return "Hearts"
         case .loopArrow:    return "Loop"
+        case .bow:          return "Bow"
+        case .pushPin:      return "Pin"
+        case .flower:       return "Flower"
+        case .butterfly:    return "Butterfly"
+        case .cloud:        return "Cloud"
+        case .moonStar:     return "Moon"
+        case .tick:         return "Tick"
+        case .ringScribble: return "Circle"
+        case .squiggle:     return "Squiggle"
+        case .envelope:     return "Letter"
+        case .plane:        return "Plane"
+        case .crown:        return "Crown"
         }
     }
 
@@ -87,6 +102,18 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .heartOutline: return CGSize(width: 62, height: 56)
         case .doubleHeart:  return CGSize(width: 96, height: 70)
         case .loopArrow:    return CGSize(width: 120, height: 62)
+        case .bow:          return CGSize(width: 100, height: 70)
+        case .pushPin:      return CGSize(width: 60, height: 80)
+        case .flower:       return CGSize(width: 80, height: 80)
+        case .butterfly:    return CGSize(width: 90, height: 70)
+        case .cloud:        return CGSize(width: 100, height: 60)
+        case .moonStar:     return CGSize(width: 70, height: 80)
+        case .tick:         return CGSize(width: 70, height: 60)
+        case .ringScribble: return CGSize(width: 100, height: 76)
+        case .squiggle:     return CGSize(width: 120, height: 26)
+        case .envelope:     return CGSize(width: 100, height: 70)
+        case .plane:        return CGSize(width: 90, height: 70)
+        case .crown:        return CGSize(width: 90, height: 62)
         }
     }
 
@@ -145,7 +172,62 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
         case .dashedBox:    DashedBox(tint: tint, zoom: zoom)
         case .heartOutline: OutlineHeart(tint: tint)
         case .doubleHeart:  DoubleHeart(tint: tint)
-        case .loopArrow:    LoopArrow(tint: tint)
+        case .loopArrow:    LoopArrow(tint: tint, zoom: zoom)
+        case .bow:          Bow(tint: tint)
+        case .pushPin:      PushPin(tint: tint)
+        case .flower:       FlowerSprig(tint: tint)
+        case .butterfly:    Butterfly(tint: tint)
+        case .cloud:        CloudPuff(tint: tint)
+        case .moonStar:     MoonAndStar(tint: tint)
+        case .tick:         TickMark(tint: tint)
+        case .ringScribble: ScribbleRing(tint: tint)
+        case .squiggle:     Squiggle(tint: tint)
+        case .envelope:     Envelope(tint: tint)
+        case .plane:        PaperPlane(tint: tint)
+        case .crown:        Crown(tint: tint)
+        }
+    }
+}
+
+/// A piece drawn in a fixed design space and scaled as a whole.
+///
+/// Laying a shape out in fractions of its own box skews every diagonal by that
+/// box's aspect. On a piece twice as wide as it is tall, a line drawn at
+/// forty-five degrees arrives on screen at twenty-six — which is how both
+/// arrows ended up with heads pointing somewhere their tails were not going.
+///
+/// Giving the drawing its own square unit keeps angles as drawn, and puts the
+/// weight of the pen on the same footing, so a piece enlarged stays the piece
+/// it was rather than a thin wire version of it.
+private struct Drawn: View {
+
+    let design: CGSize
+    let weight: CGFloat
+    let tint: Color
+    let build: ((CGFloat, CGFloat) -> CGPoint) -> Path
+
+    var body: some View {
+        GeometryReader { proxy in
+
+            let unit = min(
+                proxy.size.width / design.width,
+                proxy.size.height / design.height
+            )
+
+            let insetX = (proxy.size.width - design.width * unit) / 2
+            let insetY = (proxy.size.height - design.height * unit) / 2
+
+            build { x, y in
+                CGPoint(x: insetX + x * unit, y: insetY + y * unit)
+            }
+            .stroke(
+                tint,
+                style: StrokeStyle(
+                    lineWidth: max(weight * unit, 1),
+                    lineCap: .round,
+                    lineJoin: .round
+                )
+            )
         }
     }
 }
@@ -686,48 +768,41 @@ private struct DoubleHeart: View {
 private struct LoopArrow: View {
 
     let tint: Color
+    var zoom: CGFloat = 1
 
     var body: some View {
-        GeometryReader { proxy in
+        Drawn(design: CGSize(width: 120, height: 62), weight: 5, tint: tint) { point in
 
-            let w = proxy.size.width
-            let h = proxy.size.height
-            let line = max(w * 0.045, 2.5)
+            var path = Path()
 
-            ZStack {
+            path.move(to: point(8, 22))
 
-                Path { path in
+            // The loop, crossing over itself the way a pen does.
+            path.addCurve(
+                to: point(38, 46),
+                control1: point(22, 10),
+                control2: point(48, 18)
+            )
+            path.addCurve(
+                to: point(34, 24),
+                control1: point(30, 64),
+                control2: point(12, 40)
+            )
 
-                    path.move(to: CGPoint(x: w * 0.04, y: h * 0.30))
+            // Then away to the right, arriving almost level.
+            path.addCurve(
+                to: point(106, 32),
+                control1: point(58, 12),
+                control2: point(82, 26)
+            )
 
-                    // The loop.
-                    path.addCurve(
-                        to: CGPoint(x: w * 0.34, y: h * 0.66),
-                        control1: CGPoint(x: w * 0.20, y: h * 0.16),
-                        control2: CGPoint(x: w * 0.40, y: h * 0.24)
-                    )
-                    path.addCurve(
-                        to: CGPoint(x: w * 0.30, y: h * 0.34),
-                        control1: CGPoint(x: w * 0.26, y: h * 0.92),
-                        control2: CGPoint(x: w * 0.10, y: h * 0.52)
-                    )
+            // Barbs measured back from that tip along the direction the line
+            // arrives from, so the head belongs to the stroke it ends.
+            path.move(to: point(93, 20))
+            path.addLine(to: point(106, 32))
+            path.addLine(to: point(89, 37))
 
-                    // Away to the right.
-                    path.addCurve(
-                        to: CGPoint(x: w * 0.90, y: h * 0.52),
-                        control1: CGPoint(x: w * 0.52, y: h * 0.14),
-                        control2: CGPoint(x: w * 0.74, y: h * 0.28)
-                    )
-                }
-                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
-
-                Path { path in
-                    path.move(to: CGPoint(x: w * 0.70, y: h * 0.30))
-                    path.addLine(to: CGPoint(x: w * 0.94, y: h * 0.53))
-                    path.addLine(to: CGPoint(x: w * 0.66, y: h * 0.72))
-                }
-                .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
-            }
+            return path
         }
     }
 }
@@ -974,5 +1049,362 @@ private struct CutPaper: Shape {
         path.closeSubpath()
 
         return path
+    }
+}
+
+// MARK: - The rest of the drawer
+//
+// All drawn as line work, because that is the register the pieces that already
+// looked right were in — a sparkle, a paper clip, an outlined heart. Solid
+// silhouettes sit on a page like stickers printed on it; a drawn line sits on
+// it like something somebody put there.
+
+private struct Bow: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 100, height: 70), weight: 5, tint: tint) { point in
+
+            var path = Path()
+
+            // Left loop.
+            path.move(to: point(48, 32))
+            path.addCurve(to: point(10, 14), control1: point(34, 12), control2: point(12, 6))
+            path.addCurve(to: point(48, 38), control1: point(6, 26), control2: point(24, 40))
+
+            // Right loop.
+            path.move(to: point(52, 32))
+            path.addCurve(to: point(90, 14), control1: point(66, 12), control2: point(88, 6))
+            path.addCurve(to: point(52, 38), control1: point(94, 26), control2: point(76, 40))
+
+            // The knot.
+            path.move(to: point(44, 30))
+            path.addCurve(to: point(44, 40), control1: point(38, 34), control2: point(38, 36))
+            path.addLine(to: point(56, 40))
+            path.addCurve(to: point(56, 30), control1: point(62, 36), control2: point(62, 34))
+            path.closeSubpath()
+
+            // Tails.
+            path.move(to: point(46, 42))
+            path.addCurve(to: point(30, 64), control1: point(42, 52), control2: point(36, 58))
+            path.move(to: point(54, 42))
+            path.addCurve(to: point(72, 62), control1: point(58, 52), control2: point(66, 56))
+
+            return path
+        }
+    }
+}
+
+private struct PushPin: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 60, height: 80), weight: 5, tint: tint) { point in
+
+            var path = Path()
+
+            let origin = point(11, 6)
+            let far = point(49, 26)
+
+            // The cap you press with your thumb.
+            path.addEllipse(
+                in: CGRect(
+                    x: origin.x,
+                    y: origin.y,
+                    width: far.x - origin.x,
+                    height: far.y - origin.y
+                )
+            )
+
+            // The waist, narrowing to the collar.
+            path.move(to: point(21, 25))
+            path.addLine(to: point(24, 45))
+            path.move(to: point(39, 25))
+            path.addLine(to: point(36, 45))
+            path.move(to: point(21, 45))
+            path.addLine(to: point(39, 45))
+
+            // And the needle, straight down into the page.
+            path.move(to: point(30, 45))
+            path.addLine(to: point(30, 75))
+
+            return path
+        }
+    }
+}
+
+private struct FlowerSprig: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 80, height: 80), weight: 4.5, tint: tint) { point in
+
+            var path = Path()
+
+            // Five petals around a centre.
+            let centre = (x: CGFloat(40), y: CGFloat(32))
+
+            for petal in 0..<5 {
+                let angle = CGFloat(petal) * (2 * .pi / 5) - .pi / 2
+                let tipX = centre.x + cos(angle) * 24
+                let tipY = centre.y + sin(angle) * 24
+                let leftX = centre.x + cos(angle - 0.55) * 14
+                let leftY = centre.y + sin(angle - 0.55) * 14
+                let rightX = centre.x + cos(angle + 0.55) * 14
+                let rightY = centre.y + sin(angle + 0.55) * 14
+
+                path.move(to: point(centre.x, centre.y))
+                path.addCurve(
+                    to: point(tipX, tipY),
+                    control1: point(leftX, leftY),
+                    control2: point(leftX, leftY)
+                )
+                path.addCurve(
+                    to: point(centre.x, centre.y),
+                    control1: point(rightX, rightY),
+                    control2: point(rightX, rightY)
+                )
+            }
+
+            // Stem and a leaf.
+            path.move(to: point(40, 40))
+            path.addLine(to: point(40, 74))
+            path.move(to: point(40, 60))
+            path.addCurve(to: point(60, 52), control1: point(48, 62), control2: point(58, 60))
+
+            return path
+        }
+    }
+}
+
+private struct Butterfly: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 90, height: 70), weight: 4.5, tint: tint) { point in
+
+            var path = Path()
+
+            // Upper wings.
+            path.move(to: point(45, 34))
+            path.addCurve(to: point(10, 10), control1: point(30, 14), control2: point(14, 4))
+            path.addCurve(to: point(45, 34), control1: point(2, 22), control2: point(24, 36))
+
+            path.move(to: point(45, 34))
+            path.addCurve(to: point(80, 10), control1: point(60, 14), control2: point(76, 4))
+            path.addCurve(to: point(45, 34), control1: point(88, 22), control2: point(66, 36))
+
+            // Lower wings.
+            path.move(to: point(45, 36))
+            path.addCurve(to: point(20, 60), control1: point(32, 44), control2: point(18, 48))
+            path.addCurve(to: point(45, 38), control1: point(22, 66), control2: point(38, 50))
+
+            path.move(to: point(45, 36))
+            path.addCurve(to: point(70, 60), control1: point(58, 44), control2: point(72, 48))
+            path.addCurve(to: point(45, 38), control1: point(68, 66), control2: point(52, 50))
+
+            // Body and feelers.
+            path.move(to: point(45, 28))
+            path.addLine(to: point(45, 52))
+            path.move(to: point(45, 28))
+            path.addCurve(to: point(36, 14), control1: point(43, 22), control2: point(38, 18))
+            path.move(to: point(45, 28))
+            path.addCurve(to: point(54, 14), control1: point(47, 22), control2: point(52, 18))
+
+            return path
+        }
+    }
+}
+
+private struct CloudPuff: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 100, height: 60), weight: 5, tint: tint) { point in
+
+            var path = Path()
+
+            path.move(to: point(20, 46))
+            path.addCurve(to: point(16, 26), control1: point(6, 46), control2: point(4, 30))
+            path.addCurve(to: point(38, 16), control1: point(20, 16), control2: point(30, 12))
+            path.addCurve(to: point(64, 14), control1: point(46, 4), control2: point(60, 4))
+            path.addCurve(to: point(82, 28), control1: point(74, 16), control2: point(82, 20))
+            path.addCurve(to: point(80, 46), control1: point(94, 32), control2: point(92, 46))
+            path.closeSubpath()
+
+            return path
+        }
+    }
+}
+
+private struct MoonAndStar: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 70, height: 80), weight: 4.5, tint: tint) { point in
+
+            var path = Path()
+
+            // A crescent, drawn as two arcs meeting at the horns.
+            path.move(to: point(44, 12))
+            path.addCurve(to: point(44, 68), control1: point(14, 20), control2: point(14, 60))
+            path.addCurve(to: point(44, 12), control1: point(32, 56), control2: point(32, 24))
+            path.closeSubpath()
+
+            // A small star off its shoulder.
+            path.move(to: point(56, 20))
+            path.addLine(to: point(59, 27))
+            path.addLine(to: point(66, 30))
+            path.addLine(to: point(59, 33))
+            path.addLine(to: point(56, 40))
+            path.addLine(to: point(53, 33))
+            path.addLine(to: point(46, 30))
+            path.addLine(to: point(53, 27))
+            path.closeSubpath()
+
+            return path
+        }
+    }
+}
+
+private struct TickMark: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 70, height: 60), weight: 7, tint: tint) { point in
+
+            var path = Path()
+
+            path.move(to: point(8, 32))
+            path.addCurve(to: point(26, 48), control1: point(14, 38), control2: point(21, 44))
+            path.addCurve(to: point(62, 10), control1: point(38, 34), control2: point(50, 20))
+
+            return path
+        }
+    }
+}
+
+private struct ScribbleRing: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 100, height: 76), weight: 4.5, tint: tint) { point in
+
+            var path = Path()
+
+            // Round something, twice, the way a pen does when it means it.
+            path.move(to: point(24, 20))
+            path.addCurve(to: point(88, 40), control1: point(58, 4), control2: point(96, 16))
+            path.addCurve(to: point(20, 52), control1: point(80, 66), control2: point(30, 74))
+            path.addCurve(to: point(30, 16), control1: point(8, 36), control2: point(12, 20))
+            path.addCurve(to: point(90, 34), control1: point(60, 10), control2: point(94, 14))
+
+            return path
+        }
+    }
+}
+
+private struct Squiggle: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 120, height: 26), weight: 5, tint: tint) { point in
+
+            var path = Path()
+
+            path.move(to: point(6, 16))
+            path.addCurve(to: point(34, 16), control1: point(14, 2), control2: point(26, 30))
+            path.addCurve(to: point(62, 16), control1: point(42, 2), control2: point(54, 30))
+            path.addCurve(to: point(90, 16), control1: point(70, 2), control2: point(82, 30))
+            path.addCurve(to: point(114, 14), control1: point(98, 2), control2: point(108, 22))
+
+            return path
+        }
+    }
+}
+
+private struct Envelope: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 100, height: 70), weight: 4.5, tint: tint) { point in
+
+            var path = Path()
+
+            path.addRoundedRect(
+                in: CGRect(
+                    origin: point(8, 10),
+                    size: CGSize(
+                        width: point(84, 0).x - point(0, 0).x,
+                        height: point(0, 50).y - point(0, 0).y
+                    )
+                ),
+                cornerSize: CGSize(width: 4, height: 4)
+            )
+
+            // The flap.
+            path.move(to: point(8, 14))
+            path.addLine(to: point(50, 42))
+            path.addLine(to: point(92, 14))
+
+            return path
+        }
+    }
+}
+
+private struct PaperPlane: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 90, height: 70), weight: 4.5, tint: tint) { point in
+
+            var path = Path()
+
+            path.move(to: point(6, 32))
+            path.addLine(to: point(84, 8))
+            path.addLine(to: point(52, 62))
+            path.addLine(to: point(42, 40))
+            path.closeSubpath()
+
+            // The crease, which is the whole reason it reads as folded paper.
+            path.move(to: point(42, 40))
+            path.addLine(to: point(84, 8))
+
+            return path
+        }
+    }
+}
+
+private struct Crown: View {
+
+    let tint: Color
+
+    var body: some View {
+        Drawn(design: CGSize(width: 90, height: 62), weight: 4.5, tint: tint) { point in
+
+            var path = Path()
+
+            path.move(to: point(10, 50))
+            path.addLine(to: point(6, 14))
+            path.addLine(to: point(28, 32))
+            path.addLine(to: point(45, 8))
+            path.addLine(to: point(62, 32))
+            path.addLine(to: point(84, 14))
+            path.addLine(to: point(80, 50))
+            path.closeSubpath()
+
+            return path
+        }
     }
 }
