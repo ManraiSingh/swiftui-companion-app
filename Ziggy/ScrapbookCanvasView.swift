@@ -62,6 +62,7 @@ struct ScrapbookCanvasView: View {
     @State private var showingLayers = false
     @State private var draggingLayer: String?
     @State private var layerShift: CGFloat = 0
+    @State private var scrollX: CGFloat = 0
 
     // Sheets
     @State private var photoItem: PhotosPickerItem?
@@ -1141,23 +1142,13 @@ struct ScrapbookCanvasView: View {
             HStack(spacing: 8) {
 
                 Text(selectedID == nil
-                     ? "Layers · tap to select, drag the grip to reorder"
+                     ? "Layers · tap to select, drag to reorder"
                      : "Layers · move the selected one")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.55))
 
                 Spacer(minLength: 0)
 
-                // Reordering lives on buttons rather than on the chips.
-                //
-                // A drag gesture on each chip took every sideways swipe before
-                // the scroll view saw one, so a page with more layers than fit
-                // across the screen had no way to reach the rest of them —
-                // and the chips are the only place those layers exist. Being
-                // able to see all of them matters more than the gesture.
-                //
-                // They also beat dragging for the common case, which is
-                // nudging one thing a single place.
                 shuffle("chevron.left", "Forward", by: -1, in: ordered)
                 shuffle("chevron.right", "Back", by: 1, in: ordered)
             }
@@ -1170,15 +1161,8 @@ struct ScrapbookCanvasView: View {
                     .padding(.leading, 10)
                     .frame(height: 54)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Self.layerGap) {
-                        ForEach(Array(ordered.enumerated()), id: \.element.id) { index, element in
-                            layerChip(element, at: index, of: ordered.count)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                }
+                layerRow(ordered)
+                    .frame(height: 78)
             }
         }
         .padding(.top, 8)
@@ -1186,66 +1170,103 @@ struct ScrapbookCanvasView: View {
         .background(Color(red: 0.10, green: 0.09, blue: 0.13))
     }
 
+    /// The chips, and a bar to move along them with.
+    ///
+    /// Not a scroll view. A chip that can be dragged to reorder takes the
+    /// touch before a scroll view ever sees it, so the two cannot share the
+    /// same finger — which is why the row would not scroll while the chips
+    /// were draggable, and why dragging had to go when the row had to scroll.
+    ///
+    /// Giving the row its own bar settles it. The chips keep the whole of
+    /// themselves for dragging, and moving along the row is a separate thing
+    /// in a separate place, which is also easier to hit than a swipe that has
+    /// to start on exactly the right pixel.
+    private func layerRow(_ ordered: [ScrapbookElement]) -> some View {
+
+        let step = Self.layerWidth + Self.layerGap
+        let content = max(CGFloat(ordered.count) * step - Self.layerGap, 0)
+
+        return GeometryReader { proxy in
+
+            let visible = max(proxy.size.width, 1)
+            let travel = max(content - visible, 0)
+            let offset = min(scrollX, travel)
+
+            VStack(spacing: 8) {
+
+                HStack(spacing: Self.layerGap) {
+                    ForEach(Array(ordered.enumerated()), id: \.element.id) { index, element in
+                        layerChip(element, at: index, of: ordered.count)
+                    }
+                }
+                .frame(width: content, alignment: .leading)
+                .offset(x: -offset)
+                .frame(width: visible, alignment: .leading)
+                // Clipped so a lifted chip cannot spill over the toolbar, but
+                // generously, so its shadow is not sliced off.
+                .clipped()
+                .frame(height: 60)
+
+                if travel > 0 {
+                    scrollBar(visible: visible, content: content, travel: travel, at: offset)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+
+    /// The bar itself. Drag the thumb, or tap anywhere along the track.
+    private func scrollBar(
+        visible: CGFloat,
+        content: CGFloat,
+        travel: CGFloat,
+        at offset: CGFloat
+    ) -> some View {
+
+        // Long enough to be worth aiming at even when the row is very long.
+        let thumb = max(visible * (visible / content), 40)
+        let run = max(visible - thumb, 1)
+        let progress = travel > 0 ? offset / travel : 0
+
+        return ZStack(alignment: .leading) {
+
+            Capsule()
+                .fill(.white.opacity(0.10))
+                .frame(height: 5)
+
+            Capsule()
+                .fill(.white.opacity(0.5))
+                .frame(width: thumb, height: 5)
+                .offset(x: run * progress)
+        }
+        .frame(width: visible, height: 16)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    // The thumb centres on the finger, so tapping the far end
+                    // of the track jumps there rather than nudging.
+                    let x = min(max(value.location.x - thumb / 2, 0), run)
+                    scrollX = (x / run) * travel
+                }
+        )
+    }
+
     private static let layerWidth: CGFloat = 52
     private static let layerGap: CGFloat = 8
 
     /// One layer, with a grip along the bottom to drag it by.
     ///
-    /// The grip is the whole answer to wanting both. A drag gesture anywhere
-    /// on the chip claims the touch before the scroll view can see it, so the
-    /// row stops scrolling and layers past the edge of the screen become
-    /// unreachable. Confining it to a strip a dozen points tall leaves the
-    /// rest of the chip free: a swipe across the artwork scrolls the row, a
-    /// tap selects, and a drag on the grip reorders.
+    /// Dragged anywhere on itself, the way it was to begin with. Nothing is
+    /// competing for the touch any more — moving along the row is the bar's
+    /// job now.
     private func layerChip(_ element: ScrapbookElement, at index: Int, of count: Int) -> some View {
 
         let chosen = selectedID == element.id
         let lifted = draggingLayer == element.id
 
-        return VStack(spacing: 0) {
-
-            LayerThumb(element: element)
-                .frame(width: Self.layerWidth, height: 40)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                        tool = .select
-                        selectedID = element.id
-                        draftScale = element.scale
-                    }
-                }
-
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.black.opacity(lifted ? 0.6 : 0.28))
-                .frame(width: Self.layerWidth, height: 14)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 2)
-                        .onChanged { value in
-                            if draggingLayer != element.id {
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                    draggingLayer = element.id
-                                }
-                            }
-                            layerShift = value.translation.width
-                        }
-                        .onEnded { value in
-
-                            // How many places it travelled, from how far it
-                            // moved against the width of one chip.
-                            let step = Self.layerWidth + Self.layerGap
-                            let moved = Int((value.translation.width / step).rounded())
-
-                            withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
-                                restack(element.id, by: moved, within: count)
-                                draggingLayer = nil
-                                layerShift = 0
-                            }
-                        }
-                )
-        }
-            .frame(width: Self.layerWidth, height: 54)
+        return LayerThumb(element: element)
+            .frame(width: Self.layerWidth, height: 52)
             .background(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .fill(.white.opacity(0.93))
@@ -1268,6 +1289,38 @@ struct ScrapbookCanvasView: View {
             .shadow(color: .black.opacity(lifted ? 0.35 : 0), radius: 8, y: 4)
             .offset(x: lifted ? layerShift : 0)
             .zIndex(lifted ? 1 : 0)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                    tool = .select
+                    selectedID = element.id
+                    draftScale = element.scale
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 6)
+                    .onChanged { value in
+                        if draggingLayer != element.id {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                draggingLayer = element.id
+                            }
+                        }
+                        layerShift = value.translation.width
+                    }
+                    .onEnded { value in
+
+                        // How many places it travelled, from how far it moved
+                        // against the width of one chip.
+                        let step = Self.layerWidth + Self.layerGap
+                        let moved = Int((value.translation.width / step).rounded())
+
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                            restack(element.id, by: moved, within: count)
+                            draggingLayer = nil
+                            layerShift = 0
+                        }
+                    }
+            )
     }
 
     /// One step forward or back for whatever is selected.
