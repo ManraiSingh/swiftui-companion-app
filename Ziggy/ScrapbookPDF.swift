@@ -52,7 +52,8 @@ enum ScrapbookPDF {
 
                     let leaf = ScrapbookPagePreview(
                         page: page,
-                        elements: elements[page.id] ?? []
+                        elements: elements[page.id] ?? [],
+                        forPrint: true
                     )
                     .frame(width: pageSize.width, height: pageSize.height)
 

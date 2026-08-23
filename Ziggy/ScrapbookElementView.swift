@@ -928,6 +928,14 @@ struct ScrapbookPagePreview: View {
     let page: ScrapbookPage
     let elements: [ScrapbookElement]
 
+    /// Printing, rather than showing somebody their book.
+    ///
+    /// An empty page tells you it is waiting to be filled, which is the right
+    /// thing to say in the app and a strange thing to find in a PDF — it went
+    /// out as the last page of the book, in serif, inviting a sheet of paper
+    /// to add something to itself.
+    var forPrint = false
+
     var body: some View {
 
         GeometryReader { proxy in
@@ -942,7 +950,7 @@ struct ScrapbookPagePreview: View {
                     )
                 }
 
-                if elements.isEmpty {
+                if elements.isEmpty && !forPrint {
                     emptyHint
                 }
             }

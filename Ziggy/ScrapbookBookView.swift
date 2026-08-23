@@ -560,9 +560,23 @@ struct ScrapbookBookView: View {
 
         manager.fetchEveryPage(bookID: book.id, pageIDs: pages.map(\.id)) { elements in
 
+            // Blank pages are left out of a printed book.
+            //
+            // A book usually ends on one — you turn to the end, a fresh page
+            // is waiting, and it gets added the moment you look at it. That is
+            // right in the app and pointless on paper, where it prints as a
+            // sheet with nothing on it.
+            //
+            // Only when printing the whole book. Asking for the one page you
+            // are looking at and being handed nothing would be worse than
+            // being handed a blank.
+            let printable = whole
+                ? pages.filter { !(elements[$0.id] ?? []).isEmpty }
+                : pages
+
             let url = ScrapbookPDF.write(
                 book: book,
-                pages: pages,
+                pages: printable.isEmpty ? pages : printable,
                 elements: elements,
                 watermark: !whole
             )
