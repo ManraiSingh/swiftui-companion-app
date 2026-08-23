@@ -53,6 +53,11 @@ struct ScrapbookCanvasView: View {
     /// round trip from what the eye sees.
     @State private var justMoved: [String: ScrapbookElement] = [:]
 
+    // Layers
+    @State private var showingLayers = false
+    @State private var draggingLayer: String?
+    @State private var layerShift: CGFloat = 0
+
     // Sheets
     @State private var photoItem: PhotosPickerItem?
     @State private var showingStickers = false
@@ -121,6 +126,11 @@ struct ScrapbookCanvasView: View {
             .padding(.vertical, 2)
 
             bars
+
+            if showingLayers {
+                layersPanel
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
             toolbar
         }
@@ -1076,11 +1086,145 @@ struct ScrapbookCanvasView: View {
             toolButton("eraser.fill", "Erase", active: tool == .eraser) {
                 withAnimation { tool = tool == .eraser ? .select : .eraser; selectedID = nil }
             }
+
+            toolButton("square.3.layers.3d", "Layers", active: showingLayers) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    showingLayers.toggle()
+                }
+            }
         }
         .padding(.horizontal, 8)
         .padding(.top, 6)
         .padding(.bottom, 4)
         .background(Color(red: 0.10, green: 0.09, blue: 0.13))
+    }
+
+    // MARK: Layers
+
+    /// Everything on the page as a row, front first, that can be dragged to
+    /// reorder.
+    ///
+    /// Front and Back buttons already existed, but getting a photo out from
+    /// under four stickers meant pressing one of them four times and counting.
+    /// Seeing the pile is the difference between knowing where something is
+    /// and guessing.
+    private var layersPanel: some View {
+
+        let ordered = manager.elements.sorted { $0.z > $1.z }
+
+        return VStack(alignment: .leading, spacing: 5) {
+
+            Text("Layers · drag to reorder, tap to select")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.55))
+                .padding(.leading, 10)
+
+            if ordered.isEmpty {
+                Text("Nothing on this page yet")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .padding(.leading, 10)
+                    .frame(height: 54)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Self.layerGap) {
+                        ForEach(Array(ordered.enumerated()), id: \.element.id) { index, element in
+                            layerChip(element, at: index, of: ordered.count)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                }
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .background(Color(red: 0.10, green: 0.09, blue: 0.13))
+    }
+
+    private static let layerWidth: CGFloat = 52
+    private static let layerGap: CGFloat = 8
+
+    private func layerChip(_ element: ScrapbookElement, at index: Int, of count: Int) -> some View {
+
+        let lifted = draggingLayer == element.id
+        let chosen = selectedID == element.id
+
+        return LayerThumb(element: element)
+            .frame(width: Self.layerWidth, height: 52)
+            .background(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(.white.opacity(0.93))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .stroke(chosen ? ScrapbookStyle.blossom : .clear, lineWidth: 2)
+                    )
+            )
+            .overlay(alignment: .topTrailing) {
+                if element.locked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(3)
+                        .background(Circle().fill(.black.opacity(0.45)))
+                        .padding(2)
+                }
+            }
+            .scaleEffect(lifted ? 1.12 : 1)
+            .shadow(color: .black.opacity(lifted ? 0.35 : 0), radius: 8, y: 4)
+            .offset(x: lifted ? layerShift : 0)
+            .zIndex(lifted ? 1 : 0)
+            .onTapGesture {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                    tool = .select
+                    selectedID = element.id
+                    draftScale = element.scale
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 6)
+                    .onChanged { value in
+                        if draggingLayer != element.id {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                draggingLayer = element.id
+                            }
+                        }
+                        layerShift = value.translation.width
+                    }
+                    .onEnded { value in
+
+                        // How many places it travelled, from how far it moved
+                        // against the width of one chip.
+                        let step = Self.layerWidth + Self.layerGap
+                        let moved = Int((value.translation.width / step).rounded())
+
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                            restack(element.id, by: moved, within: count)
+                            draggingLayer = nil
+                            layerShift = 0
+                        }
+                    }
+            )
+    }
+
+    /// Moves an element through the running order and rewrites every z from it.
+    ///
+    /// The row runs front-first, so index 0 is the top of the pile — dragging
+    /// left brings something forward and right pushes it behind.
+    private func restack(_ id: String, by steps: Int, within count: Int) {
+
+        guard steps != 0 else { return }
+
+        var ordered = manager.elements.sorted { $0.z > $1.z }
+        guard let from = ordered.firstIndex(where: { $0.id == id }) else { return }
+
+        let to = min(max(from + steps, 0), count - 1)
+        guard to != from else { return }
+
+        let moving = ordered.remove(at: from)
+        ordered.insert(moving, at: to)
+
+        manager.restack(ordered, bookID: book.id, pageID: page.id)
     }
 
     private func toolButton(
@@ -1950,5 +2094,61 @@ private extension UIImage {
         return UIGraphicsImageRenderer(size: target, format: format).image { _ in
             draw(in: CGRect(origin: .zero, size: target))
         }
+    }
+}
+
+/// A small likeness of one element, for the layers row.
+///
+/// Deliberately not the element's own view: that one positions itself against a
+/// whole canvas and carries its rotation and scale with it, which in a 52-point
+/// chip means most of the row is empty and half the pieces sit outside their
+/// own box. What a layer needs to show is which thing it is, upright.
+private struct LayerThumb: View {
+
+    let element: ScrapbookElement
+
+    var body: some View {
+        switch element.kind {
+
+        case .photo:
+            if let image = ScrapbookImageCache.shared.image(
+                for: element.id,
+                base64: element.payload
+            ) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            } else {
+                icon("photo.fill")
+            }
+
+        case .text:
+            Text(element.payload.isEmpty ? "Aa" : element.payload)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color(scrapbookHex: element.colorHex))
+                .lineLimit(3)
+                .multilineTextAlignment(.center)
+                .padding(4)
+
+        case .sticker:
+            if let piece = ScrapbookDecoration.from(payload: element.payload) {
+                piece.view(tint: Color(scrapbookHex: element.colorHex))
+                    .frame(width: piece.size.width, height: piece.size.height)
+                    .scaleEffect(min(38 / piece.size.width, 38 / piece.size.height))
+            } else {
+                Text(element.payload).font(.system(size: 24))
+            }
+
+        case .stroke:
+            icon("scribble.variable")
+        }
+    }
+
+    private func icon(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.black.opacity(0.4))
     }
 }

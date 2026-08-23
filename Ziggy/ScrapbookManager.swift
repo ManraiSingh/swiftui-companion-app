@@ -600,6 +600,30 @@ final class ScrapbookManager: ObservableObject {
         touch(bookID: bookID, pageID: pageID)
     }
 
+    /// Rewrites the stacking order for a whole page in one batch.
+    ///
+    /// `ordered` runs front-first, the way the layers panel reads. Writing the
+    /// whole run rather than the one element that moved is what keeps the two
+    /// phones agreeing: shuffling one z leaves it tied with whatever it landed
+    /// beside, and a tie is settled differently depending on the order the
+    /// documents happen to arrive in.
+    func restack(_ ordered: [ScrapbookElement], bookID: String, pageID: String) {
+
+        guard let ref = elementsRef(bookID, pageID), !ordered.isEmpty else { return }
+
+        let batch = db.batch()
+
+        for (place, element) in ordered.enumerated() {
+            batch.updateData(
+                ["z": ordered.count - place],
+                forDocument: ref.document(element.id)
+            )
+        }
+
+        batch.commit { _ in }
+        touch(bookID: bookID, pageID: pageID)
+    }
+
     func update(_ element: ScrapbookElement, bookID: String, pageID: String) {
         elementsRef(bookID, pageID)?.document(element.id).updateData(payloadDictionary(element))
         touch(bookID: bookID, pageID: pageID)
