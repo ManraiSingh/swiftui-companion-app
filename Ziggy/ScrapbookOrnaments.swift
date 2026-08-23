@@ -49,9 +49,15 @@ enum ScrapbookOrnament: Int, CaseIterable, Identifiable {
     /// the shelves, and sixteen of them would leave no room for the books.
     /// The rest are there to be chosen — a shelf you have arranged yourself is
     /// never overwritten by this.
+    /// What stands on a shelf nobody has arranged yet.
+    ///
+    /// Three, not eight. A new shelf has no books on it, so the stock
+    /// arrangement was the entire screen — eight objects and one small slot to
+    /// start a book with, which reads as a room somebody else has already
+    /// filled rather than a shelf waiting for you. The rest are all still
+    /// there under Add Object.
     static let defaultKinds: [ScrapbookOrnament] = [
-        .flowerVase, .bookStack, .framedArt, .tableLamp,
-        .camera, .bunny, .pottedPlant, .heartFrame
+        .flowerVase, .framedArt, .pottedPlant
     ]
 
     var label: String {

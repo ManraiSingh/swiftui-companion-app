@@ -1138,7 +1138,7 @@ struct ScrapbookCanvasView: View {
 
         return VStack(alignment: .leading, spacing: 5) {
 
-            Text("Layers · drag to reorder, tap to select")
+            Text("Layers · tap to select, hold and drag to reorder")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.55))
                 .padding(.leading, 10)
@@ -1205,22 +1205,37 @@ struct ScrapbookCanvasView: View {
                     draftScale = element.scale
                 }
             }
+            // Hold, then drag.
+            //
+            // Dragging straight away meant the chips ate every sideways swipe
+            // before the scroll view saw it, so a page with more layers than
+            // fit on screen had no way to reach the rest of them. Waiting for
+            // a press first hands plain swipes back to the row and keeps
+            // reordering for when somebody means it — which is how iOS
+            // reorders anything else.
             .gesture(
-                DragGesture(minimumDistance: 6)
+                LongPressGesture(minimumDuration: 0.28)
+                    .sequenced(before: DragGesture(minimumDistance: 0))
                     .onChanged { value in
+
+                        guard case .second(true, let drag) = value else { return }
+
                         if draggingLayer != element.id {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                                 draggingLayer = element.id
                             }
                         }
-                        layerShift = value.translation.width
+
+                        layerShift = drag?.translation.width ?? 0
                     }
                     .onEnded { value in
+
+                        guard case .second(true, let drag) = value else { return }
 
                         // How many places it travelled, from how far it moved
                         // against the width of one chip.
                         let step = Self.layerWidth + Self.layerGap
-                        let moved = Int((value.translation.width / step).rounded())
+                        let moved = Int(((drag?.translation.width ?? 0) / step).rounded())
 
                         withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
                             restack(element.id, by: moved, within: count)

@@ -208,10 +208,12 @@ struct ScrapbookShelfView: View {
         var trailing = [ShelfItem(addSlotWidth: metrics.addSlot,
                                   height: metrics.bookSlotHeight)]
 
-        if editing {
-            trailing.append(ShelfItem(addOrnamentWidth: metrics.addSlot,
-                                      height: metrics.bookSlotHeight))
-        }
+        // Alongside Add Book rather than only while editing. Putting things on
+        // the shelf is the same kind of act as starting a book, and hiding it
+        // behind Edit meant the only way to find it was to go looking for
+        // something else.
+        trailing.append(ShelfItem(addOrnamentWidth: metrics.addSlot,
+                                  height: metrics.bookSlotHeight))
 
         for item in list + trailing {
 
