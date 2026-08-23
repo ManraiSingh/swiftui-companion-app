@@ -40,6 +40,19 @@ struct ScrapbookCanvasView: View {
     @State private var pinchScale: Double = 1
     @State private var spinAngle: Double = 0
 
+    /// Where a gesture just left each element, held until Firestore agrees.
+    ///
+    /// Lifting a finger zeroes the offsets above, which paints the element
+    /// back at the position Firestore still holds — the one it had before the
+    /// drag — where it sits for a round trip and then jumps to where it was
+    /// put. Half a second of the old position is enough to make a canvas feel
+    /// unfinished, and it was the only thing between dragging here and
+    /// dragging in the bouquet builder.
+    ///
+    /// Keeping the settled value until the write comes back removes the
+    /// round trip from what the eye sees.
+    @State private var justMoved: [String: ScrapbookElement] = [:]
+
     // Sheets
     @State private var photoItem: PhotosPickerItem?
     @State private var showingStickers = false
@@ -113,6 +126,15 @@ struct ScrapbookCanvasView: View {
         }
         .background(Color(red: 0.13, green: 0.12, blue: 0.17).ignoresSafeArea())
         .onAppear { manager.startElements(bookID: book.id, pageID: page.id) }
+        // The moment Firestore reports an element where this phone already put
+        // it, the local copy has nothing left to say and steps aside — so a
+        // change your partner makes to the same element still comes through.
+        .onChange(of: manager.elements) { _, latest in
+            guard !justMoved.isEmpty else { return }
+            for item in latest where justMoved[item.id]?.placedLike(item) == true {
+                justMoved.removeValue(forKey: item.id)
+            }
+        }
         .onChange(of: selectedID) { _, _ in
             draftScale = selected?.scale ?? 1
         }
@@ -389,6 +411,10 @@ struct ScrapbookCanvasView: View {
     /// The element with any in-flight gesture applied on top.
     private func live(_ element: ScrapbookElement) -> ScrapbookElement {
 
+        // Whatever the last gesture settled on wins over what Firestore has
+        // said so far, until the two agree.
+        let element = justMoved[element.id] ?? element
+
         if element.id == typingID, element.kind == .sticker {
             var hidden = element
             hidden.caption = ""
@@ -479,7 +505,17 @@ struct ScrapbookCanvasView: View {
                 settled.rotation = element.rotation + spinAngle
 
                 draftScale = settled.scale
+                justMoved[element.id] = settled
                 manager.move(settled, bookID: book.id, pageID: page.id)
+
+                // A write that never lands must not leave the element sitting
+                // somewhere only this phone believes in. Better a late
+                // correction than a lie that outlives the app.
+                let id = element.id
+                Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    justMoved.removeValue(forKey: id)
+                }
             }
     }
 

@@ -394,3 +394,22 @@ enum ScrapbookStroke {
         return path
     }
 }
+
+extension ScrapbookElement {
+
+    /// Whether two copies of the same element sit in the same place, at the
+    /// same size and the same angle.
+    ///
+    /// Only the four fields a gesture can change. Comparing whole elements
+    /// would keep answering no over a caption being typed or a frame being
+    /// swapped somewhere else, which has nothing to do with where the thing is.
+    func placedLike(_ other: ScrapbookElement) -> Bool {
+
+        let close = { (a: Double, b: Double) in abs(a - b) < 0.0001 }
+
+        return close(x, other.x)
+            && close(y, other.y)
+            && close(scale, other.scale)
+            && close(rotation, other.rotation)
+    }
+}
