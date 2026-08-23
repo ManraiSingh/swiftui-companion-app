@@ -60,6 +60,8 @@ struct ScrapbookCanvasView: View {
 
     // Layers
     @State private var showingLayers = false
+    @State private var draggingLayer: String?
+    @State private var layerShift: CGFloat = 0
 
     // Sheets
     @State private var photoItem: PhotosPickerItem?
@@ -1139,7 +1141,7 @@ struct ScrapbookCanvasView: View {
             HStack(spacing: 8) {
 
                 Text(selectedID == nil
-                     ? "Layers · tap one to select it"
+                     ? "Layers · tap to select, drag the grip to reorder"
                      : "Layers · move the selected one")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.55))
@@ -1187,12 +1189,63 @@ struct ScrapbookCanvasView: View {
     private static let layerWidth: CGFloat = 52
     private static let layerGap: CGFloat = 8
 
+    /// One layer, with a grip along the bottom to drag it by.
+    ///
+    /// The grip is the whole answer to wanting both. A drag gesture anywhere
+    /// on the chip claims the touch before the scroll view can see it, so the
+    /// row stops scrolling and layers past the edge of the screen become
+    /// unreachable. Confining it to a strip a dozen points tall leaves the
+    /// rest of the chip free: a swipe across the artwork scrolls the row, a
+    /// tap selects, and a drag on the grip reorders.
     private func layerChip(_ element: ScrapbookElement, at index: Int, of count: Int) -> some View {
 
         let chosen = selectedID == element.id
+        let lifted = draggingLayer == element.id
 
-        return LayerThumb(element: element)
-            .frame(width: Self.layerWidth, height: 52)
+        return VStack(spacing: 0) {
+
+            LayerThumb(element: element)
+                .frame(width: Self.layerWidth, height: 40)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                        tool = .select
+                        selectedID = element.id
+                        draftScale = element.scale
+                    }
+                }
+
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.black.opacity(lifted ? 0.6 : 0.28))
+                .frame(width: Self.layerWidth, height: 14)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            if draggingLayer != element.id {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                    draggingLayer = element.id
+                                }
+                            }
+                            layerShift = value.translation.width
+                        }
+                        .onEnded { value in
+
+                            // How many places it travelled, from how far it
+                            // moved against the width of one chip.
+                            let step = Self.layerWidth + Self.layerGap
+                            let moved = Int((value.translation.width / step).rounded())
+
+                            withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
+                                restack(element.id, by: moved, within: count)
+                                draggingLayer = nil
+                                layerShift = 0
+                            }
+                        }
+                )
+        }
+            .frame(width: Self.layerWidth, height: 54)
             .background(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .fill(.white.opacity(0.93))
@@ -1211,13 +1264,10 @@ struct ScrapbookCanvasView: View {
                         .padding(2)
                 }
             }
-            .onTapGesture {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
-                    tool = .select
-                    selectedID = element.id
-                    draftScale = element.scale
-                }
-            }
+            .scaleEffect(lifted ? 1.12 : 1)
+            .shadow(color: .black.opacity(lifted ? 0.35 : 0), radius: 8, y: 4)
+            .offset(x: lifted ? layerShift : 0)
+            .zIndex(lifted ? 1 : 0)
     }
 
     /// One step forward or back for whatever is selected.
