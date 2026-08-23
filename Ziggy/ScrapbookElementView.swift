@@ -503,7 +503,31 @@ struct ScrapbookElementView: View {
 
     // MARK: Stroke
 
+    @ViewBuilder
     private var strokeShape: some View {
+
+        // The page's PencilKit drawing, when that is what this is.
+        if let drawing = ScrapbookInk.decode(element.payload) {
+
+            if let picture = ScrapbookInk.image(drawing, size: canvasSize) {
+                Image(uiImage: picture)
+                    .resizable()
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .offset(
+                        x: canvasSize.width * (0.5 - element.x),
+                        y: canvasSize.height * (0.5 - element.y)
+                    )
+                    .allowsHitTesting(false)
+            }
+
+        } else {
+            legacyStroke
+        }
+    }
+
+    /// Pages drawn before PencilKit came in still have their points, and still
+    /// draw the way they always did.
+    private var legacyStroke: some View {
 
         // A stroke covers the whole page and is positioned at its centre, so
         // the transform that every other element gets has to be undone here —

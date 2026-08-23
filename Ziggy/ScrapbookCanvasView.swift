@@ -11,6 +11,7 @@
 //
 
 import SwiftUI
+import PencilKit
 import PhotosUI
 
 struct ScrapbookCanvasView: View {
@@ -33,7 +34,6 @@ struct ScrapbookCanvasView: View {
     @State private var brushColor = "#2E2A27"
     @State private var brushWidth: Double = 6
     @State private var brushIndex = 0
-    @State private var livePoints: [CGPoint] = []
 
     // Live gesture state, so dragging feels immediate without a round trip.
     @State private var dragOffset: CGSize = .zero
@@ -53,8 +53,10 @@ struct ScrapbookCanvasView: View {
     /// round trip from what the eye sees.
     @State private var justMoved: [String: ScrapbookElement] = [:]
 
-    /// What each stroke has become under the eraser, before it is written down.
-    @State private var rubbedOut: [String: [ScrapbookElement]] = [:]
+    // The page's drawing, done by PencilKit — the same pens and the same
+    // eraser as the doodle screen, because they should feel like one app.
+    @State private var inkCanvas = PKCanvasView()
+    @State private var inkLoaded = false
 
     // Layers
     @State private var showingLayers = false
@@ -138,7 +140,22 @@ struct ScrapbookCanvasView: View {
             toolbar
         }
         .background(Color(red: 0.13, green: 0.12, blue: 0.17).ignoresSafeArea())
-        .onAppear { manager.startElements(bookID: book.id, pageID: page.id) }
+        .onAppear {
+            manager.startElements(bookID: book.id, pageID: page.id)
+            configureInk()
+        }
+        // The drawing arrives with the rest of the page, a moment after the
+        // screen does, so the canvas is filled the first time anything shows up
+        // rather than on appear when there is nothing to read yet.
+        .onChange(of: manager.elements.count) { _, _ in loadInk() }
+        .onChange(of: tool) { _, _ in
+            configureInk()
+            saveInk()
+        }
+        .onChange(of: brushIndex) { _, _ in configureInk() }
+        .onChange(of: brushColor) { _, _ in configureInk() }
+        .onChange(of: brushWidth) { _, _ in configureInk() }
+        .onDisappear { saveInk() }
         // The moment Firestore reports an element where this phone already put
         // it, the local copy has nothing left to say and steps aside — so a
         // change your partner makes to the same element still comes through.
@@ -310,6 +327,11 @@ struct ScrapbookCanvasView: View {
                     canvasSize: canvasSize,
                     isSelected: element.id == selectedID && tool == .select
                 )
+                // Held back while PencilKit is up, or the drawing shows twice.
+                .opacity(
+                    ScrapbookInk.holdsInk(element.payload)
+                        && (tool == .brush || tool == .eraser) ? 0 : 1
+                )
                 // Whatever is being typed into is drawn by the field instead,
                 // so the words don't appear twice. A sticker keeps its paper —
                 // only its caption is held back.
@@ -329,20 +351,19 @@ struct ScrapbookCanvasView: View {
                 typingField(for: element, canvasSize: canvasSize)
             }
 
-            // The stroke in progress, drawn through the same brush the
-            // finished one will use. It was a plain round line before, so
-            // every pen looked identical until you lifted your finger.
-            if !livePoints.isEmpty {
-                ScrapbookStrokeView(
-                    points: livePoints,
-                    canvasSize: canvasSize,
-                    colorHex: brushColor,
-                    width: brushWidth,
-                    brushIndex: brushIndex
-                )
+            // PencilKit, laid over the page like a sheet of glass while there
+            // is drawing or rubbing out to do.
+            //
+            // The ink element underneath is hidden meanwhile, because the
+            // canvas is already showing every mark in it — leaving both up
+            // draws the whole drawing twice, once soft and once sharp.
+            if tool == .brush || tool == .eraser {
+                ScrapbookInkCanvas(canvas: inkCanvas)
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .allowsHitTesting(true)
             }
 
-            if manager.elements.isEmpty && livePoints.isEmpty {
+            if manager.elements.isEmpty {
                 emptyHint
             }
         }
@@ -422,33 +443,7 @@ struct ScrapbookCanvasView: View {
     }
 
     /// Everything the page is showing right now.
-    ///
-    /// Usually just what Firestore holds, but while the eraser is down a
-    /// stroke may already have become two or three pieces that nobody has
-    /// written anywhere yet. The page draws those instead, so rubbing out
-    /// looks like rubbing out rather than like nothing happening until the
-    /// finger lifts.
-    private var onPage: [ScrapbookElement] {
-
-        guard !rubbedOut.isEmpty else { return manager.elements }
-
-        // Deduplicated by id, because for a moment both sources hold the same
-        // thing: a stroke rubbed in two becomes a fragment kept here *and*, as
-        // soon as the write lands, a document of its own. Drawing the list
-        // naively would show that fragment twice, at double weight, until the
-        // local copy was dropped.
-        var seen = Set<String>()
-        var showing: [ScrapbookElement] = []
-
-        for element in manager.elements {
-            for piece in rubbedOut[element.id] ?? [element] where !seen.contains(piece.id) {
-                seen.insert(piece.id)
-                showing.append(piece)
-            }
-        }
-
-        return showing
-    }
+    private var onPage: [ScrapbookElement] { manager.elements }
 
     /// The element with any in-flight gesture applied on top.
     private func live(_ element: ScrapbookElement) -> ScrapbookElement {
@@ -561,62 +556,20 @@ struct ScrapbookCanvasView: View {
             }
     }
 
-    /// Drawing, erasing, and tapping empty paper to deselect.
+    /// Tapping empty paper to deselect.
+    ///
+    /// Drawing and rubbing out are no longer here — PencilKit's own canvas is
+    /// over the page whenever either tool is chosen, and it handles the touch
+    /// itself. That is the point of using it: pressure, taper, grain and a
+    /// bitmap eraser are all things it already has and a list of points can
+    /// never have.
     private func canvasGesture(canvasSize: CGSize) -> some Gesture {
 
         DragGesture(minimumDistance: 0)
-            .onChanged { value in
-
-                let point = CGPoint(
-                    x: value.location.x / canvasSize.width,
-                    y: value.location.y / canvasSize.height
-                )
-
-                if tool == .eraser {
-                    erase(at: point, canvasSize: canvasSize)
-                    return
-                }
-
-                guard tool == .brush else { return }
-
-                // Sampling every point makes for enormous payloads; a stroke
-                // reads the same with a small minimum step between samples.
-                if let last = livePoints.last {
-                    let dx = last.x - point.x
-                    let dy = last.y - point.y
-                    guard (dx * dx + dy * dy) > 0.00004 else { return }
-                }
-
-                livePoints.append(point)
-            }
             .onEnded { _ in
-
-                if tool == .eraser {
-                    commitErasing()
-                    return
-                }
-
                 if tool == .select {
                     withAnimation { selectedID = nil }
-                    return
                 }
-
-                guard tool == .brush, livePoints.count > 1 else {
-                    livePoints = []
-                    return
-                }
-
-                var element = ScrapbookElement(id: UUID().uuidString, kind: .stroke)
-                element.payload = ScrapbookStroke.encode(livePoints)
-                element.colorHex = brushColor
-                element.widthValue = brushWidth
-                element.brushIndex = brushIndex
-                element.z = manager.nextZ
-                element.x = 0.5
-                element.y = 0.5
-
-                manager.add(element, bookID: book.id, pageID: page.id)
-                livePoints = []
             }
     }
 
@@ -626,103 +579,64 @@ struct ScrapbookCanvasView: View {
     /// and text as readily as pencil and left a smear of paint behind that
     /// couldn't itself be removed. Working on the strokes themselves means it
     /// can't touch anything that isn't drawn.
-    private func erase(at point: CGPoint, canvasSize: CGSize) {
+    // MARK: Ink
 
-        // The eraser's reach, in the page's normalised units.
-        let reach = (brushWidth / 2 + 6) / canvasSize.width
-
-        // Compared in page proportions rather than raw numbers — the page is
-        // taller than it is wide, so a plain distance would make the eraser
-        // reach further vertically than it looks.
-        let aspect = canvasSize.height / canvasSize.width
-
-        for element in manager.elements where element.kind == .stroke && !element.locked {
-
-            // Whatever this stroke has already become under this finger, or
-            // the stroke itself if it is the first time it has been touched.
-            let current = rubbedOut[element.id] ?? [element]
-            var rebuilt: [ScrapbookElement] = []
-            var changed = false
-
-            for piece in current {
-
-                let points = ScrapbookStroke.decode(piece.payload)
-
-                // Walk the line, dropping the samples under the eraser and
-                // keeping what survives in runs. A line rubbed through the
-                // middle comes back as two, which is the whole difference
-                // between erasing and deleting — this used to throw away the
-                // entire stroke the moment the eraser grazed any part of it.
-                var runs: [[CGPoint]] = []
-                var run: [CGPoint] = []
-
-                for sample in points {
-                    let dx = sample.x - point.x
-                    let dy = (sample.y - point.y) * aspect
-
-                    if (dx * dx + dy * dy) <= reach * reach {
-                        changed = true
-                        if run.count > 1 { runs.append(run) }
-                        run = []
-                    } else {
-                        run.append(sample)
-                    }
-                }
-
-                if run.count > 1 { runs.append(run) }
-
-                // A run of one point is a dot too short to see, and not worth
-                // a document of its own.
-                for (index, kept) in runs.enumerated() {
-                    var fragment = piece
-                    if index > 0 { fragment.id = UUID().uuidString }
-                    fragment.payload = ScrapbookStroke.encode(kept)
-                    rebuilt.append(fragment)
-                }
-            }
-
-            if changed { rubbedOut[element.id] = rebuilt }
+    /// Points PencilKit at the pen or the eraser the toolbar is showing.
+    private func configureInk() {
+        if tool == .eraser {
+            inkCanvas.tool = PKEraserTool(.bitmap, width: brushWidth)
+        } else {
+            inkCanvas.tool = PKInkingTool(
+                ScrapbookInk.ink(brushIndex),
+                color: UIColor(Color(scrapbookHex: brushColor)),
+                width: brushWidth
+            )
         }
     }
 
-    /// Writes the erasing down, once the finger lifts.
+    /// Reads the page's drawing into the canvas, once.
+    private func loadInk() {
+
+        guard !inkLoaded else { return }
+        inkLoaded = true
+
+        if let element = manager.elements.first(where: { ScrapbookInk.holdsInk($0.payload) }),
+           let drawing = ScrapbookInk.decode(element.payload) {
+            inkCanvas.drawing = drawing
+        }
+    }
+
+    /// Writes the drawing back to the page.
     ///
-    /// Splitting a stroke is three writes — rewrite the first piece, add the
-    /// rest, or delete it outright — and the eraser reports a new position
-    /// every few milliseconds. Doing it as it happened would have been
-    /// hundreds of writes for one sweep, and the partner's page redrawing
-    /// through every one of them. The page shows the local answer while the
-    /// finger is down and Firestore hears about it at the end.
-    private func commitErasing() {
+    /// One element holds all of it, which is the whole shape of this: the
+    /// doodle's pens and its eraser only exist because PencilKit owns the
+    /// marks, and it owns them together. Photographs, words and stickers are
+    /// untouched by that — they stay separate things that can be stacked.
+    private func saveInk() {
 
-        // Held a moment longer than the writes, so the page keeps showing the
-        // local answer until Firestore has caught up — dropping it the instant
-        // the writes go out is what made a dragged element flash back to where
-        // it started, and rubbing out would do the same.
-        defer {
-            Task {
-                try? await Task.sleep(for: .seconds(1))
-                rubbedOut = [:]
-            }
+        guard inkLoaded else { return }
+
+        let payload = ScrapbookInk.encode(inkCanvas.drawing)
+
+        if var existing = manager.elements.first(where: { ScrapbookInk.holdsInk($0.payload) }) {
+
+            guard existing.payload != payload else { return }
+
+            existing.payload = payload
+            manager.update(existing, bookID: book.id, pageID: page.id)
+            return
         }
 
-        for (id, pieces) in rubbedOut {
+        // Nothing to save and nothing saved before.
+        guard !inkCanvas.drawing.strokes.isEmpty else { return }
 
-            guard let original = manager.elements.first(where: { $0.id == id }) else { continue }
+        var element = ScrapbookElement(id: UUID().uuidString, kind: .stroke)
+        element.payload = payload
+        element.z = manager.nextZ
+        element.x = 0.5
+        element.y = 0.5
 
-            guard let first = pieces.first else {
-                manager.delete(id, bookID: book.id, pageID: page.id)
-                continue
-            }
-
-            if first.payload != original.payload {
-                manager.update(first, bookID: book.id, pageID: page.id)
-            }
-
-            for extra in pieces.dropFirst() {
-                manager.add(extra, bookID: book.id, pageID: page.id)
-            }
-        }
+        manager.add(element, bookID: book.id, pageID: page.id)
     }
 
     // MARK: Adding
