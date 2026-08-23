@@ -189,6 +189,54 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - The finish
+//
+// What separated these pieces from the bouquet's flowers was never the drawing.
+// It was that each one was a single flat colour with a dark hairline round it
+// and one hard shadow underneath — which reads as a shape, not as a thing lying
+// on paper. Three changes fix that, and they are worth stating because every
+// piece below uses them.
+
+extension ShapeStyle where Self == LinearGradient {
+
+    /// A fill that is not perfectly even, because nothing on paper is.
+    ///
+    /// Light off the top, the colour itself through the middle, a little depth
+    /// at the bottom. The range is deliberately narrow — enough to give a shape
+    /// a body, not so much that it looks like a button.
+    static func paper(_ tint: Color) -> LinearGradient {
+        LinearGradient(
+            colors: [tint.lighter, tint, tint.deeper],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
+extension View {
+
+    /// Two shadows rather than one.
+    ///
+    /// A single mid-sized shadow is what makes a shape look like it has an
+    /// outline drawn under it. Real things cast a tight, dark contact shadow
+    /// where they touch, and a wide faint one from the light in the room.
+    /// Having both is most of why something looks like it is sitting on the
+    /// page rather than printed into it.
+    func paperLift(_ zoom: CGFloat, weight: CGFloat = 1) -> some View {
+        self
+            .shadow(
+                color: .black.opacity(0.16 * weight),
+                radius: 1.2 * zoom,
+                y: 0.8 * zoom
+            )
+            .shadow(
+                color: .black.opacity(0.13 * weight),
+                radius: 5 * zoom,
+                y: 3 * zoom
+            )
+    }
+}
+
 /// A piece drawn in a fixed design space and scaled as a whole.
 ///
 /// Laying a shape out in fractions of its own box skews every diagonal by that
@@ -228,6 +276,7 @@ private struct Drawn: View {
                     lineJoin: .round
                 )
             )
+            .paperLift(unit * 1.4, weight: 0.45)
         }
     }
 }
@@ -244,47 +293,33 @@ private struct WashiTape: View {
 
             // Tape is translucent, and that is most of why it reads as tape
             // rather than a painted bar — the page carries on underneath it.
-            Rectangle().fill(tint.opacity(0.58))
+            Rectangle().fill(tint.opacity(0.62))
 
-            // Stripes measured off the strip's own width, so a long piece is
-            // striped end to end instead of running out after nine of them.
-            Stripes(count: 12).fill(.white.opacity(0.22))
-
-            // The sheen along the top edge of a strip pressed down flat.
+            // No stripes.
+            //
+            // Vertical bands against an edge that wanders read as corrugation,
+            // and the strip came out looking like a folded paper fan rather
+            // than something stuck to a page. What actually says tape is that
+            // the page shows through it and the light catches along the top,
+            // so that is all this is now.
             LinearGradient(
-                colors: [.white.opacity(0.20), .white.opacity(0.02)],
+                colors: [
+                    .white.opacity(0.26),
+                    .white.opacity(0.04),
+                    .black.opacity(0.05)
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
         }
-        .clipShape(TornEdges(teeth: 9, depth: 3 * zoom))
+        // Barely ragged. Tape is cut from a roll, not torn off a sheet — the
+        // long edges are near enough straight, and giving them a torn strip's
+        // raggedness was what made a piece of tape read as a folded paper fan.
+        .clipShape(TornEdges(teeth: 18, depth: 1.6 * zoom))
+        .paperLift(zoom, weight: 0.6)
     }
 }
 
-/// Evenly spaced vertical bands, proportional to whatever they are drawn in.
-private struct Stripes: Shape {
-
-    let count: Int
-
-    func path(in rect: CGRect) -> Path {
-
-        var path = Path()
-        let step = rect.width / CGFloat(max(count, 1))
-
-        for band in 0..<max(count, 1) {
-            path.addRect(
-                CGRect(
-                    x: CGFloat(band) * step,
-                    y: 0,
-                    width: step * 0.45,
-                    height: rect.height
-                )
-            )
-        }
-
-        return path
-    }
-}
 
 // MARK: - Torn paper
 
@@ -366,11 +401,18 @@ private struct StarBurst: View {
 
     var body: some View {
         SpikeStar(points: 5, innerRatio: 0.42)
-            .fill(tint)
+            .fill(.paper(tint))
             .overlay(
+                // Rounded rather than sharp. A cut-paper star has soft points
+                // — needle-sharp ones are what a vector star looks like.
                 SpikeStar(points: 5, innerRatio: 0.42)
-                    .stroke(.black.opacity(0.12), lineWidth: zoom)
+                    .stroke(
+                        tint.lighter.opacity(0.5),
+                        style: StrokeStyle(lineWidth: 2.2 * zoom, lineJoin: .round)
+                    )
+                    .blendMode(.plusLighter)
             )
+            .paperLift(zoom)
     }
 }
 
@@ -484,9 +526,19 @@ private struct Banner: View {
 
     var body: some View {
         BannerShape()
-            .fill(tint)
-            .overlay(BannerShape().stroke(.black.opacity(0.12), lineWidth: zoom))
-            .shadow(color: .black.opacity(0.14), radius: 3 * zoom, y: 2 * zoom)
+            .fill(.paper(tint))
+            .overlay(
+                // The crease where a ribbon turns back on itself, which is the
+                // one line that stops a banner reading as a flat notched bar.
+                HStack {
+                    Rectangle().fill(.black.opacity(0.14)).frame(width: 1.4 * zoom)
+                    Spacer()
+                    Rectangle().fill(.black.opacity(0.14)).frame(width: 1.4 * zoom)
+                }
+                .padding(.horizontal, 18 * zoom)
+                .mask(BannerShape())
+            )
+            .paperLift(zoom)
     }
 }
 
@@ -552,15 +604,20 @@ private struct Stamp: View {
 
     var body: some View {
         StampShape(bite: 5 * zoom)
-            .fill(tint)
+            // Even-odd, so the circles laid along each edge are bitten *out*
+            // of the stamp instead of added to it. Filled the ordinary way
+            // they piled up on the boundary and overlapped each other, which
+            // is why the edge read as a row of squiggles rather than
+            // perforations.
+            .fill(.paper(tint), style: FillStyle(eoFill: true))
             .overlay(
-                StampShape(bite: 5 * zoom)
-                    .inset(by: 8 * zoom)
-                    .stroke(.white.opacity(0.85),
-                            style: StrokeStyle(lineWidth: 1.5 * zoom,
-                                               dash: [4 * zoom, 3 * zoom]))
+                // The plate line a printed stamp carries a little inside its
+                // own edge.
+                RoundedRectangle(cornerRadius: 2 * zoom, style: .continuous)
+                    .stroke(.white.opacity(0.5), lineWidth: 1.2 * zoom)
+                    .padding(9 * zoom)
             )
-            .shadow(color: .black.opacity(0.14), radius: 3 * zoom, y: 2 * zoom)
+            .paperLift(zoom)
     }
 }
 
@@ -613,7 +670,7 @@ private struct FilmStrip: View {
 
     var body: some View {
         ZStack {
-            Rectangle().fill(tint)
+            Rectangle().fill(.paper(tint))
 
             VStack {
                 sprockets
@@ -632,6 +689,7 @@ private struct FilmStrip: View {
             .padding(.vertical, 15 * zoom)
             .padding(.horizontal, 6 * zoom)
         }
+        .paperLift(zoom)
     }
 
     private var sprockets: some View {
@@ -656,7 +714,7 @@ private struct SpeechBubble: View {
         ZStack(alignment: .bottomLeading) {
 
             RoundedRectangle(cornerRadius: 16 * zoom, style: .continuous)
-                .fill(tint)
+                .fill(.paper(tint))
                 .padding(.bottom, 12 * zoom)
 
             Path { path in
@@ -665,11 +723,11 @@ private struct SpeechBubble: View {
                 path.addLine(to: CGPoint(x: 20 * zoom, y: 14 * zoom))
                 path.closeSubpath()
             }
-            .fill(tint)
+            .fill(tint.deeper)
             .frame(width: 44 * zoom, height: 14 * zoom)
             .offset(x: 14 * zoom)
         }
-        .shadow(color: .black.opacity(0.14), radius: 3 * zoom, y: 2 * zoom)
+        .paperLift(zoom)
     }
 }
 
@@ -682,8 +740,8 @@ private struct HeartDoodle: View {
 
     var body: some View {
         DoodleHeart()
-            .fill(tint)
-            .overlay(DoodleHeart().stroke(.black.opacity(0.12), lineWidth: zoom))
+            .fill(.paper(tint))
+            .paperLift(zoom)
     }
 }
 
