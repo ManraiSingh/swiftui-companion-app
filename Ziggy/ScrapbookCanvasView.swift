@@ -60,8 +60,6 @@ struct ScrapbookCanvasView: View {
 
     // Layers
     @State private var showingLayers = false
-    @State private var draggingLayer: String?
-    @State private var layerShift: CGFloat = 0
 
     // Sheets
     @State private var photoItem: PhotosPickerItem?
@@ -1138,10 +1136,30 @@ struct ScrapbookCanvasView: View {
 
         return VStack(alignment: .leading, spacing: 5) {
 
-            Text("Layers · tap to select, hold and drag to reorder")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.55))
-                .padding(.leading, 10)
+            HStack(spacing: 8) {
+
+                Text(selectedID == nil
+                     ? "Layers · tap one to select it"
+                     : "Layers · move the selected one")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+
+                Spacer(minLength: 0)
+
+                // Reordering lives on buttons rather than on the chips.
+                //
+                // A drag gesture on each chip took every sideways swipe before
+                // the scroll view saw one, so a page with more layers than fit
+                // across the screen had no way to reach the rest of them —
+                // and the chips are the only place those layers exist. Being
+                // able to see all of them matters more than the gesture.
+                //
+                // They also beat dragging for the common case, which is
+                // nudging one thing a single place.
+                shuffle("chevron.left", "Forward", by: -1, in: ordered)
+                shuffle("chevron.right", "Back", by: 1, in: ordered)
+            }
+            .padding(.horizontal, 10)
 
             if ordered.isEmpty {
                 Text("Nothing on this page yet")
@@ -1171,7 +1189,6 @@ struct ScrapbookCanvasView: View {
 
     private func layerChip(_ element: ScrapbookElement, at index: Int, of count: Int) -> some View {
 
-        let lifted = draggingLayer == element.id
         let chosen = selectedID == element.id
 
         return LayerThumb(element: element)
@@ -1194,10 +1211,6 @@ struct ScrapbookCanvasView: View {
                         .padding(2)
                 }
             }
-            .scaleEffect(lifted ? 1.12 : 1)
-            .shadow(color: .black.opacity(lifted ? 0.35 : 0), radius: 8, y: 4)
-            .offset(x: lifted ? layerShift : 0)
-            .zIndex(lifted ? 1 : 0)
             .onTapGesture {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                     tool = .select
@@ -1205,45 +1218,39 @@ struct ScrapbookCanvasView: View {
                     draftScale = element.scale
                 }
             }
-            // Hold, then drag.
-            //
-            // Dragging straight away meant the chips ate every sideways swipe
-            // before the scroll view saw it, so a page with more layers than
-            // fit on screen had no way to reach the rest of them. Waiting for
-            // a press first hands plain swipes back to the row and keeps
-            // reordering for when somebody means it — which is how iOS
-            // reorders anything else.
-            .gesture(
-                LongPressGesture(minimumDuration: 0.28)
-                    .sequenced(before: DragGesture(minimumDistance: 0))
-                    .onChanged { value in
+    }
 
-                        guard case .second(true, let drag) = value else { return }
+    /// One step forward or back for whatever is selected.
+    @ViewBuilder
+    private func shuffle(
+        _ icon: String,
+        _ label: String,
+        by steps: Int,
+        in ordered: [ScrapbookElement]
+    ) -> some View {
 
-                        if draggingLayer != element.id {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                draggingLayer = element.id
-                            }
-                        }
+        let id = selectedID
+        let place = ordered.firstIndex { $0.id == id }
+        let canMove = place.map { $0 + steps >= 0 && $0 + steps < ordered.count } ?? false
 
-                        layerShift = drag?.translation.width ?? 0
-                    }
-                    .onEnded { value in
-
-                        guard case .second(true, let drag) = value else { return }
-
-                        // How many places it travelled, from how far it moved
-                        // against the width of one chip.
-                        let step = Self.layerWidth + Self.layerGap
-                        let moved = Int(((drag?.translation.width ?? 0) / step).rounded())
-
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
-                            restack(element.id, by: moved, within: count)
-                            draggingLayer = nil
-                            layerShift = 0
-                        }
-                    }
+        Button {
+            guard let id else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                restack(id, by: steps, within: ordered.count)
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 9, weight: .black))
+                Text(label).font(.system(size: 10, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(canMove ? .white : .white.opacity(0.25))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(.white.opacity(canMove ? 0.16 : 0.05))
             )
+        }
+        .disabled(!canMove)
     }
 
     /// Moves an element through the running order and rewrites every z from it.
