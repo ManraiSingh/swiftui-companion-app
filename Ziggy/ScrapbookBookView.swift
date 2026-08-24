@@ -106,7 +106,15 @@ struct ScrapbookBookView: View {
             titleVisibility: .visible
         ) {
             Button("Export this page") { runExport(whole: false) }
-            Button("See Ziggy Forever") { paywall = .wholeBook }
+            // Same reason as the locked stickers: the dialog is still going
+            // away, and a sheet asked for over one that is dismissing is
+            // dropped.
+            Button("See Ziggy Forever") {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(450))
+                    paywall = .wholeBook
+                }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You'll get the page you're looking at, with a small Ziggy line at the foot. Ziggy Forever prints the whole book, clean.")

@@ -734,7 +734,16 @@ struct ScrapbookCanvasView: View {
     /// turnable and lockable like everything else without the editor needing
     /// to know it's any different.
     private func showStickerPaywall() {
-        paywall = .sticker
+
+        // Asked for after the sticker sheet has actually gone.
+        //
+        // Setting one sheet's item while another is still dismissing loses the
+        // new one — UIKit is still tearing the first down and quietly declines
+        // to present over it. The lock would have looked like a dead button.
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            paywall = .sticker
+        }
     }
 
     private func addDecoration(_ decoration: ScrapbookDecoration) {
