@@ -396,24 +396,34 @@ struct ScrapbookElementView: View {
     @ViewBuilder
     private func inlay(on decoration: ScrapbookDecoration, in box: CGSize) -> some View {
 
-        if let window = decoration.imageWindow,
-           !element.imagePayload.isEmpty,
-           let image = ScrapbookImageCache.shared.image(for: element.id + "#inlay",
-                                                        base64: element.imagePayload) {
+        // One picture per window, in the order they were put in. A length of
+        // film has three, so its payload holds up to three.
+        let pictures = ScrapbookInlay.split(element.imagePayload)
+        let windows = decoration.imageWindows
 
-            let width = window.width * box.width
-            let height = window.height * box.height
+        return ForEach(Array(windows.enumerated()), id: \.offset) { index, window in
 
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: width, height: height)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: decoration.imageCorner * width,
-                                     style: .continuous)
-                )
-                .position(x: window.midX * box.width, y: window.midY * box.height)
-                .allowsHitTesting(false)
+            if index < pictures.count,
+               !pictures[index].isEmpty,
+               let image = ScrapbookImageCache.shared.image(
+                    for: element.id + "#inlay\(index)",
+                    base64: pictures[index]
+               ) {
+
+                let width = window.width * box.width
+                let height = window.height * box.height
+
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: width, height: height)
+                    .clipShape(
+                        RoundedRectangle(cornerRadius: decoration.imageCorner * width,
+                                         style: .continuous)
+                    )
+                    .position(x: window.midX * box.width, y: window.midY * box.height)
+                    .allowsHitTesting(false)
+            }
         }
     }
 

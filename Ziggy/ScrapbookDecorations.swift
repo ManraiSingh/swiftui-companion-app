@@ -120,17 +120,39 @@ enum ScrapbookDecoration: String, CaseIterable, Identifiable {
     /// Where a picture can be tucked inside, as fractions of the sticker's own
     /// box. Only the pieces that are a container rather than a shape: a stamp,
     /// a frame, a bubble, a length of film.
-    var imageWindow: CGRect? {
+    /// Every place a picture can go, as fractions of the sticker's own box.
+    ///
+    /// A list, because a length of film has three frames and putting one
+    /// photograph across all of them defeats the point of it being film. The
+    /// rest hold one thing and have one window.
+    var imageWindows: [CGRect] {
         switch self {
-        case .stamp:        return CGRect(x: 0.16, y: 0.15, width: 0.68, height: 0.70)
-        case .dashedBox:    return CGRect(x: 0.05, y: 0.06, width: 0.90, height: 0.88)
-        case .speechBubble: return CGRect(x: 0.07, y: 0.07, width: 0.86, height: 0.67)
-        case .filmStrip:    return CGRect(x: 0.05, y: 0.27, width: 0.90, height: 0.46)
-        default:            return nil
+
+        case .stamp:        return [CGRect(x: 0.16, y: 0.15, width: 0.68, height: 0.70)]
+        case .dashedBox:    return [CGRect(x: 0.05, y: 0.06, width: 0.90, height: 0.88)]
+        case .speechBubble: return [CGRect(x: 0.07, y: 0.07, width: 0.86, height: 0.67)]
+
+        case .filmStrip:
+            // Three frames along the strip, matching the cells drawn behind
+            // them. Measured off the same numbers the drawing uses, so a
+            // picture lands exactly in a frame rather than near one.
+            return (0..<3).map { cell in
+                CGRect(
+                    x: 0.045 + Double(cell) * 0.3123,
+                    y: 0.20,
+                    width: 0.2837,
+                    height: 0.60
+                )
+            }
+
+        default: return []
         }
     }
 
-    var holdsImage: Bool { imageWindow != nil }
+    /// The first window, for everything that only has one.
+    var imageWindow: CGRect? { imageWindows.first }
+
+    var holdsImage: Bool { !imageWindows.isEmpty }
 
     /// How round the window's corners are, against its own width.
     var imageCorner: CGFloat {
@@ -677,27 +699,39 @@ private struct FilmStrip: View {
                 Spacer()
                 sprockets
             }
-            .padding(.vertical, 4 * zoom)
+            .padding(.vertical, 2.5 * zoom)
 
-            // The three blank cells. A picture placed inside covers exactly
-            // this band, so they read as the empty frames until one is.
-            HStack(spacing: 4 * zoom) {
-                ForEach(0..<3, id: \.self) { _ in
-                    Rectangle().fill(.white.opacity(0.22))
+            // Three frames, each its own. The borders used to be thick enough
+            // that the pictures were a thin band down the middle of a mostly
+            // black rectangle — real film is nearly all frame, with just
+            // enough edge to carry the sprockets.
+            GeometryReader { proxy in
+
+                let width = proxy.size.width
+                let height = proxy.size.height
+                let cell = width * 0.2837
+                let step = width * 0.3123
+
+                ForEach(0..<3, id: \.self) { index in
+                    Rectangle()
+                        .fill(.white.opacity(0.20))
+                        .frame(width: cell, height: height * 0.60)
+                        .position(
+                            x: width * 0.045 + step * Double(index) + cell / 2,
+                            y: height * 0.50
+                        )
                 }
             }
-            .padding(.vertical, 15 * zoom)
-            .padding(.horizontal, 6 * zoom)
         }
         .paperLift(zoom)
     }
 
     private var sprockets: some View {
-        HStack(spacing: 6 * zoom) {
-            ForEach(0..<9, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 1.5 * zoom)
+        HStack(spacing: 5 * zoom) {
+            ForEach(0..<10, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 1 * zoom)
                     .fill(.white.opacity(0.85))
-                    .frame(width: 6 * zoom, height: 5 * zoom)
+                    .frame(width: 4.5 * zoom, height: 3.5 * zoom)
             }
         }
     }

@@ -413,3 +413,48 @@ extension ScrapbookElement {
             && close(rotation, other.rotation)
     }
 }
+
+/// Pictures tucked inside a sticker.
+///
+/// One string holds them all, separated by a character no base64 payload can
+/// contain. A length of film has three frames and wants three photographs; a
+/// stamp has one. Keeping them in the field that already exists means no new
+/// column, no migration, and a sticker filled before any of this still reads
+/// as a sticker with one picture in it.
+enum ScrapbookInlay {
+
+    private static let separator = "|"
+
+    static func split(_ payload: String) -> [String] {
+        payload.isEmpty ? [] : payload.components(separatedBy: separator)
+    }
+
+    static func join(_ pictures: [String]) -> String {
+        pictures.joined(separator: separator)
+    }
+
+    /// Adds a picture to the first empty frame, or replaces the last one when
+    /// every frame is full — which is what "Change" means on a piece that only
+    /// has room for one.
+    static func adding(_ picture: String, to payload: String, capacity: Int) -> String {
+
+        var pictures = split(payload)
+
+        if let empty = pictures.firstIndex(where: \.isEmpty) {
+            pictures[empty] = picture
+        } else if pictures.count < capacity {
+            pictures.append(picture)
+        } else if pictures.isEmpty {
+            pictures = [picture]
+        } else {
+            pictures[pictures.count - 1] = picture
+        }
+
+        return join(pictures)
+    }
+
+    /// How many frames are already filled.
+    static func filled(_ payload: String) -> Int {
+        split(payload).filter { !$0.isEmpty }.count
+    }
+}

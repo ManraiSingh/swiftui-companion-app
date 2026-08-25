@@ -665,9 +665,23 @@ struct ScrapbookCanvasView: View {
         // picture goes inside the piece of paper, which keeps its size, angle
         // and any words already on it.
         if let id = fillingID, var host = manager.elements.first(where: { $0.id == id }) {
-            host.imagePayload = base64
+
+            // Into the next empty frame rather than over the whole piece, so a
+            // length of film fills up one photograph at a time.
+            let capacity = ScrapbookDecoration.from(payload: host.payload)?
+                .imageWindows.count ?? 1
+
+            host.imagePayload = ScrapbookInlay.adding(
+                base64,
+                to: host.imagePayload,
+                capacity: capacity
+            )
+
             manager.update(host, bookID: book.id, pageID: page.id)
-            ScrapbookImageCache.shared.forget(id + "#inlay")
+
+            for frame in 0..<capacity {
+                ScrapbookImageCache.shared.forget(id + "#inlay\(frame)")
+            }
             fillingID = nil
             showingCamera = false
             selectedID = id
@@ -1567,6 +1581,15 @@ private struct SelectedElementBar: View {
         .padding(.leading, 16)
     }
 
+    /// Whether every frame this piece has is already taken.
+    private var inlayIsFull: Bool {
+
+        let capacity = ScrapbookDecoration.from(payload: element.payload)?
+            .imageWindows.count ?? 1
+
+        return ScrapbookInlay.filled(element.imagePayload) >= capacity
+    }
+
     /// "Write" only where there is nothing written yet.
     private var labelTitle: String {
         if element.kind == .text { return "Edit" }
@@ -1583,7 +1606,10 @@ private struct SelectedElementBar: View {
             }
 
             if let onInlay {
-                action(element.imagePayload.isEmpty ? "Photo" : "Change",
+                // "Change" only once there is nowhere left to put one. A strip
+                // of film with one frame filled still wants another photo, not
+                // a different first photo.
+                action(inlayIsFull ? "Change" : "Photo",
                        "photo.on.rectangle", onInlay)
             }
 
