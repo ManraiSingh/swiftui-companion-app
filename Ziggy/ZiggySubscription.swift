@@ -305,11 +305,11 @@ final class ZiggySubscription: ObservableObject {
         static let books = 1
         static let pages = 3
 
-        /// Five, not two. A bouquet is the loveliest thing in here and the
-        /// first one somebody sends is what makes them tell anyone about the
-        /// app — pricing it after two turns the whole feature into an advert
-        /// for itself before it has had the chance to be a gift.
-        static let bouquets = 5
+        /// Three. Enough to send one, be pleased with it, and send another —
+        /// which is the point of a free tier. A bouquet is the loveliest thing
+        /// in here and the first one somebody sends is what makes them tell
+        /// anyone about the app, so it cannot be the wall.
+        static let bouquets = 3
 
         /// How far back the instant archive reaches without a subscription.
         static let instantDays = 7
