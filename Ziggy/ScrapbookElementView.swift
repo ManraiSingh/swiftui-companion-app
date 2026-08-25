@@ -393,7 +393,9 @@ struct ScrapbookElementView: View {
     /// Placed against the window each piece declares rather than filling the
     /// whole box, so the stamp's perforated border and the film's sprockets
     /// still show around it.
-    @ViewBuilder
+    // No `@ViewBuilder` here. This returns one thing — a `ForEach` over the
+    // windows — and an explicit `return` switches the builder off anyway, so
+    // the attribute did nothing but warn.
     private func inlay(on decoration: ScrapbookDecoration, in box: CGSize) -> some View {
 
         // One picture per window, in the order they were put in. A length of
