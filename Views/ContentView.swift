@@ -1435,11 +1435,10 @@ struct ContentView: View {
         Button {
             openStore()
         } label: {
-            Image(systemName: "bag.fill")
-                .font(.system(size: 15, weight: .bold))
-                // Warm rather than near-black: it sits in a pastel header,
-                // and the dark version was the only heavy thing up there.
-                .foregroundStyle(Color(red: 0.95, green: 0.62, blue: 0.25))
+            // Warm rather than near-black: it sits in a pastel header, and
+            // the dark version was the only heavy thing up there.
+            BouquetGlyph(tint: Color(red: 0.95, green: 0.62, blue: 0.25))
+                .frame(width: 21, height: 21)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(.white.opacity(0.9)))
                 .shadow(color: .black.opacity(0.06), radius: 6, y: 3)

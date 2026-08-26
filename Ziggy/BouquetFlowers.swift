@@ -795,3 +795,72 @@ private struct Eucalyptus: View {
         }
     }
 }
+
+/// A bouquet, small enough to be a button.
+///
+/// Drawn rather than borrowed. There is no SF Symbol that reads as flowers —
+/// the nearest is a shopping bag, which is what this was, and a bag says
+/// "shop" where the button actually opens a thing you make by hand. An emoji
+/// would have been the other easy answer and sits wrong next to a header that
+/// is otherwise all drawn artwork.
+///
+/// Three blooms and a wrap. At eighteen points there is no room for petals, so
+/// the shapes do the work: round heads fanned above a cone, which is the
+/// silhouette of a bouquet even when it is too small to be anything else.
+struct BouquetGlyph: View {
+
+    var tint: Color = Color(red: 0.95, green: 0.62, blue: 0.25)
+
+    var body: some View {
+        GeometryReader { proxy in
+
+            let unit = min(proxy.size.width, proxy.size.height) / 100
+            let inset = CGPoint(
+                x: (proxy.size.width - 100 * unit) / 2,
+                y: (proxy.size.height - 100 * unit) / 2
+            )
+
+            let point: (CGFloat, CGFloat) -> CGPoint = { x, y in
+                CGPoint(x: inset.x + x * unit, y: inset.y + y * unit)
+            }
+
+            ZStack {
+
+                // Stems, gathered where the hand would be.
+                Path { path in
+                    for head in [(24, 36), (50, 20), (76, 36)] {
+                        path.move(to: point(CGFloat(head.0), CGFloat(head.1)))
+                        path.addLine(to: point(50, 66))
+                    }
+                }
+                .stroke(
+                    tint.deeper,
+                    style: StrokeStyle(lineWidth: 5 * unit, lineCap: .round)
+                )
+
+                // The wrap: a tapered sleeve, not a point.
+                //
+                // Drawn as a spike first time round, which with three blooms
+                // bunched above it made the whole thing a tree. Paper folded
+                // round stems is wide and blunt, and it is the part that says
+                // this is a bouquet rather than something growing.
+                Path { path in
+                    path.move(to: point(33, 60))
+                    path.addLine(to: point(43, 88))
+                    path.addLine(to: point(57, 88))
+                    path.addLine(to: point(67, 60))
+                    path.closeSubpath()
+                }
+                .fill(tint.deeper)
+
+                // Blooms, far enough apart to be three of them.
+                ForEach(Array([(24, 36), (76, 36), (50, 20)].enumerated()), id: \.offset) { _, head in
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 26 * unit, height: 26 * unit)
+                        .position(point(CGFloat(head.0), CGFloat(head.1)))
+                }
+            }
+        }
+    }
+}
