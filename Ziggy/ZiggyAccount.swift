@@ -190,9 +190,16 @@ final class ZiggyAccount: ObservableObject {
 
                 let code = AuthErrorCode(rawValue: (error as NSError).code)
 
-                #if DEBUG
-                print("Apple link failed:", (error as NSError).code, error.localizedDescription)
-                #endif
+                // Logged in every build, not only in debug.
+                //
+                // This sat behind `#if DEBUG`, so the one time it mattered — a
+                // shipped app refusing to sign somebody in — the reason was
+                // thrown away and all anyone had was "please try again". A line
+                // in the device console costs nothing and is the difference
+                // between fixing it and guessing at it.
+                NSLog("Ziggy: Apple link failed (%d) %@",
+                      (error as NSError).code,
+                      error.localizedDescription)
 
                 // Already signed in with Apple on this very account, and
                 // pressing the button again is not a failure.
@@ -215,8 +222,26 @@ final class ZiggyAccount: ObservableObject {
                 // the whole point of the feature. The user has signed in on
                 // some other phone, and their real identity is waiting. Sign
                 // into it and pick their relationship back up.
+                // The credential to try signing in with.
+                //
+                // Not the one we just used. Apple's identity token is good for
+                // a single exchange, and a failed `link` has already spent it —
+                // handing it straight to `signIn` gets it refused every time.
+                // Firebase knows this and puts a fresh one in the error for
+                // exactly this purpose.
+                //
+                // This is why signing in worked once, on the phone whose Apple
+                // ID had never been used with Ziggy before: that account linked
+                // on the first try and never reached here. Every attempt after
+                // it — the same Apple ID, now belonging to a Firebase account
+                // of its own — failed on a credential that had already been
+                // cashed in.
+                let renewed = (error as NSError)
+                    .userInfo[AuthErrorUserInfoUpdatedCredentialKey] as? AuthCredential
+                    ?? credential
+
                 if code == .credentialAlreadyInUse || code == .emailAlreadyInUse {
-                    self.signIn(credential, offeredName: offeredName, completion: completion)
+                    self.signIn(renewed, offeredName: offeredName, completion: completion)
                     return
                 }
 
@@ -224,7 +249,7 @@ final class ZiggyAccount: ObservableObject {
                 // so signing in with it outright will still land the user on a
                 // working account. Better than a dead end on an error we
                 // didn't anticipate.
-                self.signIn(credential, offeredName: offeredName, completion: completion)
+                self.signIn(renewed, offeredName: offeredName, completion: completion)
             }
         }
     }
@@ -242,6 +267,11 @@ final class ZiggyAccount: ObservableObject {
                 guard let self else { return }
 
                 guard error == nil else {
+
+                    NSLog("Ziggy: Apple sign-in failed (%d) %@",
+                          (error! as NSError).code,
+                          error!.localizedDescription)
+
                     self.isWorking = false
                     self.lastError = "Could not sign in. Please try again."
                     completion(false)

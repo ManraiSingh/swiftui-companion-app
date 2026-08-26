@@ -661,8 +661,18 @@ final class ScrapbookManager: ObservableObject {
 
     /// Bumps the book so the shelf reorders and the partner sees it move.
     private func touch(bookID: String, pageID: String) {
+
+        // Who, as well as when.
+        //
+        // The page only recorded the time it changed, which is enough to sort
+        // a shelf and not enough to tell anybody about it — a notification has
+        // to name somebody, and it must not go to the person who caused it.
+        // The device id is what separates those two, because both partners can
+        // and do set the same display name.
         pagesRef(bookID)?.document(pageID).updateData([
-            "updatedAt": FieldValue.serverTimestamp()
+            "updatedAt": FieldValue.serverTimestamp(),
+            "lastEditor": UserManager.shared.username,
+            "lastEditorDeviceID": FirestoreManager.shared.currentDeviceID
         ])
         shelfRef()?.document(bookID).updateData([
             "updatedAt": FieldValue.serverTimestamp()

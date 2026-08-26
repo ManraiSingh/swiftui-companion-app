@@ -153,6 +153,99 @@ export const notifyPartnerDoodle = onDocumentWritten(
   }
 );
 
+// Flowers. A bouquet is the one thing in here somebody arranged by hand, and
+// it was arriving silently — the only way to find out was to happen to open
+// the app, which is no way to be given flowers.
+export const notifyPartnerBouquet = onDocumentCreated(
+  {
+    document: "relationships/{relationshipId}/bouquets/{bouquetId}",
+    region,
+    secrets,
+  },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      return;
+    }
+
+    const relationshipId = event.params.relationshipId;
+    const data = snapshot.data() as {
+      sender?: string;
+      senderDeviceID?: string;
+      letter?: string;
+    };
+
+    if (!data.sender) {
+      logger.info("Skipping bouquet push without sender", {relationshipId});
+      return;
+    }
+
+    // A note tucked in is worth saying out loud — it is the difference
+    // between flowers and flowers with something written on them.
+    const hasLetter = typeof data.letter === "string" && data.letter.length > 0;
+
+    await sendPartnerWidgetPush(relationshipId, event.params.bouquetId, {
+      title: hasLetter ? "Flowers, with a note 💐" : "Flowers for you 💐",
+      sender: data.sender,
+      senderDeviceID: data.senderDeviceID,
+      type: "bouquet",
+      emotion: "",
+    });
+  }
+);
+
+// A page worked on. Not every element — one push per page per few minutes,
+// because a scrapbook session is dozens of writes and nobody wants a
+// notification for each sticker.
+export const notifyPartnerScrapbook = onDocumentWritten(
+  {
+    document: "relationships/{relationshipId}/scrapbooks/{bookId}/pages/{pageId}",
+    region,
+    secrets,
+  },
+  async (event) => {
+    const after = event.data?.after;
+    if (!after || !after.exists) {
+      return;
+    }
+
+    const relationshipId = event.params.relationshipId;
+    const data = after.data() as {
+      lastEditor?: string;
+      lastEditorDeviceID?: string;
+      updatedAt?: admin.firestore.Timestamp;
+      lastNotifiedAt?: admin.firestore.Timestamp;
+    };
+
+    if (!data.lastEditor) {
+      return;
+    }
+
+    // Quiet for a while after the last one. Adding a photo, moving it, and
+    // writing a caption is three writes in ten seconds, and three buzzes for
+    // one act is worse than none.
+    const now = Date.now();
+    const since = data.lastNotifiedAt ? now - data.lastNotifiedAt.toMillis() : Infinity;
+
+    if (since < 10 * 60 * 1000) {
+      return;
+    }
+
+    await after.ref.set(
+      {lastNotifiedAt: admin.firestore.Timestamp.fromMillis(now)},
+      {merge: true}
+    );
+
+    await sendPartnerWidgetPush(relationshipId, `${event.params.pageId}-${now}`, {
+      title: "Someone's been scrapbooking 📖",
+      sender: data.lastEditor,
+      senderDeviceID: data.lastEditorDeviceID,
+      type: "scrapbook",
+      emotion: "",
+    });
+  }
+);
+
 // When one partner opens a game lobby first, invite the other partner to join.
 export const notifyPartnerGameInvite = onDocumentWritten(
   {
