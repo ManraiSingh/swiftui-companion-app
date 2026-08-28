@@ -183,7 +183,7 @@ struct BouquetLetterEditor: View {
                             }
                         }
 
-                        TextField("Write something for her…",
+                        TextField("Write something for them…",
                                   text: $letter.text, axis: .vertical)
                             .font(ScrapbookStyle.font(letter.fontIndex, size: 19))
                             .foregroundStyle(BouquetPalette.ink)

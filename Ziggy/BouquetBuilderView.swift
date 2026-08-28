@@ -364,7 +364,7 @@ struct BouquetBuilderView: View {
                         } else {
                             Image(systemName: "paperplane.fill")
                         }
-                        Text(isSending ? "Sending…" : "Give it to her")
+                        Text(isSending ? "Sending…" : "Give it to them")
                             .fontWeight(.black)
                     }
                     .font(.subheadline)
@@ -819,7 +819,7 @@ struct BouquetBuilderView: View {
                     .font(.system(size: 19, weight: .black, design: .rounded))
                     .foregroundStyle(accent)
 
-                Text("She'll see it the moment she opens Ziggy")
+                Text("They'll see it the moment they open Ziggy")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
