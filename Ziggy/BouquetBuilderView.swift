@@ -794,6 +794,11 @@ struct BouquetBuilderView: View {
                 return
             }
 
+            ZiggyAnalytics.bouquetSent(
+                hasNote: !bouquet.letter.isEmpty,
+                flowers: bouquet.stems.count
+            )
+
             withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { sent = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) { dismiss() }
         }

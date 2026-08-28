@@ -124,7 +124,10 @@ struct PaywallView: View {
                 appeared = true
             }
         }
-        .task { await subscription.loadProducts() }
+        .task {
+            ZiggyAnalytics.paywallShown(reason)
+            await subscription.loadProducts()
+        }
     }
 
     private var close: some View {
@@ -302,6 +305,10 @@ struct PaywallView: View {
             Button {
                 Task {
                     if await subscription.purchase(yearlyPlan: choice == .yearly) {
+                        ZiggyAnalytics.subscribed(
+                            plan: choice == .yearly ? "yearly" : "monthly",
+                            from: reason
+                        )
                         dismiss()
                     }
                 }

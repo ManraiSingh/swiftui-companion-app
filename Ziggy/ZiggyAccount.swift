@@ -306,6 +306,7 @@ final class ZiggyAccount: ObservableObject {
         // doesn't ask a signed-in user their own name again.
         ZiggyKeychain.set(UserManager.shared.username, for: ZiggyKeychain.usernameKey)
 
+        ZiggyAnalytics.signedInWithApple()
         FirestoreManager.shared.publishAccountStatus()
     }
 

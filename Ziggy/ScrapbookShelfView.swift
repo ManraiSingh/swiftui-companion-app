@@ -286,6 +286,7 @@ struct ScrapbookShelfView: View {
         .sheet(isPresented: $showingNewBook) {
             NewBookSheet { title, cover in
                 manager.createBook(title: title, coverIndex: cover)
+                ZiggyAnalytics.bookCreated(total: manager.books.count + 1)
             }
             .presentationDetents([.height(560)])
         }

@@ -408,6 +408,7 @@ struct ScrapbookBookView: View {
             }
 
             manager.addPage(bookID: book.id) { _ in }
+            ZiggyAnalytics.pageAdded(inBookWith: landing + 1)
 
             withAnimation(.easeInOut(duration: 0.3)) {
                 pageIndex = landing

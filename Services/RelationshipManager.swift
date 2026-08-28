@@ -61,6 +61,8 @@ final class RelationshipManager: ObservableObject {
         // in which case there was nowhere to put this at the time.
         FirestoreManager.shared.publishAccountStatus()
 
+        ZiggyAnalytics.paired()
+
         NotificationCenter.default.post(
             name: NSNotification.Name("RelationshipChanged"),
             object: nil
