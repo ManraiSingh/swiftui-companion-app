@@ -599,8 +599,27 @@ export const revenueCatWebhook = onRequest(
     // RevenueCat sends whatever Authorization header you configure. Without
     // this check anyone who found the URL could grant themselves a
     // subscription with a single curl.
-    if (request.get("Authorization") !== revenueCatAuth.value()) {
-      logger.warn("Rejected a webhook with a bad Authorization header");
+    //
+    // Both forms are accepted: the bare secret, and "Bearer <secret>". The
+    // field in RevenueCat is prefilled with an example that begins "Bearer",
+    // so putting one there is the natural thing to do — and a comparison that
+    // refused it rejected every renewal for days without saying why. The
+    // secret still has to be right; only the wrapper is forgiven.
+    const presented = (request.get("Authorization") ?? "").trim();
+    const expected = revenueCatAuth.value().trim();
+
+    const offered = presented.toLowerCase().startsWith("bearer ") ?
+      presented.slice(7).trim() :
+      presented;
+
+    if (offered !== expected) {
+      // Lengths, not values. Enough to tell "nothing arrived" from "the wrong
+      // thing arrived" from "something got truncated", without writing a
+      // secret into a log file.
+      logger.warn("Rejected a webhook with a bad Authorization header", {
+        presentedLength: offered.length,
+        expectedLength: expected.length,
+      });
       response.status(401).send("Unauthorized");
       return;
     }
