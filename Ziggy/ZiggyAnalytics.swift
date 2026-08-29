@@ -80,7 +80,13 @@ enum ZiggyAnalytics {
 
     // MARK: -
 
-    private static func name(of reason: PaywallReason) -> String {
+    /// Deliberately outside any actor.
+    ///
+    /// It reads one enum and returns a string — no state, nothing to race
+    /// against — but it inherited main-actor isolation from its surroundings,
+    /// so counting a paywall from a background context warned about crossing
+    /// an actor boundary for a switch statement.
+    private nonisolated static func name(of reason: PaywallReason) -> String {
         switch reason {
         case .books:       return "books"
         case .pages:       return "pages"
