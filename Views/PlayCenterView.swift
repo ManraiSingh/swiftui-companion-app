@@ -12,6 +12,7 @@ struct PlayCenterView: View {
     @State private var showDotsAndBoxes = false
     @State private var showConnectFour = false
     @State private var showMemoryMatch = false
+    @State private var showZiggyJump = false
 
     @State private var scores: [String: Any] = [:]
     @State private var showScoreboardPopup = false
@@ -120,6 +121,20 @@ struct PlayCenterView: View {
                     ) {
                         showMemoryMatch = true
                     }
+
+                    // The only one here you play on your own, so it sits
+                    // apart from the four that feed the shared scoreboard.
+                    gameCard(
+                        title: "\(petVM.pet.name) Jump",
+                        subtitle: "Solo. Dodge the crates — double tap to hop higher.",
+                        tint: .green,
+                        action: { showZiggyJump = true }
+                    ) {
+                        Image("z6")
+                            .resizable()
+                            .scaledToFit()
+                            .padding(5)
+                    }
                 }
 
                 }
@@ -192,6 +207,15 @@ struct PlayCenterView: View {
         ) {
 
             MemoryMatchGameView(
+                petVM: petVM
+            )
+            .swipeToDismiss()
+        }
+        .fullScreenCover(
+            isPresented: $showZiggyJump
+        ) {
+
+            ZiggyJumpGameView(
                 petVM: petVM
             )
             .swipeToDismiss()
