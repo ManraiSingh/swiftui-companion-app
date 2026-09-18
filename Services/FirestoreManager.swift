@@ -37,14 +37,11 @@ class FirestoreManager {
     var currentDeviceID: String { deviceID }
 
     /// Ensures there's an anonymous user, then returns its uid.
+    ///
+    /// The nil check this used to do itself lived on the launch path, where
+    /// `currentUser` is briefly nil for everybody. See ZiggyAuth.
     private func ensureSignedIn(_ completion: @escaping (String?) -> Void) {
-        if let uid = Auth.auth().currentUser?.uid {
-            completion(uid)
-            return
-        }
-        Auth.auth().signInAnonymously { result, _ in
-            completion(result?.user.uid)
-        }
+        ZiggyAuth.ensureSignedIn(completion)
     }
 
     /// Throws away the current anonymous session and starts a fresh one.

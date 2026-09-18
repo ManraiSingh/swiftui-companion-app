@@ -112,9 +112,12 @@ struct ZiggyApp: App {
         // Silent anonymous sign-in so every device has a stable identity.
         // Used by Firestore security rules to limit access to the two
         // partners in a relationship.
-        if Auth.auth().currentUser == nil {
-            Auth.auth().signInAnonymously()
-        }
+        //
+        // Deliberately not `if currentUser == nil` any more. Straight after
+        // configure() that check is a coin toss — the saved user is still
+        // being read out of the keychain — and losing the toss here made a
+        // second identity for somebody who already had one.
+        ZiggyAuth.ensureSignedIn { _ in }
 
         ZiggySubscription.configure()
     }

@@ -489,8 +489,7 @@ class DailyQuestionManager: ObservableObject {
     // MARK: - Listen to today
 
     private func ensureSignedIn(_ completion: @escaping () -> Void) {
-        if Auth.auth().currentUser != nil { completion(); return }
-        Auth.auth().signInAnonymously { _, _ in completion() }
+        ZiggyAuth.ensureSignedIn { _ in completion() }
     }
 
     func startListening() {
