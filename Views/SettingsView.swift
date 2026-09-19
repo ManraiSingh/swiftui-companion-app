@@ -30,15 +30,12 @@ struct SettingsView: View {
     @State private var copiedFlash = false
     @State private var paywall: PaywallReason?
 
-    private let cream = LinearGradient(
-        colors: [
-            Color(red: 0.97, green: 0.95, blue: 0.92),
-            Color(red: 0.95, green: 0.92, blue: 0.88)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    @ObservedObject private var themes = ThemeManager.shared
 
+    private var cream: LinearGradient { themes.theme.gradient }
+
+    /// Used only as a button fill now — the card titles it used to colour
+    /// were invisible on a dark theme and take the theme's ink instead.
     private let accent = Color(red: 0.27, green: 0.24, blue: 0.21)
 
     // Ziggy Forever's own palette. Real gold is warm and slightly dirty —
@@ -64,6 +61,15 @@ struct SettingsView: View {
 
                     VStack(spacing: 18) {
 
+                        Text("Settings")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundStyle(themes.theme.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 4)
+
+                        themeCard
+
                         // Profile
                         settingsCard(
                             icon: "👤",
@@ -73,8 +79,9 @@ struct SettingsView: View {
                             VStack(spacing: 12) {
 
                                 TextField("Your Name", text: $editedName)
+                                    .foregroundStyle(themes.theme.ink)
                                     .padding(12)
-                                    .background(.white.opacity(0.7))
+                                    .background(themes.theme.surface(0.7))
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
 
                                 fillButton(
@@ -124,7 +131,7 @@ struct SettingsView: View {
 
                                 TextField("Pet Name", text: $petName)
                                     .padding(12)
-                                    .background(.white.opacity(0.7))
+                                    .background(themes.theme.surface(0.7))
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
 
                                 fillButton(title: "Rename") {
@@ -155,7 +162,7 @@ struct SettingsView: View {
                                         Text(RelationshipManager.shared.relationshipCode)
                                             .font(.system(.body, design: .monospaced))
                                             .fontWeight(.semibold)
-                                            .foregroundColor(accent)
+                                            .foregroundColor(themes.theme.ink)
 
                                         Spacer()
 
@@ -165,7 +172,7 @@ struct SettingsView: View {
                                             .foregroundColor(.pink)
                                     }
                                     .padding(12)
-                                    .background(.white.opacity(0.7))
+                                    .background(themes.theme.surface(0.7))
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
                                 }
 
@@ -184,8 +191,8 @@ struct SettingsView: View {
                                         .fontWeight(.semibold)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 13)
-                                        .background(.white.opacity(0.7))
-                                        .foregroundColor(accent)
+                                        .background(themes.theme.surface(0.7))
+                                        .foregroundColor(themes.theme.ink)
                                         .clipShape(RoundedRectangle(cornerRadius: 14))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 14)
@@ -225,7 +232,7 @@ struct SettingsView: View {
                                      ? "Permanently delete your account, along with your shared \(petVM.pet.name), photos and messages. Ziggy is removed from your Apple ID too. This can't be undone."
                                      : "Permanently delete your shared \(petVM.pet.name), photos and messages from our servers. This can't be undone.")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(themes.theme.inkSoft)
 
                                 Button(role: .destructive) {
                                     showDeleteConfirm = true
@@ -252,13 +259,15 @@ struct SettingsView: View {
 
                         Text("Made with 💕 for us")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themes.theme.inkSoft)
                             .padding(.top, 4)
                     }
                     .padding()
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .paywall($paywall)
             .confirmationDialog(
                 "Disconnect from your partner?",
@@ -341,7 +350,7 @@ struct SettingsView: View {
 
                 Text("Signed in with Apple. Your Ziggy and your scrapbook will come back on a new phone.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themes.theme.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Spacer(minLength: 0)
@@ -353,7 +362,7 @@ struct SettingsView: View {
 
                 Text("Right now everything lives only on this phone. Sign in and it follows you — nothing else changes.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themes.theme.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -407,7 +416,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
                         .foregroundColor(gold)
-                        .background(.white.opacity(0.05))
+                        .background(themes.theme.surface(0.05))
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
@@ -558,6 +567,80 @@ struct SettingsView: View {
         .shadow(color: .black.opacity(0.3), radius: 14, y: 7)
     }
 
+    /// Swatches rather than a list of names.
+    ///
+    /// You are choosing how the app looks, so the control should look like
+    /// the thing it changes — each tile is the real gradient with a real card
+    /// sitting on it, which is exactly what you get.
+    private var themeCard: some View {
+
+        settingsCard(icon: "🎨", title: "Theme") {
+
+            VStack(alignment: .leading, spacing: 10) {
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(ZiggyTheme.all) { option in
+                            swatch(option)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 2)
+                }
+
+                Text(themes.theme.blurb)
+                    .font(.caption)
+                    .foregroundStyle(themes.theme.inkSoft)
+            }
+        }
+    }
+
+    private func swatch(_ option: ZiggyTheme) -> some View {
+
+        let selected = themes.theme == option
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.3)) { themes.theme = option }
+        } label: {
+
+            VStack(spacing: 6) {
+
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(option.gradient)
+                    .frame(width: 56, height: 72)
+                    .overlay(alignment: .bottomTrailing) {
+                        // The card that will sit on it, so a dark theme
+                        // previews as "bright cards on deep blue" rather
+                        // than just a dark rectangle.
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(option.card)
+                            .frame(width: 30, height: 17)
+                            .padding(6)
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(
+                                selected ? option.accent : Color.black.opacity(0.14),
+                                lineWidth: selected ? 3 : 1
+                            )
+                    )
+                    .overlay(alignment: .topLeading) {
+                        if selected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 15))
+                                .foregroundStyle(option.accent, .white)
+                                .padding(4)
+                        }
+                    }
+
+                Text(option.name)
+                    .font(.system(size: 11, weight: selected ? .bold : .medium))
+                    .foregroundStyle(selected ? themes.theme.ink : themes.theme.inkSoft)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     private func settingsCard<Content: View>(
         icon: String,
         title: String,
@@ -573,7 +656,7 @@ struct SettingsView: View {
 
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
             }
 
             content()
@@ -581,7 +664,7 @@ struct SettingsView: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 24)
-                .fill(.white.opacity(0.9))
+                .fill(themes.theme.surface(0.9))
         )
         .shadow(color: .black.opacity(0.06), radius: 8, y: 4)
     }

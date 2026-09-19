@@ -10,6 +10,8 @@ import PhotosUI
 
 struct InstantView: View {
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @Environment(\.dismiss)
     private var dismiss
 
@@ -142,7 +144,7 @@ struct InstantView: View {
                 .foregroundColor(accent)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.white.opacity(0.9))
+                .background(themes.theme.surface(0.9))
                 .clipShape(Capsule())
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
             }
@@ -169,7 +171,7 @@ struct InstantView: View {
                 .foregroundColor(accent)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.white.opacity(0.9))
+                .background(themes.theme.surface(0.9))
                 .clipShape(Capsule())
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
             }
@@ -205,7 +207,7 @@ struct InstantView: View {
             if let sender {
                 Text("From \(sender)")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themes.theme.inkSoft)
             }
 
             Spacer(minLength: 0)
@@ -253,7 +255,7 @@ struct InstantView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(accent.opacity(0.7))
                 Text("Sent")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themes.theme.inkSoft)
             }
             .font(.subheadline)
 
@@ -302,7 +304,7 @@ struct InstantView: View {
                     // the drop zone scales with the device's width instead
                     // of leaving a gap on big phones / crowding small ones.
                     RoundedRectangle(cornerRadius: 26)
-                        .fill(.white.opacity(0.7))
+                        .fill(themes.theme.surface(0.7))
                         .aspectRatio(4.0 / 5.0, contentMode: .fit)
                         .overlay {
 
@@ -345,7 +347,7 @@ struct InstantView: View {
 
                 TextField("Add a caption", text: $caption)
                     .padding(14)
-                    .background(.white.opacity(0.85))
+                    .background(themes.theme.surface(0.85))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
@@ -416,7 +418,7 @@ struct InstantView: View {
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
-                .background(.white.opacity(0.9))
+                .background(themes.theme.surface(0.9))
                 .foregroundColor(accent)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
                 .shadow(color: .black.opacity(0.06), radius: 6, y: 3)

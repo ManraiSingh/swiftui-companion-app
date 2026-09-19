@@ -3,6 +3,8 @@ import UIKit
 
 struct RelationshipSetupView: View {
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @State private var joinCode = ""
     @State private var generatedCode = ""
     @State private var bounce = false
@@ -86,7 +88,7 @@ struct RelationshipSetupView: View {
 
                         Text("Connect with your partner so you\ncan raise Ziggy together 🐾")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themes.theme.inkSoft)
                             .multilineTextAlignment(.center)
                     }
 
@@ -114,7 +116,7 @@ struct RelationshipSetupView: View {
                                     Spacer()
                                 }
                                 .padding(14)
-                                .background(.white.opacity(0.72))
+                                .background(themes.theme.surface(0.72))
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                                 Button {
@@ -140,7 +142,7 @@ struct RelationshipSetupView: View {
 
                                 Text("Share this invite. Once it is sent, Ziggy will open for you.")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(themes.theme.inkSoft)
                                     .multilineTextAlignment(.center)
 
                                 Button {
@@ -152,7 +154,7 @@ struct RelationshipSetupView: View {
                                         .foregroundColor(accent)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
-                                        .background(.white.opacity(0.6))
+                                        .background(themes.theme.surface(0.6))
                                         .clipShape(RoundedRectangle(cornerRadius: 14))
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 14)
@@ -204,7 +206,7 @@ struct RelationshipSetupView: View {
                     .padding(18)
                     .background(
                         RoundedRectangle(cornerRadius: 24)
-                            .fill(.white.opacity(0.9))
+                            .fill(themes.theme.surface(0.9))
                     )
                     .shadow(color: .black.opacity(0.06), radius: 8, y: 4)
                     .padding(.horizontal, 22)
@@ -214,7 +216,7 @@ struct RelationshipSetupView: View {
                         line
                         Text("or")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themes.theme.inkSoft)
                             .padding(.horizontal, 8)
                         line
                     }
@@ -238,7 +240,7 @@ struct RelationshipSetupView: View {
                                 .textInputAutocapitalization(.characters)
                         }
                         .padding(14)
-                        .background(.white.opacity(0.7))
+                        .background(themes.theme.surface(0.7))
                         .clipShape(RoundedRectangle(cornerRadius: 14))
 
                         Button {
@@ -275,7 +277,7 @@ struct RelationshipSetupView: View {
                     .padding(18)
                     .background(
                         RoundedRectangle(cornerRadius: 24)
-                            .fill(.white.opacity(0.9))
+                            .fill(themes.theme.surface(0.9))
                     )
                     .shadow(color: .black.opacity(0.06), radius: 8, y: 4)
                     .padding(.horizontal, 22)

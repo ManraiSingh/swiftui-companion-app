@@ -185,14 +185,9 @@ struct ActivityView: View {
     @State private var bouquets: [Bouquet] = []
     @State private var openBouquet: Bouquet?
 
-    private let cream = LinearGradient(
-        colors: [
-            Color(red: 0.97, green: 0.95, blue: 0.92),
-            Color(red: 0.95, green: 0.92, blue: 0.88)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    @ObservedObject private var themes = ThemeManager.shared
+
+    private var cream: LinearGradient { themes.theme.gradient }
     private let accent = Color(red: 0.27, green: 0.24, blue: 0.21)
 
     var body: some View {
@@ -201,6 +196,28 @@ struct ActivityView: View {
                 cream.ignoresSafeArea()
 
                 VStack(spacing: 0) {
+
+                    HStack(alignment: .firstTextBaseline) {
+
+                        Text("Our Memories 💕")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundStyle(themes.theme.ink)
+
+                        Spacer()
+
+                        if selectedTab == 0 && !petVM.pet.events.isEmpty {
+                            Button { showClearConfirm = true } label: {
+                                Image(systemName: "trash")
+                                    .font(.headline)
+                                    .foregroundColor(.pink)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
+
                     // Segment picker
                     picker
                         .padding(.horizontal)
@@ -215,19 +232,12 @@ struct ActivityView: View {
                     }
                 }
             }
-            .navigationTitle("Our Memories 💕")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear { FirestoreManager.shared.startBouquets { bouquets = $0 } }
             .fullScreenCover(item: $openBouquet) { bouquet in
                 BouquetShowcaseView(bouquet: bouquet)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if selectedTab == 0 && !petVM.pet.events.isEmpty {
-                        Button { showClearConfirm = true } label: {
-                            Image(systemName: "trash").foregroundColor(.pink)
-                        }
-                    }
-                }
             }
             .confirmationDialog(
                 "Clear all memories?",
@@ -251,7 +261,7 @@ struct ActivityView: View {
             pickerTab(title: "Moments 🐾", index: 0)
             pickerTab(title: "Questions 💌", index: 1)
         }
-        .background(Color.white.opacity(0.6))
+        .background(themes.theme.surface(0.6))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -263,7 +273,7 @@ struct ActivityView: View {
         } label: {
             Text(title)
                 .font(.subheadline).fontWeight(.black)
-                .foregroundStyle(selectedTab == index ? .white : .secondary)
+                .foregroundStyle(selectedTab == index ? .white : themes.theme.inkSoft)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(
@@ -356,14 +366,14 @@ struct ActivityView: View {
                         .foregroundStyle(accent)
                     Text(bouquet.sentAt, format: .dateTime.day().month(.abbreviated))
                         .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                 }
             }
             .padding(.vertical, 10)
             .frame(width: 126)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.white.opacity(0.75))
+                    .fill(themes.theme.surface(0.75))
             )
         }
         .buttonStyle(BubblePress())
@@ -441,7 +451,7 @@ struct ActivityView: View {
                 .font(.title3).fontWeight(.semibold)
                 .foregroundColor(accent)
             Text("Feed, play and send love —\nyour moments show up here 💕")
-                .font(.subheadline).foregroundColor(.secondary)
+                .font(.subheadline).foregroundColor(themes.theme.inkSoft)
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -504,7 +514,7 @@ struct ActivityView: View {
                 .font(.title3).fontWeight(.semibold)
                 .foregroundColor(accent)
             Text("Answer today's question together —\nyour answers build up here 🐾")
-                .font(.subheadline).foregroundColor(.secondary)
+                .font(.subheadline).foregroundColor(themes.theme.inkSoft)
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -515,6 +525,8 @@ struct ActivityView: View {
 // MARK: - Question History Card
 
 struct QuestionHistoryCard: View {
+
+    @ObservedObject private var themes = ThemeManager.shared
 
     let q: DailyQuestion
 
@@ -541,10 +553,10 @@ struct QuestionHistoryCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(formattedDate)
                     .font(.caption2).fontWeight(.black)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                 Text(q.text)
                     .font(.subheadline).fontWeight(.bold)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(themes.theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.bottom, 12)
@@ -597,7 +609,7 @@ struct QuestionHistoryCard: View {
                         .font(.caption2).fontWeight(.black).foregroundStyle(.pink)
                     Text(q.myAnswer)
                         .font(.caption)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(themes.theme.ink)
                         .lineLimit(1)
                         .blur(radius: 4)
                 }
@@ -605,21 +617,21 @@ struct QuestionHistoryCard: View {
 
                 Image(systemName: "lock.fill")
                     .font(.system(size: 16))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
 
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(q.partnerName)
                         .font(.caption2).fontWeight(.black).foregroundStyle(.purple)
                     Text(q.partnerAnswer)
                         .font(.caption)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(themes.theme.ink)
                         .lineLimit(1)
                         .blur(radius: 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(12)
-            .background(.white.opacity(0.6))
+            .background(themes.theme.surface(0.6))
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
@@ -668,13 +680,13 @@ struct QuestionHistoryCard: View {
                     .foregroundStyle(tint)
                 Text(text)
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(themes.theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
         .padding(10)
-        .background(.white.opacity(0.78))
+        .background(themes.theme.surface(0.78))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
@@ -686,11 +698,11 @@ struct QuestionHistoryCard: View {
                     Text("You answered")
                         .font(.caption2).fontWeight(.black).foregroundStyle(.pink)
                     Text(q.myAnswer)
-                        .font(.caption).foregroundStyle(.primary).lineLimit(2)
+                        .font(.caption).foregroundStyle(themes.theme.ink).lineLimit(2)
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.white.opacity(0.7))
+                .background(themes.theme.surface(0.7))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             if !q.partnerAnswer.isEmpty {
@@ -698,11 +710,11 @@ struct QuestionHistoryCard: View {
                     Text(q.partnerName)
                         .font(.caption2).fontWeight(.black).foregroundStyle(.purple)
                     Text(q.partnerAnswer)
-                        .font(.caption).foregroundStyle(.primary).lineLimit(2)
+                        .font(.caption).foregroundStyle(themes.theme.ink).lineLimit(2)
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .background(.white.opacity(0.7))
+                .background(themes.theme.surface(0.7))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }

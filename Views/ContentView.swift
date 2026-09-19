@@ -792,6 +792,8 @@ struct ContentView: View {
     @State private var showFeedView        = false
     @State private var showInstantView     = false
     @State private var showDrawingGameView = false
+
+    @ObservedObject private var themes = ThemeManager.shared
     @State private var showDoodleView      = false
     @State private var showAnswerSheet     = false
 
@@ -1049,16 +1051,8 @@ struct ContentView: View {
 
     private var homeView: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.98, green: 0.96, blue: 0.91),
-                    Color(red: 0.90, green: 0.97, blue: 0.94),
-                    Color(red: 0.92, green: 0.94, blue: 0.99)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            themes.theme.gradient
+                .ignoresSafeArea()
 
             // Reads the real available area on THIS device, and the real
             // measured height of every other card, so ziggyHero can be
@@ -1232,7 +1226,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("You two & \(petVM.pet.name) 💞")
                     .font(.system(size: 22, weight: .black))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(themes.theme.ink)
                     // Held to one line. The header is measured and Ziggy is
                     // given whatever height is left over, so a long pet name
                     // wrapping here would quietly shrink him.
@@ -1240,7 +1234,7 @@ struct ContentView: View {
                     .minimumScaleFactor(0.75)
                 Text(shortMoodMessage)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                     .lineLimit(1)
             }
             Spacer()
@@ -1292,7 +1286,7 @@ struct ContentView: View {
                     Text(petVM.pet.mood)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                 }
                 .padding(.top, 22)
                 .padding(.bottom, 16)
@@ -1304,7 +1298,7 @@ struct ContentView: View {
                     Text("How love grows")
                         .font(.caption)
                         .fontWeight(.black)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     loveRow("🍗", "Feed \(petVM.pet.name)", "+5")
@@ -1320,7 +1314,7 @@ struct ContentView: View {
                     Text("💔").font(.system(size: 17))
                     Text("Every whole day you both stay quiet takes 15 away.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
@@ -1368,7 +1362,7 @@ struct ContentView: View {
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundStyle(.primary)
+                .foregroundStyle(themes.theme.ink)
             Spacer(minLength: 8)
             Text(amount)
                 .font(.system(size: 14, weight: .black))
@@ -1401,12 +1395,12 @@ struct ContentView: View {
                 .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
             Text("\(petVM.pet.loveScore)")
                 .font(.system(size: 17, weight: .black))
-                .foregroundStyle(.primary)
+                .foregroundStyle(themes.theme.ink)
                 .contentTransition(.numericText())
         }
         .padding(.horizontal, 13)
         .frame(height: 40)
-        .background(Capsule().fill(.white.opacity(0.9)))
+        .background(Capsule().fill(themes.theme.surface(0.9)))
         .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: petVM.pet.loveScore)
         }
@@ -1440,7 +1434,7 @@ struct ContentView: View {
             BouquetGlyph(tint: Color(red: 0.95, green: 0.62, blue: 0.25))
                 .frame(width: 21, height: 21)
                 .frame(width: 40, height: 40)
-                .background(Circle().fill(.white.opacity(0.9)))
+                .background(Circle().fill(themes.theme.surface(0.9)))
                 .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
@@ -1635,10 +1629,10 @@ struct ContentView: View {
         Text(speechBubbleText)
             .font(.footnote).fontWeight(.bold)
             .multilineTextAlignment(.center)
-            .foregroundStyle(.primary)
+            .foregroundStyle(themes.theme.ink)
             .lineLimit(5).fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(.white.opacity(0.92))
+            .background(themes.theme.surface(0.92))
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(alignment: .bottom) {
                 Image(systemName: "triangle.fill")
@@ -1666,7 +1660,7 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .background(.white.opacity(0.92))
+            .background(themes.theme.surface(0.92))
             .clipShape(RoundedRectangle(cornerRadius: 18))
             .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
         }
@@ -1675,6 +1669,9 @@ struct ContentView: View {
 
     // MARK: - Daily Question Card
 
+    /// Keeps `.primary`/`.secondary` deliberately: this card carries its own
+    /// fixed pink gradient rather than a themed surface, so it stays light on
+    /// every theme and needs dark text on all of them.
     private var dailyQuestionCard: some View {
         let q          = dailyQ.question
         let myAnswered = !(q?.myAnswer.isEmpty ?? true)
@@ -1813,7 +1810,7 @@ struct ContentView: View {
             customMessageComposer
         }
         .padding(14)
-        .background(.white.opacity(0.74))
+        .background(themes.theme.surface(0.74))
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.05), radius: 10, y: 6)
     }
@@ -1871,7 +1868,7 @@ struct ContentView: View {
 
                     Text("Save it once, then send it with a single tap.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                         .multilineTextAlignment(.center)
 
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -1952,10 +1949,10 @@ struct ContentView: View {
                         } label: {
                             Text("Cancel")
                                 .font(.subheadline).fontWeight(.bold)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themes.theme.inkSoft)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 13)
-                                .background(Color.white.opacity(0.9))
+                                .background(themes.theme.surface(0.9))
                                 .clipShape(Capsule())
                         }
 
@@ -2031,7 +2028,7 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
                 }
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themes.theme.inkSoft)
                 .padding(.horizontal)
 
                 LazyVGrid(
@@ -2050,7 +2047,7 @@ struct ContentView: View {
                                 Text(emo.label)
                                     .font(.caption2)
                                     .fontWeight(.bold)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(themes.theme.ink)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -2072,10 +2069,10 @@ struct ContentView: View {
                 } label: {
                     Text("Back")
                         .font(.subheadline).fontWeight(.bold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themes.theme.inkSoft)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
-                        .background(Color.white.opacity(0.9))
+                        .background(themes.theme.surface(0.9))
                         .clipShape(Capsule())
                 }
             }
@@ -2107,7 +2104,7 @@ struct ContentView: View {
                 Text("\u{201C}\(customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines))\u{201D}")
                     .font(.subheadline)
                     .italic()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
@@ -2129,7 +2126,7 @@ struct ContentView: View {
                                 Text(emo.label)
                                     .font(.caption2)
                                     .fontWeight(.bold)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(themes.theme.ink)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -2152,7 +2149,7 @@ struct ContentView: View {
                     Text("Cancel")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                 }
                 .padding(.top, 2)
             }
@@ -2206,7 +2203,7 @@ struct ContentView: View {
 
                 Text("A quick rating helps other couples find us too 🥹")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
 
@@ -2237,7 +2234,7 @@ struct ContentView: View {
                     Text("Not right now")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                 }
                 .padding(.top, 2)
             }
@@ -2296,7 +2293,7 @@ struct ContentView: View {
 
                 Text("You and your partner can now raise \(petVM.pet.name) together 🐾")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
 
@@ -2358,7 +2355,7 @@ struct ContentView: View {
 
                 Text("\(petVM.doodlePopupSender) drew you something")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
 
@@ -2373,7 +2370,7 @@ struct ContentView: View {
                             .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
-                            .background(Color.white.opacity(0.85))
+                            .background(themes.theme.surface(0.85))
                             .clipShape(Capsule())
                     }
 
@@ -2431,7 +2428,7 @@ struct ContentView: View {
 
                 Text("\(petVM.instantPopupSender) sent you a photo")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
 
@@ -2446,7 +2443,7 @@ struct ContentView: View {
                             .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
-                            .background(Color.white.opacity(0.85))
+                            .background(themes.theme.surface(0.85))
                             .clipShape(Capsule())
                     }
 
@@ -2496,11 +2493,12 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 Text(customQuickMessage.isEmpty ? "Write your own tiny note" : customQuickMessage)
                     .font(.subheadline)
-                    .foregroundColor(customQuickMessage.isEmpty ? .secondary : .primary)
+                    .foregroundColor(customQuickMessage.isEmpty
+                                     ? themes.theme.inkSoft : themes.theme.ink)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 13)
-                    .background(.white.opacity(0.9))
+                    .background(themes.theme.surface(0.9))
                     .clipShape(Capsule())
 
                 Image(systemName: "paperplane.fill")
@@ -2725,6 +2723,8 @@ struct ContentView: View {
 
 struct InviteConnectionView: View {
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     let inviteCode: String
     let onConnected: () -> Void
 
@@ -2761,7 +2761,7 @@ struct InviteConnectionView: View {
 
                     Text(failed ? "Check your connection and try again." : "One moment while Ziggy connects you two.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themes.theme.inkSoft)
                         .multilineTextAlignment(.center)
                 }
 
@@ -2834,6 +2834,8 @@ struct InviteConnectionView: View {
 
 struct AnswerSheetView: View {
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @ObservedObject var dailyQ: DailyQuestionManager
     var petName: String = "Ziggy"
     let onDismiss: () -> Void
@@ -2875,7 +2877,7 @@ struct AnswerSheetView: View {
 
                 Text("🐾 \(petName) asks today")
                     .font(.caption).fontWeight(.black)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
                     .padding(.bottom, 10)
 
                 Text(dailyQ.todayQuestion)
@@ -2916,7 +2918,7 @@ struct AnswerSheetView: View {
                 .lineLimit(1...4)
                 .textInputAutocapitalization(.sentences)
                 .padding(.horizontal, 16).padding(.vertical, 14)
-                .background(.white.opacity(0.92))
+                .background(themes.theme.surface(0.92))
                 .clipShape(RoundedRectangle(cornerRadius: 18))
                 .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
 
@@ -2966,10 +2968,10 @@ struct AnswerSheetView: View {
                     .foregroundStyle(.purple.opacity(0.6))
                 Text("Waiting for \(q?.partnerName ?? "your partner") to answer…")
                     .font(.caption).fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(themes.theme.inkSoft)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(.white.opacity(0.7))
+            .background(themes.theme.surface(0.7))
             .clipShape(Capsule())
         }
         .padding(.horizontal, 24)
@@ -2981,7 +2983,7 @@ struct AnswerSheetView: View {
             // Pulsing locked card
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(.white.opacity(0.7))
+                    .fill(themes.theme.surface(0.7))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(Color.pink.opacity(0.35), lineWidth: 2)
@@ -2995,7 +2997,7 @@ struct AnswerSheetView: View {
                         .font(.subheadline).fontWeight(.black)
                     Text("Tap to reveal each other's answers")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                         .multilineTextAlignment(.center)
                 }
                 .padding(24)
@@ -3040,7 +3042,7 @@ struct AnswerSheetView: View {
             }
             Text("💞 You both answered today")
                 .font(.caption).fontWeight(.bold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themes.theme.inkSoft)
                 .padding(.top, 4)
         }
         .padding(.horizontal, 24)
@@ -3062,13 +3064,13 @@ struct AnswerSheetView: View {
                     .foregroundStyle(tint)
                 Text(text)
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(themes.theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(.white.opacity(0.78))
+        .background(themes.theme.surface(0.78))
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
@@ -3095,6 +3097,8 @@ struct AnswerSheetView: View {
 // MARK: - Confetti Hearts
 
 struct ConfettiHeartsView: View {
+
+    @ObservedObject private var themes = ThemeManager.shared
 
     @State private var animate = false
 
@@ -3177,10 +3181,10 @@ func quickPill(_ msg: QuickMessage, action: @escaping () -> Void) -> some View {
     Button(action: action) {
         HStack(spacing: 9) {
             Text(msg.emoji).font(.headline)
-            Text(msg.label).font(.caption).fontWeight(.black).foregroundStyle(.primary)
+            Text(msg.label).font(.caption).fontWeight(.black).foregroundStyle(ThemeManager.shared.theme.ink)
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
-        .background(Capsule().fill(.white.opacity(0.94)))
+        .background(Capsule().fill(ThemeManager.shared.theme.surface(0.94)))
         .overlay(Capsule().stroke(Color.orange.opacity(0.18), lineWidth: 1.5))
         .shadow(color: .black.opacity(0.08), radius: 7, y: 3)
     }
@@ -3213,13 +3217,13 @@ func actionCard(
                 }
             }
             VStack(spacing: 2) {
-                Text(title).font(.subheadline).fontWeight(.black).foregroundStyle(.primary)
-                Text(subtitle).font(.caption2).fontWeight(.bold).foregroundStyle(.secondary)
+                Text(title).font(.subheadline).fontWeight(.black).foregroundStyle(ThemeManager.shared.theme.ink)
+                Text(subtitle).font(.caption2).fontWeight(.bold).foregroundStyle(ThemeManager.shared.theme.inkSoft)
             }
         }
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, minHeight: cardMinHeight)
-        .background(RoundedRectangle(cornerRadius: 22).fill(.white.opacity(0.78)))
+        .background(RoundedRectangle(cornerRadius: 22).fill(ThemeManager.shared.theme.surface(0.78)))
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(color.opacity(0.20), lineWidth: 1.5))
         .shadow(color: color.opacity(0.12), radius: 10, y: 6)
     }

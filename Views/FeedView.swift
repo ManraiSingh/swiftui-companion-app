@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct FeedView: View {
+
+    @ObservedObject private var themes = ThemeManager.shared
     @AppStorage("hasSeenFeedTutorial")
     private var hasSeenFeedTutorial = false
 
@@ -115,7 +117,7 @@ struct FeedView: View {
                         .foregroundColor(.black)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(.white.opacity(0.9))
+                        .background(themes.theme.surface(0.9))
                         .clipShape(Capsule())
                         .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
                     }

@@ -12,11 +12,9 @@ struct PlayCenterView: View {
     @State private var showDotsAndBoxes = false
     @State private var showConnectFour = false
     @State private var showMemoryMatch = false
-    /// Ziggy Jump got big enough to deserve its own half of this screen, but
-    /// not big enough to earn a slot in the app's bottom bar — it lives here,
-    /// behind Play, where somebody looking for something to do will find it.
-    private enum PlaySection { case games, jump }
-    @State private var section: PlaySection = .games
+    @State private var showZiggyJump = false
+
+    @ObservedObject private var themes = ThemeManager.shared
 
     @State private var scores: [String: Any] = [:]
     @State private var showScoreboardPopup = false
@@ -33,22 +31,8 @@ struct PlayCenterView: View {
 
         ZStack {
 
-            // Ziggy Jump brings its own full-bleed scenery, so it replaces
-            // this background rather than sitting on top of it.
-            if section == .jump {
-                ZiggyJumpHomeView(petVM: petVM, showsClose: false)
-            } else {
-
-            LinearGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.92, blue: 0.88),
-                    Color(red: 0.91, green: 0.97, blue: 0.94),
-                    Color(red: 0.94, green: 0.92, blue: 1.0)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            themes.theme.gradient
+                .ignoresSafeArea()
 
             // Six cards plus the hero and scoreboard overflow a phone
             // screen, and without a scroll the last game was simply cut off
@@ -57,8 +41,8 @@ struct PlayCenterView: View {
 
                 VStack(spacing: 18) {
 
-                    // Clears the header and picker floating above.
-                    Color.clear.frame(height: 86)
+                    // Clears the header floating above.
+                    Color.clear.frame(height: 48)
 
                 HStack(spacing: 12) {
 
@@ -72,19 +56,22 @@ struct PlayCenterView: View {
                         Text("\(petVM.pet.name) Play Center")
                             .font(.title2)
                             .fontWeight(.black)
+                            .foregroundStyle(themes.theme.ink)
 
                         Text("Pick a tiny date-night game and make \(petVM.pet.name) very, very spoiled.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themes.theme.inkSoft)
                     }
 
                     Spacer(minLength: 0)
                 }
                 .padding(16)
-                .background(.white.opacity(0.76))
+                .background(themes.theme.surface(0.76))
                 .clipShape(RoundedRectangle(cornerRadius: 24))
 
                 scoreboardSummaryCard
+
+                ziggyJumpHero
 
                 VStack(spacing: 14) {
 
@@ -132,22 +119,6 @@ struct PlayCenterView: View {
                     ) {
                         showMemoryMatch = true
                     }
-
-                    // The only one here you play on your own, so it sits
-                    // apart from the four that feed the shared scoreboard.
-                    gameCard(
-                        title: "\(petVM.pet.name) Jump",
-                        subtitle: "Dodge the crates on your own, or race your partner.",
-                        tint: .green,
-                        action: {
-                            withAnimation(.easeOut(duration: 0.18)) { section = .jump }
-                        }
-                    ) {
-                        Image("z6")
-                            .resizable()
-                            .scaledToFit()
-                            .padding(5)
-                    }
                 }
 
                 }
@@ -160,13 +131,15 @@ struct PlayCenterView: View {
                 scoreboardPopup
                     .zIndex(1)
             }
-            }
 
-            VStack(spacing: 9) {
+            VStack(spacing: 0) {
                 header
-                sectionPicker
                 Spacer(minLength: 0)
             }
+        }
+        .fullScreenCover(isPresented: $showZiggyJump) {
+            ZiggyJumpHomeView(petVM: petVM)
+                .swipeToDismiss()
         }
         .onAppear {
             FirestoreManager.shared.listenForScores { data in
@@ -233,39 +206,120 @@ struct PlayCenterView: View {
         }
     }
 
-    /// Dark on purpose, in both halves.
+    /// Deliberately unlike everything else on this screen.
     ///
-    /// It sits over a pale gradient on one side and over a night sky on the
-    /// other, and a control that inverted between them would be the only
-    /// thing on screen flickering as you switched.
-    private var sectionPicker: some View {
+    /// The five game tiles are pale pastel rows, which is right for a list you
+    /// scan. Ziggy Jump is a whole game with a world of its own, and as a
+    /// sixth pastel row it simply disappeared into them. So this card *is*
+    /// that world — the same night sky, the same stars, Ziggy caught mid-leap
+    /// over a crate. It reads as a door rather than a list item.
+    private var ziggyJumpHero: some View {
 
-        HStack(spacing: 4) {
+        Button { showZiggyJump = true } label: {
 
-            segment("Games", .games)
-            segment("Ziggy Jump", .jump)
-        }
-        .padding(4)
-        .background(Capsule().fill(.black.opacity(0.28)))
-        .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 1))
-        .padding(.horizontal, 44)
-    }
+            ZStack {
 
-    private func segment(_ title: String, _ value: PlaySection) -> some View {
-
-        let selected = section == value
-
-        return Button {
-            withAnimation(.easeOut(duration: 0.18)) { section = value }
-        } label: {
-            Text(title)
-                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
-                .foregroundStyle(selected ? Color(red: 0.14, green: 0.11, blue: 0.17) : .white.opacity(0.92))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(selected ? Color.white.opacity(0.92) : Color.clear)
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.08, green: 0.09, blue: 0.24),
+                        Color(red: 0.24, green: 0.17, blue: 0.40),
+                        Color(red: 0.46, green: 0.26, blue: 0.44)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
+
+                // Scattered on the golden angle, the same way the game does
+                // it, so the two skies feel like the same sky.
+                Canvas { context, size in
+                    for index in 0..<30 {
+                        let angle = Double(index) * 2.399963
+                        let x = (0.5 + 0.47 * sin(angle)) * size.width
+                        let y = (Double(index) / 30.0) * size.height * 0.78
+                        let r: CGFloat = index % 4 == 0 ? 1.9 : 1.1
+                        context.fill(
+                            Path(ellipseIn: CGRect(x: x - r, y: y - r,
+                                                   width: r * 2, height: r * 2)),
+                            with: .color(.white.opacity(index % 4 == 0 ? 0.9 : 0.42))
+                        )
+                    }
+                }
+
+                HStack(spacing: 12) {
+
+                    VStack(alignment: .leading, spacing: 6) {
+
+                        Text("NEW")
+                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .tracking(1.4)
+                            .foregroundStyle(Color(red: 0.16, green: 0.12, blue: 0.10))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(Color(red: 0.99, green: 0.74, blue: 0.40))
+                            )
+
+                        Text("\(petVM.pet.name) Jump")
+                            .font(.system(size: 23, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+
+                        Text("Solo, or race your partner to the flag.")
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.68))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    // The whole game in one glance: him in the air, a crate
+                    // underneath him.
+                    ZStack(alignment: .bottom) {
+
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.99, green: 0.74, blue: 0.40),
+                                        Color(red: 0.86, green: 0.47, blue: 0.26)
+                                    ],
+                                    startPoint: .top, endPoint: .bottom
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .stroke(Color(red: 0.30, green: 0.16, blue: 0.14),
+                                            lineWidth: 1.5)
+                            )
+                            .frame(width: 26, height: 30)
+
+                        // Sized so the lift still clears the crate while
+                        // keeping him inside the container — the card is
+                        // clipped to its corner radius, and at 78pt with a
+                        // 36pt lift his ears were being cut off by the top.
+                        Image("z6")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 66, height: 66)
+                            .shadow(color: .white.opacity(0.22), radius: 10)
+                            .offset(y: -28)
+                    }
+                    .frame(width: 84, height: 96)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+            }
+            .frame(height: 126)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(.white.opacity(0.20), lineWidth: 1)
+            )
+            .shadow(
+                color: Color(red: 0.24, green: 0.14, blue: 0.44).opacity(0.5),
+                radius: 16, y: 8
+            )
         }
         .buttonStyle(.plain)
     }
@@ -279,9 +333,9 @@ struct PlayCenterView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.headline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(themes.theme.ink)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.84))
+                    .background(themes.theme.surface(0.84))
                     .clipShape(Circle())
             }
 
@@ -290,6 +344,9 @@ struct PlayCenterView: View {
             Text("Play")
                 .font(.headline)
                 .fontWeight(.black)
+                // Nothing behind it, so it takes the theme's ink rather
+                // than `.primary` — which went black-on-navy under Midnight.
+                .foregroundStyle(themes.theme.ink)
 
             Spacer()
 
@@ -297,9 +354,13 @@ struct PlayCenterView: View {
                 .fill(.clear)
                 .frame(width: 42, height: 42)
         }
+        // Matches the inset the cards get from the scroll view's padding —
+        // the header used to live in there and inherit it, and floating it
+        // above left the close button pressed against the bezel.
+        .padding(.horizontal, 16)
         // Enough to clear the Dynamic Island without leaving the title
         // stranded in the middle of the gap below it.
-        .padding(.top, 6)
+        .padding(.top, 10)
     }
 
     private func gameCard(
@@ -357,11 +418,11 @@ struct PlayCenterView: View {
                     Text(title)
                         .font(.headline)
                         .fontWeight(.black)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(themes.theme.ink)
 
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(themes.theme.inkSoft)
                         .multilineTextAlignment(.leading)
                 }
 
@@ -372,7 +433,7 @@ struct PlayCenterView: View {
                     .foregroundStyle(tint)
             }
             .padding(16)
-            .background(.white.opacity(0.86))
+            .background(themes.theme.surface(0.86))
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .overlay(
                 RoundedRectangle(cornerRadius: 22)
@@ -438,7 +499,7 @@ struct PlayCenterView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Scoreboard")
                         .font(.subheadline).fontWeight(.black)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(themes.theme.ink)
 
                     HStack(spacing: 6) {
                         summaryScoreChip(
@@ -463,7 +524,7 @@ struct PlayCenterView: View {
                     .foregroundStyle(.orange)
             }
             .padding(14)
-            .background(.white.opacity(0.86))
+            .background(themes.theme.surface(0.86))
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
@@ -490,7 +551,7 @@ struct PlayCenterView: View {
             Text("\(score)")
                 .font(.system(size: 11, weight: .black, design: .rounded))
         }
-        .foregroundStyle(isLeading ? .white : Color.primary.opacity(0.6))
+        .foregroundStyle(isLeading ? .white : themes.theme.ink.opacity(0.6))
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
         .background(
@@ -515,7 +576,7 @@ struct PlayCenterView: View {
 
             Text("VS")
                 .font(.system(size: 13, weight: .black, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themes.theme.inkSoft)
 
             playerColumn(
                 name: partnerDisplayName,
@@ -551,7 +612,7 @@ struct PlayCenterView: View {
 
             Text(name)
                 .font(.caption2).fontWeight(.bold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themes.theme.inkSoft)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
@@ -582,11 +643,11 @@ struct PlayCenterView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(.white.opacity(0.8)))
+                .background(Circle().fill(themes.theme.surface(0.8)))
 
             Text(game.title)
                 .font(.caption).fontWeight(.bold)
-                .foregroundStyle(.primary)
+                .foregroundStyle(themes.theme.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
@@ -596,7 +657,7 @@ struct PlayCenterView: View {
 
             Text("–")
                 .font(.caption2).fontWeight(.bold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(themes.theme.inkSoft)
 
             scorePill(theirs, isLeading: theirs > mine, tint: partnerTint)
         }
@@ -604,14 +665,14 @@ struct PlayCenterView: View {
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(.white.opacity(0.55))
+                .fill(themes.theme.surface(0.55))
         )
     }
 
     private func scorePill(_ value: Int, isLeading: Bool, tint: Color) -> some View {
         Text("\(value)")
             .font(.system(size: 14, weight: .black, design: .rounded))
-            .foregroundStyle(isLeading ? .white : Color.primary.opacity(0.55))
+            .foregroundStyle(isLeading ? .white : themes.theme.ink.opacity(0.55))
             .frame(width: 30, height: 25)
             .background(
                 Capsule().fill(isLeading ? tint : Color.black.opacity(0.06))
@@ -651,7 +712,7 @@ struct PlayCenterView: View {
                             .foregroundColor(.red)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(.white.opacity(0.9))
+                            .background(themes.theme.surface(0.9))
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(Color.red.opacity(0.25), lineWidth: 1))
                     }

@@ -10,6 +10,8 @@ import AuthenticationServices
 
 struct OnboardingView: View {
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @State private var name = ""
     @State private var bounce = false
 
@@ -77,7 +79,7 @@ struct OnboardingView: View {
 
                     Text("Your little love companion 🐾\nWhat should I call you?")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themes.theme.inkSoft)
                         .multilineTextAlignment(.center)
                 }
 
@@ -92,7 +94,7 @@ struct OnboardingView: View {
                             .submitLabel(.done)
                     }
                     .padding(16)
-                    .background(.white.opacity(0.92))
+                    .background(themes.theme.surface(0.92))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
@@ -149,7 +151,7 @@ struct OnboardingView: View {
                 line
                 Text("or")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themes.theme.inkSoft)
                     .padding(.horizontal, 8)
                 line
             }
@@ -224,7 +226,7 @@ struct OnboardingView: View {
                  ? "Bring your Ziggy and your scrapbook back"
                  : "So your memories survive a new phone")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(themes.theme.inkSoft)
                 .multilineTextAlignment(.center)
                 // The screen is tight once the button is in, and without this
                 // the line is offered a single row and truncated mid-sentence.
