@@ -27,7 +27,22 @@ import UIKit
 
 final class ZiggyJumpEngine: NSObject, ObservableObject {
 
-    enum Phase { case ready, running, dying, over }
+    enum Phase {
+        case ready, running, dying, over
+        /// Race only: clipped a crate, frozen a moment before carrying on.
+        case stumbling
+        /// Race only: over the finish line.
+        case finished
+    }
+
+    /// Solo and race share every bit of the physics and the animation. What
+    /// differs is where the crates come from, what a hit costs you, and
+    /// whether there is an end.
+    enum Mode {
+        case solo
+        /// A course both phones built from the same seed.
+        case race(RaceLevel)
+    }
 
     enum Kind: CaseIterable { case short, middle, tall }
 
@@ -113,6 +128,55 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
     /// Always advancing, unlike `scroll`, which is still before the first tap.
     @Published private(set) var clock: CGFloat = 0
 
+    // MARK: Race state
+
+    private(set) var mode: Mode = .solo
+
+    /// How far down the course this player has come. Solo has no such thing
+    /// — there is no end to be a fraction of.
+    @Published private(set) var distance: CGFloat = 0
+
+    /// Ticks down while he is picking himself up after a clip.
+    @Published private(set) var stumbleRemaining: CGFloat = 0
+
+    /// He passes through crates until this runs out, so the one that just
+    /// caught him cannot catch him again the instant he starts moving.
+    @Published private(set) var mercyRemaining: CGFloat = 0
+
+    /// Where the other player has got to. Purely something to look at — the
+    /// two racers never collide.
+    @Published private(set) var ghostDistance: CGFloat = 0
+
+    private var ghostTarget: CGFloat = 0
+
+    /// The other phone reports every few hundred milliseconds, which at race
+    /// speed means jumps of over a hundred points. Easing toward each report
+    /// instead of snapping to it costs the ghost a fraction of a second of
+    /// accuracy and buys it not twitching for the entire race — a fair trade
+    /// for something nobody can collide with.
+    func reportGhost(_ reported: CGFloat) {
+        ghostTarget = reported
+    }
+
+    private var nextCrateIndex = 0
+
+    var raceLevel: RaceLevel? {
+        if case let .race(level) = mode { return level }
+        return nil
+    }
+
+    var isRacing: Bool { raceLevel != nil }
+
+    var raceProgress: Double {
+        guard let level = raceLevel, level.length > 0 else { return 0 }
+        return min(1, Double(distance / level.length))
+    }
+
+    var ghostProgress: Double {
+        guard let level = raceLevel, level.length > 0 else { return 0 }
+        return min(1, Double(ghostDistance / level.length))
+    }
+
     private(set) var velocity: CGFloat = 0
     private(set) var speed = Tuning.startSpeed
     private var boostUsed = false
@@ -139,7 +203,13 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
 
     var groundY: CGFloat { size.height * Tuning.groundFraction }
     var ziggyX: CGFloat { size.width * 0.26 }
-    var dayProgress: Double { Double(score) / Tuning.dayLength }
+    var screenWidth: CGFloat { size.width }
+    var dayProgress: Double {
+        // In a race the light doubles as a progress bar you can feel: dawn at
+        // the gun, dusk at the finish, whoever wins.
+        if isRacing { return raceProgress * 0.55 }
+        return Double(score) / Tuning.dayLength
+    }
 
     // MARK: Driving
 
@@ -168,6 +238,11 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
     private func tick(_ delta: CGFloat) {
 
         clock += delta
+        if mercyRemaining > 0 { mercyRemaining = max(0, mercyRemaining - delta) }
+
+        if isRacing {
+            ghostDistance += (ghostTarget - ghostDistance) * min(1, delta * 8)
+        }
 
         switch phase {
 
@@ -179,19 +254,77 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
 
         case .running:
             scroll += speed * delta
+            distance += speed * delta
             advanceCrates(delta)
             applyGravity(delta)
-            spawnIfDue(delta)
+            if isRacing { feedFromCourse() } else { spawnIfDue(delta) }
             checkCollision()
+            if let level = raceLevel, distance >= level.length { cross() }
+
+        case .stumbling:
+            // The world holds still while he picks himself up. That pause is
+            // the whole cost of a hit in a race — time lost, not the run.
+            stumbleRemaining -= delta
+            if stumbleRemaining <= 0 {
+                stumbleRemaining = 0
+                phase = .running
+            }
 
         case .dying:
             applyGravity(delta)
             spin += Double(delta) * 260
             if height < -size.height { finish() }
 
-        case .over:
+        case .over, .finished:
             break
         }
+    }
+
+    /// Hands crates to the live list as they come into view.
+    ///
+    /// Read off the course rather than rolled, which is exactly what keeps the
+    /// two phones showing the same thing: `distance` is the only input, and it
+    /// advances at a fixed speed on both sides.
+    private func feedFromCourse() {
+
+        guard let level = raceLevel, size.width > 0 else { return }
+
+        while nextCrateIndex < level.crates.count {
+            let next = level.crates[nextCrateIndex]
+            let screenX = ziggyX + (next.x - distance)
+            guard screenX < size.width + 90 else { break }
+            crates.append(Crate(
+                x: screenX, width: next.width, height: next.height, counts: true
+            ))
+            nextCrateIndex += 1
+        }
+    }
+
+    private func cross() {
+        guard phase != .finished else { return }
+        phase = .finished
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    /// Begins a race on a course both phones have built from one seed.
+    func startRace(_ level: RaceLevel) {
+        mode = .race(level)
+        speed = RaceLevel.speed
+        distance = 0
+        ghostDistance = 0
+        nextCrateIndex = 0
+        crates = []
+        score = 0
+        height = 0
+        velocity = 0
+        spin = 0
+        scroll = 0
+        stumbleRemaining = 0
+        mercyRemaining = 0
+        isNewBest = false
+        // No `.ready` tap: both phones start on the same signal, and the
+        // course opens with clear ground so nobody is ambushed at the gun.
+        phase = .running
     }
 
     private func applyGravity(_ delta: CGFloat) {
@@ -221,7 +354,11 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
             if crates[index].x + crates[index].width < ziggyX - Tuning.hitHalfWidth {
                 crates[index].scored = true
                 score += 1
-                speed = min(Tuning.maxSpeed, Tuning.startSpeed + CGFloat(score) * 8)
+                // Held flat in a race: two people running at different speeds
+                // down one course makes a nonsense of the finish line.
+                if !isRacing {
+                    speed = min(Tuning.maxSpeed, Tuning.startSpeed + CGFloat(score) * 8)
+                }
             }
         }
         crates.removeAll { $0.x + $0.width < -120 }
@@ -321,6 +458,9 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
 
     private func checkCollision() {
 
+        // Still shaking it off — he passes straight through.
+        guard mercyRemaining <= 0 else { return }
+
         let left = ziggyX - Tuning.hitHalfWidth
         let right = ziggyX + Tuning.hitHalfWidth
 
@@ -329,9 +469,27 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
             // Four points of forgiveness: clipping the very top corner should
             // feel like a near miss, not a death.
             guard overlaps, height < crate.height - 4 else { continue }
-            die()
+            if isRacing { stumble() } else { die() }
             return
         }
+    }
+
+    /// A clip costs you time, not the run.
+    ///
+    /// He stops where he stands, blinks, and carries on from that exact spot.
+    /// Nobody gets sent back to the start of a race they are halfway down.
+    ///
+    /// The mercy window deliberately outlasts the freeze, so the crate that
+    /// caught him is well behind before he can be caught by it again — the
+    /// world is stationary while he is down, so it would otherwise still be
+    /// sitting on top of him the moment he stood up.
+    private func stumble() {
+        phase = .stumbling
+        stumbleRemaining = 0.85
+        mercyRemaining = 2.3
+        height = 0
+        velocity = 0
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
     }
 
     // MARK: Input
@@ -356,7 +514,7 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
             }
 
-        case .dying, .over:
+        case .stumbling, .dying, .over, .finished:
             break
         }
     }
@@ -387,7 +545,10 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
         ZiggyGameCenter.shared.submit(score: score)
     }
 
+    /// Solo only. A race that has finished goes back to its lobby instead,
+    /// because the next course has to be agreed with the other phone.
     func retry() {
+        mode = .solo
         score = 0
         isNewBest = false
         height = 0
@@ -399,11 +560,27 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
         recent = []
         untilNextCrate = 0
         scroll = 0
+        distance = 0
+        ghostDistance = 0
+        nextCrateIndex = 0
+        stumbleRemaining = 0
+        mercyRemaining = 0
         phase = .ready
     }
 }
 
 // MARK: - Screen
+
+/// Everything the playfield needs in order to be a race rather than a solo run.
+///
+/// Bundled into one optional so solo play is untouched: `race == nil` and not
+/// a line of the single-player path behaves differently.
+struct RaceHooks {
+    let level: RaceLevel
+    let ghostDistance: CGFloat
+    let onProgress: (CGFloat) -> Void
+    let onFinish: () -> Void
+}
 
 struct ZiggyJumpGameView: View {
 
@@ -411,6 +588,14 @@ struct ZiggyJumpGameView: View {
     private var dismiss
 
     @ObservedObject var petVM: PetViewModel
+
+    var race: RaceHooks?
+
+    /// Position reports go out on this rather than every frame — sixty writes
+    /// a second would be absurd for something nobody can collide with.
+    private let reportTimer = Timer
+        .publish(every: 0.35, on: .main, in: .common)
+        .autoconnect()
 
     @StateObject private var engine = ZiggyJumpEngine()
 
@@ -433,8 +618,11 @@ struct ZiggyJumpGameView: View {
                     groundY: engine.groundY
                 )
 
+                finishLine
                 crates
                 contactShadow
+                // Behind the real one, so yours is always the Ziggy on top.
+                ghost
                 ziggy
 
                 // The whole screen is the button. Everything interactive sits
@@ -445,18 +633,30 @@ struct ZiggyJumpGameView: View {
                     .onTapGesture { engine.tap() }
 
                 header
-                scoreBadge
 
-                if engine.phase == .ready { readyCard }
-                if engine.phase == .over { overCard }
+                if engine.isRacing { raceBar } else { scoreBadge }
+
+                if !engine.isRacing, engine.phase == .ready { readyCard }
+                if !engine.isRacing, engine.phase == .over { overCard }
             }
             .onAppear {
                 engine.configure(geometry.size)
                 engine.begin()
                 gameCenter.authenticate()
+                if let race { engine.startRace(race.level) }
             }
             .onChange(of: geometry.size) { _, new in
                 engine.configure(new)
+            }
+            .onChange(of: race?.ghostDistance ?? 0) { _, new in
+                engine.reportGhost(new)
+            }
+            .onChange(of: engine.phase) { _, new in
+                if new == .finished { race?.onFinish() }
+            }
+            .onReceive(reportTimer) { _ in
+                guard let race, engine.isRacing else { return }
+                race.onProgress(engine.distance)
             }
             .onDisappear { engine.end() }
         }
@@ -476,6 +676,65 @@ struct ZiggyJumpGameView: View {
                     x: crate.x + crate.width / 2,
                     y: engine.groundY - crate.height / 2
                 )
+        }
+    }
+
+    /// The other racer, drawn through rather than solid.
+    ///
+    /// Shown at their true position and nowhere else. An earlier version
+    /// pinned them to the screen edge once the gap got wide, so you would
+    /// always see *something* — but a Ziggy stuck to the bezel, not reacting
+    /// to the crates going past underneath, just looks broken. They fade out
+    /// as they approach the edge and are gone beyond it. The bar at the top
+    /// is what carries the gap when they are out of sight.
+    @ViewBuilder
+    private var ghost: some View {
+
+        if engine.isRacing, engine.screenWidth > 0 {
+
+            let x = engine.ziggyX + (engine.ghostDistance - engine.distance)
+            let margin: CGFloat = 70
+
+            if x > -margin, x < engine.screenWidth + margin {
+
+                // Full strength through the middle, fading over the last
+                // stretch at either side so they leave rather than vanish.
+                let edge = min(x + margin, engine.screenWidth + margin - x)
+                let fade = min(1, max(0, edge / 120))
+
+                Image(Self.trot[Int(max(0, engine.ghostDistance) / 28) % Self.trot.count])
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: ZiggyJumpEngine.Tuning.spriteH,
+                        height: ZiggyJumpEngine.Tuning.spriteH
+                    )
+                    .opacity(0.42 * fade)
+                    .position(x: x, y: groundedCentreY)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// Where the sprite's centre goes when his feet are on the floor.
+    private var groundedCentreY: CGFloat {
+        engine.groundY
+            - (ZiggyJumpEngine.Tuning.feetFraction - 0.5) * ZiggyJumpEngine.Tuning.spriteH
+    }
+
+    @ViewBuilder
+    private var finishLine: some View {
+
+        if let level = engine.raceLevel {
+
+            let x = engine.ziggyX + (level.length - engine.distance)
+
+            if x > -80, x < engine.screenWidth + 80 {
+                FinishBanner()
+                    .frame(width: 46, height: 200)
+                    .position(x: x, y: engine.groundY - 100)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -514,9 +773,17 @@ struct ZiggyJumpGameView: View {
                 color: sky.orb.color.opacity(0.30 * sky.night),
                 radius: 14
             )
+            .opacity(blink)
             .rotationEffect(.degrees(engine.spin))
             .position(x: engine.ziggyX, y: spriteCentreY - idleBob)
             .animation(nil, value: engine.height)
+    }
+
+    /// Mario's trick. The flicker is both the feedback that you were clipped
+    /// and the warning that the protection is about to run out.
+    private var blink: Double {
+        guard engine.mercyRemaining > 0 else { return 1 }
+        return sin(Double(engine.clock) * 26) > 0 ? 0.28 : 1
     }
 
     private var spriteCentreY: CGFloat {
@@ -533,6 +800,9 @@ struct ZiggyJumpGameView: View {
     private var spriteName: String {
 
         if engine.phase == .dying { return "z6" }
+
+        // Down on his front, gathering himself.
+        if engine.phase == .stumbling { return "z2" }
 
         // Waiting to start. z1 is the only real sit in the set, and it only
         // works while the world is still — which is why `.ready` freezes it.
@@ -636,6 +906,82 @@ struct ZiggyJumpGameView: View {
             Spacer()
         }
         .allowsHitTesting(false)
+    }
+
+    /// Both racers on one track.
+    ///
+    /// Earns its place because the ghost gets clamped to a screen edge once
+    /// the gap is bigger than a phone — at that point the only honest read on
+    /// who is winning is here.
+    private var raceBar: some View {
+
+        VStack {
+
+            VStack(spacing: 7) {
+
+                GeometryReader { bar in
+
+                    let width = bar.size.width
+
+                    ZStack(alignment: .leading) {
+
+                        Capsule()
+                            .fill(.white.opacity(0.16))
+                            .frame(height: 5)
+
+                        Capsule()
+                            .fill(.white.opacity(0.85))
+                            .frame(width: max(5, width * engine.raceProgress), height: 5)
+
+                        marker(engine.ghostProgress, width, mine: false)
+                        marker(engine.raceProgress, width, mine: true)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .center)
+                }
+                .frame(height: 14)
+
+                HStack(spacing: 0) {
+
+                    Text("YOU")
+                        .foregroundStyle(.white.opacity(0.85))
+
+                    Spacer()
+
+                    Text(engine.raceProgress >= engine.ghostProgress ? "AHEAD" : "BEHIND")
+                        .foregroundStyle(
+                            engine.raceProgress >= engine.ghostProgress
+                                ? .white.opacity(0.85)
+                                : .white.opacity(0.45)
+                        )
+
+                    Spacer()
+
+                    Image(systemName: "flag.checkered")
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .tracking(1.1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .background(.black.opacity(0.32), in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 1))
+            .padding(.horizontal, 30)
+            .padding(.top, 112)
+
+            Spacer()
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func marker(_ progress: Double, _ width: CGFloat, mine: Bool) -> some View {
+        Circle()
+            .fill(mine ? Color.white : Color.white.opacity(0.45))
+            .frame(width: mine ? 11 : 9, height: mine ? 11 : 9)
+            .overlay(
+                Circle().stroke(.black.opacity(mine ? 0.35 : 0), lineWidth: 1.5)
+            )
+            .offset(x: max(0, min(width - 11, CGFloat(progress) * width - 5.5)))
     }
 
     private var readyCard: some View {
@@ -810,13 +1156,55 @@ private struct CrateView: View {
     }
 }
 
+// MARK: - Finish line
+
+private struct FinishBanner: View {
+
+    var body: some View {
+
+        VStack(spacing: 0) {
+
+            Canvas { context, size in
+                let columns = 4
+                let rows = 5
+                let cellW = size.width / CGFloat(columns)
+                let cellH = size.height / CGFloat(rows)
+                for row in 0..<rows {
+                    for column in 0..<columns {
+                        let dark = (row + column) % 2 == 0
+                        context.fill(
+                            Path(CGRect(
+                                x: CGFloat(column) * cellW, y: CGFloat(row) * cellH,
+                                width: cellW + 0.5, height: cellH + 0.5
+                            )),
+                            with: .color(dark
+                                ? Color.black.opacity(0.82)
+                                : Color.white.opacity(0.95))
+                        )
+                    }
+                }
+            }
+            .frame(height: 62)
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+
+            Rectangle()
+                .fill(.white.opacity(0.7))
+                .frame(width: 5)
+        }
+        .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
+    }
+}
+
 // MARK: - Backdrop
 
 /// Sky, sun or moon, stars, hills and the platform, in one drawing pass.
 ///
 /// It redraws every frame because the hills and floor scroll and the light
 /// changes, so this is a single Canvas rather than several dozen views.
-private struct SkyBackdrop: View {
+///
+/// Not private: the menu stands on the same scenery, so that walking into
+/// Ziggy Jump feels like arriving somewhere rather than reading a list.
+struct SkyBackdrop: View {
 
     let sky: Sky
     let scroll: CGFloat

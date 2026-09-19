@@ -151,7 +151,7 @@ class FirestoreManager {
             scoresListener, ticTacToeListener, dotsAndBoxesListener,
             connectFourListener, memoryMatchListener, instantBadgeListener,
             instantViewListener, instantArchiveListener, bouquetListener,
-            doodleViewListener, doodleWidgetListener
+            doodleViewListener, doodleWidgetListener, ziggyJumpRaceListener
         ] {
             listener?.remove()
         }
@@ -165,6 +165,7 @@ class FirestoreManager {
         instantViewListener = nil;      instantArchiveListener = nil
         bouquetListener = nil
         doodleViewListener = nil;       doodleWidgetListener = nil
+        ziggyJumpRaceListener = nil
     }
 
     func savePet(_ pet: Pet) {
@@ -3932,5 +3933,247 @@ class FirestoreManager {
             "lastChef": username,
             "updatedAt": Timestamp()
         ]
+    }
+
+    // MARK: - Ziggy Jump race
+    //
+    // Same shape as the other two-player games: one document under the
+    // relationship, sides claimed by device ID so renaming yourself cannot
+    // steal your partner's slot.
+    //
+    // The one addition is `seed`. It is written in the same transaction that
+    // starts the race, so there is never a moment where one phone is running
+    // and the other has not been told which course to build.
+
+    private var ziggyJumpRaceListener: ListenerRegistration?
+
+    private var ziggyJumpRaceRef: DocumentReference? {
+        guard !relationshipCode.isEmpty else { return nil }
+        return db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("ziggyJumpRace")
+    }
+
+    func joinZiggyJumpRace(
+        username: String,
+        completion: @escaping (String?) -> Void
+    ) {
+
+        guard let gameRef = ziggyJumpRaceRef else {
+            completion(nil)
+            return
+        }
+
+        let myDeviceID = deviceID
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let rightPlayer = data["rightPlayer"] as? String ?? ""
+                let leftDeviceID = data["leftDeviceID"] as? String ?? ""
+                let rightDeviceID = data["rightDeviceID"] as? String ?? ""
+                let status = data["status"] as? String ?? "lobby"
+
+                var updates: [String: Any] = ["updatedAt": Timestamp()]
+
+                // A finished race drops back to the lobby with both players
+                // still in their seats, so neither gets bounced out.
+                if status == "complete" {
+                    updates["status"] = "lobby"
+                    updates["leftReady"] = false
+                    updates["rightReady"] = false
+                    updates["leftDistance"] = 0
+                    updates["rightDistance"] = 0
+                    updates["leftFinished"] = false
+                    updates["rightFinished"] = false
+                    updates["winner"] = ""
+                }
+
+                let assignedSide: String
+
+                if leftDeviceID == myDeviceID {
+                    assignedSide = "left"
+                    updates["leftPlayer"] = username
+                } else if rightDeviceID == myDeviceID {
+                    assignedSide = "right"
+                    updates["rightPlayer"] = username
+                } else if leftPlayer.isEmpty {
+                    assignedSide = "left"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
+                } else if rightPlayer.isEmpty {
+                    assignedSide = "right"
+                    updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
+                    updates["rightReady"] = false
+                } else if leftDeviceID.isEmpty {
+                    assignedSide = "left"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
+                } else {
+                    assignedSide = "right"
+                    updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
+                    updates["rightReady"] = false
+                }
+
+                if data["status"] == nil && updates["status"] == nil {
+                    updates["status"] = "lobby"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+
+                return assignedSide
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { side, _ in
+
+            completion(side as? String)
+        }
+    }
+
+    /// Marks one side ready, and starts the race the moment both are.
+    func setZiggyJumpRaceReady(side: String, isReady: Bool) {
+
+        guard let gameRef = ziggyJumpRaceRef else { return }
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                var updates: [String: Any] = [
+                    "\(side)Ready": isReady,
+                    "updatedAt": Timestamp()
+                ]
+
+                let other = side == "left" ? "right" : "left"
+                let otherReady = data["\(other)Ready"] as? Bool ?? false
+                let bothSeated = !(data["leftPlayer"] as? String ?? "").isEmpty
+                    && !(data["rightPlayer"] as? String ?? "").isEmpty
+
+                if isReady, otherReady, bothSeated {
+                    updates["status"] = "racing"
+                    updates["seed"] = Int64.random(in: 1...Int64.max)
+                    updates["leftDistance"] = 0
+                    updates["rightDistance"] = 0
+                    updates["leftFinished"] = false
+                    updates["rightFinished"] = false
+                    updates["winner"] = ""
+                    updates["startedAt"] = Timestamp()
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    /// A position report, sent a few times a second while racing.
+    ///
+    /// Deliberately a plain merge rather than a transaction: the two sides
+    /// never write the same field, nothing reads it back to make a decision,
+    /// and a dropped one corrects itself on the next tick a moment later.
+    /// Running this through a transaction would cost a read per report for
+    /// no benefit at all.
+    func updateZiggyJumpRaceProgress(side: String, distance: Double) {
+
+        guard let gameRef = ziggyJumpRaceRef else { return }
+        gameRef.setData(["\(side)Distance": distance], merge: true)
+    }
+
+    /// First one home takes it.
+    ///
+    /// A transaction, unlike the progress reports, because `winner` is the one
+    /// field both phones can try to claim at the same moment.
+    func finishZiggyJumpRace(side: String, username: String) {
+
+        guard let gameRef = ziggyJumpRaceRef else { return }
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(gameRef)
+                let data = snapshot.data() ?? [:]
+
+                var updates: [String: Any] = [
+                    "\(side)Finished": true,
+                    "updatedAt": Timestamp()
+                ]
+
+                if (data["winner"] as? String ?? "").isEmpty {
+                    updates["winner"] = username
+                    updates["status"] = "complete"
+                }
+
+                transaction.setData(updates, forDocument: gameRef, merge: true)
+                return nil
+
+            } catch let error as NSError {
+
+                errorPointer?.pointee = error
+                return nil
+            }
+
+        } completion: { _, _ in }
+    }
+
+    func listenForZiggyJumpRace(
+        completion: @escaping ([String: Any]) -> Void
+    ) {
+
+        guard let gameRef = ziggyJumpRaceRef else { return }
+
+        ziggyJumpRaceListener?.remove()
+        ziggyJumpRaceListener = gameRef.addSnapshotListener { snapshot, error in
+
+            if error != nil { return }
+
+            completion(snapshot?.data() ?? [:])
+        }
+    }
+
+    func stopZiggyJumpRaceListener() {
+        ziggyJumpRaceListener?.remove()
+        ziggyJumpRaceListener = nil
+    }
+
+    func resetZiggyJumpRace() {
+
+        guard let gameRef = ziggyJumpRaceRef else { return }
+
+        gameRef.setData([
+            "status": "lobby",
+            "leftReady": false,
+            "rightReady": false,
+            "leftDistance": 0,
+            "rightDistance": 0,
+            "leftFinished": false,
+            "rightFinished": false,
+            "winner": "",
+            "updatedAt": Timestamp()
+        ], merge: true)
     }
 }

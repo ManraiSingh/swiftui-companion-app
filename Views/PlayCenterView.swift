@@ -12,7 +12,11 @@ struct PlayCenterView: View {
     @State private var showDotsAndBoxes = false
     @State private var showConnectFour = false
     @State private var showMemoryMatch = false
-    @State private var showZiggyJump = false
+    /// Ziggy Jump got big enough to deserve its own half of this screen, but
+    /// not big enough to earn a slot in the app's bottom bar — it lives here,
+    /// behind Play, where somebody looking for something to do will find it.
+    private enum PlaySection { case games, jump }
+    @State private var section: PlaySection = .games
 
     @State private var scores: [String: Any] = [:]
     @State private var showScoreboardPopup = false
@@ -28,6 +32,12 @@ struct PlayCenterView: View {
     var body: some View {
 
         ZStack {
+
+            // Ziggy Jump brings its own full-bleed scenery, so it replaces
+            // this background rather than sitting on top of it.
+            if section == .jump {
+                ZiggyJumpHomeView(petVM: petVM, showsClose: false)
+            } else {
 
             LinearGradient(
                 colors: [
@@ -47,7 +57,8 @@ struct PlayCenterView: View {
 
                 VStack(spacing: 18) {
 
-                    header
+                    // Clears the header and picker floating above.
+                    Color.clear.frame(height: 86)
 
                 HStack(spacing: 12) {
 
@@ -126,9 +137,11 @@ struct PlayCenterView: View {
                     // apart from the four that feed the shared scoreboard.
                     gameCard(
                         title: "\(petVM.pet.name) Jump",
-                        subtitle: "Solo. Dodge the crates — double tap to hop higher.",
+                        subtitle: "Dodge the crates on your own, or race your partner.",
                         tint: .green,
-                        action: { showZiggyJump = true }
+                        action: {
+                            withAnimation(.easeOut(duration: 0.18)) { section = .jump }
+                        }
                     ) {
                         Image("z6")
                             .resizable()
@@ -146,6 +159,13 @@ struct PlayCenterView: View {
             if showScoreboardPopup {
                 scoreboardPopup
                     .zIndex(1)
+            }
+            }
+
+            VStack(spacing: 9) {
+                header
+                sectionPicker
+                Spacer(minLength: 0)
             }
         }
         .onAppear {
@@ -211,15 +231,43 @@ struct PlayCenterView: View {
             )
             .swipeToDismiss()
         }
-        .fullScreenCover(
-            isPresented: $showZiggyJump
-        ) {
+    }
 
-            ZiggyJumpGameView(
-                petVM: petVM
-            )
-            .swipeToDismiss()
+    /// Dark on purpose, in both halves.
+    ///
+    /// It sits over a pale gradient on one side and over a night sky on the
+    /// other, and a control that inverted between them would be the only
+    /// thing on screen flickering as you switched.
+    private var sectionPicker: some View {
+
+        HStack(spacing: 4) {
+
+            segment("Games", .games)
+            segment("Ziggy Jump", .jump)
         }
+        .padding(4)
+        .background(Capsule().fill(.black.opacity(0.28)))
+        .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 1))
+        .padding(.horizontal, 44)
+    }
+
+    private func segment(_ title: String, _ value: PlaySection) -> some View {
+
+        let selected = section == value
+
+        return Button {
+            withAnimation(.easeOut(duration: 0.18)) { section = value }
+        } label: {
+            Text(title)
+                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                .foregroundStyle(selected ? Color(red: 0.14, green: 0.11, blue: 0.17) : .white.opacity(0.92))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(selected ? Color.white.opacity(0.92) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {
