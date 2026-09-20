@@ -890,6 +890,8 @@ struct ContentView: View {
                     SettingsView(petVM: petVM)
                         .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                 }
+                // The selected tab was the one thing still tinted system blue.
+                .tint(themes.theme.accent)
                 .onAppear {
                     loadUsage()
                     loadCustomQuickMessages()
@@ -1615,7 +1617,9 @@ struct ContentView: View {
         switch petVM.pet.settledMoodImage {
         case "ziggy_sleep": return "nightbackground"
         case "ziggu_cry":   return "cry"
-        default:            return "Afternoon"
+        // The sunlit afternoon room is the one thing on a dark theme that
+        // still blazes. Same room, lights low.
+        default:            return themes.theme.isDark ? "sceenery-bg-daerk" : "Afternoon"
         }
     }
 
@@ -1624,6 +1628,11 @@ struct ContentView: View {
     private var isDarkHeroBackground: Bool {
         heroBackgroundName != "Afternoon"
     }
+
+    /// The tinted tiles — Doodle, Play, Instant.
+    ///
+    /// Their outline carries the colour on a dark theme, where the pale fill
+    /// that used to do it has gone.
 
     private var speechBubble: some View {
         Text(speechBubbleText)
@@ -1669,9 +1678,10 @@ struct ContentView: View {
 
     // MARK: - Daily Question Card
 
-    /// Keeps `.primary`/`.secondary` deliberately: this card carries its own
-    /// fixed pink gradient rather than a themed surface, so it stays light on
-    /// every theme and needs dark text on all of them.
+    /// The pink is the card's signature on a pale theme, but on a dark one it
+    /// was the single bright slab left on the page. It takes the themed
+    /// surface there instead, and the label wears the accent so the card is
+    /// still recognisably itself.
     private var dailyQuestionCard: some View {
         let q          = dailyQ.question
         let myAnswered = !(q?.myAnswer.isEmpty ?? true)
@@ -1684,11 +1694,11 @@ struct ContentView: View {
                         Text("🐾").font(.system(size: 13))
                         Text("\(petVM.pet.name) asks today")
                             .font(.caption2).fontWeight(.black)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(themes.theme.isDark ? themes.theme.accent : Color.secondary)
                     }
                     Text(dailyQ.todayQuestion)
                         .font(.caption).fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(themes.theme.ink)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1724,19 +1734,25 @@ struct ContentView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
             .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 1.0, green: 0.93, blue: 0.97),
-                        Color(red: 0.94, green: 0.93, blue: 1.0)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
+                Group {
+                    if themes.theme.isDark {
+                        themes.theme.surface(0.78)
+                    } else {
+                        LinearGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.93, blue: 0.97),
+                                Color(red: 0.94, green: 0.93, blue: 1.0)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
+                }
             )
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.pink.opacity(0.20), lineWidth: 1.5)
+                    .stroke(themes.theme.outline(.pink), lineWidth: 1.5)
             )
             .shadow(color: .pink.opacity(0.08), radius: 8, y: 4)
         }
@@ -3223,8 +3239,18 @@ func actionCard(
         }
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, minHeight: cardMinHeight)
-        .background(RoundedRectangle(cornerRadius: 22).fill(ThemeManager.shared.theme.surface(0.78)))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(color.opacity(0.20), lineWidth: 1.5))
+        .background(
+            RoundedRectangle(cornerRadius: 22)
+                .fill(ThemeManager.shared.theme.surface(0.78))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .fill(ThemeManager.shared.theme.tintedFill(color))
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(ThemeManager.shared.theme.outline(color), lineWidth: 1.5)
+        )
         .shadow(color: color.opacity(0.12), radius: 10, y: 6)
     }
     .buttonStyle(.plain)

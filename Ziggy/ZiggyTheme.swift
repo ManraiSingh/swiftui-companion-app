@@ -77,8 +77,8 @@ struct ZiggyTheme: Identifiable, Equatable {
     /// instead of cut into it.
     func surface(_ weight: Double) -> Color {
         guard isDark else { return surfaceTint.opacity(weight) }
-        return Color(red: 0.20, green: 0.21, blue: 0.33)
-            .opacity(min(1, 0.52 + weight * 0.46))
+        return Color(red: 0.125, green: 0.122, blue: 0.137)
+            .opacity(min(1, 0.55 + weight * 0.45))
     }
 
     /// The default card weight, for anything that doesn't state one.
@@ -88,15 +88,28 @@ struct ZiggyTheme: Identifiable, Equatable {
     /// what saves hand-colouring seventy-odd labels one at a time.
     var colorScheme: ColorScheme { isDark ? .dark : .light }
 
+    /// How strongly a coloured outline should read.
+    ///
+    /// The tinted tiles — Doodle, Play, Instant — are drawn with a faint
+    /// stroke of their own colour, which is right on a pale background and
+    /// disappears completely on a dark one. In the dark the outline is doing
+    /// the work the fill used to, so it gets to be three times as present.
+    func outline(_ colour: Color) -> Color {
+        colour.opacity(isDark ? 0.62 : 0.20)
+    }
+
+    /// The app's dark-chocolate button, or the theme's accent when the page
+    /// is itself near-black and chocolate-on-black stops reading as a button.
+    func solidButton(_ chocolate: Color) -> Color { isDark ? accent : chocolate }
+
+    /// A matching wash behind that outline.
+    func tintedFill(_ colour: Color) -> Color {
+        colour.opacity(isDark ? 0.14 : 0.0)
+    }
+
     // MARK: - The set
 
-    /// Midnight is deliberately not in here.
-    ///
-    /// It is built and works, but it is held back for now. Anyone who had it
-    /// selected falls back to Dawn on their own, because `named(_:)` only
-    /// resolves ids that are actually offered — so pulling it needs no
-    /// migration and putting it back is one line.
-    static let all: [ZiggyTheme] = [dawn, sunset, meadow, lavender, rose]
+    static let all: [ZiggyTheme] = [dawn, sunset, meadow, lavender, rose, midnight]
 
     /// Exactly the colours the app shipped with, so choosing "Dawn" puts
     /// everything back where it was.
@@ -185,27 +198,26 @@ struct ZiggyTheme: Identifiable, Equatable {
         isDark: false
     )
 
-    /// The dark one. Finished, tested, and currently withheld — see `all`.
+    /// The dark one.
     ///
-    /// Kept rather than deleted because everything that makes it work is
-    /// still carried by the other themes: `isDark`, the dark branch of
-    /// `surface(_:)`, and the hand-drawn titles in Settings and Activity that
-    /// replaced system ones UIKit would paint black. Re-adding it to `all` is
-    /// the whole job.
+    /// Near-black and neutral rather than navy — a tinted dark theme reads as
+    /// a colour choice, and this one should read as the lights being off. The
+    /// cards sit a shade above the page so they still lift off it, and the
+    /// accent stays pink so the app doesn't lose its character in the dark.
     static let midnight = ZiggyTheme(
         id: "midnight",
         name: "Midnight",
-        blurb: "Deep navy and indigo, with the cards glowing on top.",
+        blurb: "Lights off. Near-black, with everything glowing on top.",
         background: [
-            Color(red: 0.09, green: 0.10, blue: 0.20),
-            Color(red: 0.14, green: 0.13, blue: 0.27),
-            Color(red: 0.10, green: 0.13, blue: 0.24)
+            Color(red: 0.043, green: 0.043, blue: 0.051),
+            Color(red: 0.071, green: 0.063, blue: 0.082),
+            Color(red: 0.051, green: 0.047, blue: 0.059)
         ],
-        accent: Color(red: 0.62, green: 0.68, blue: 1.00),
-        ink: Color(red: 0.96, green: 0.96, blue: 0.99),
-        inkSoft: Color(red: 0.70, green: 0.71, blue: 0.82),
+        accent: Color(red: 1.00, green: 0.30, blue: 0.55),
+        ink: Color(red: 0.97, green: 0.97, blue: 0.98),
+        inkSoft: Color(red: 0.62, green: 0.62, blue: 0.66),
         surfaceTint: Color.white,
-        cardOpacity: 0.90,
+        cardOpacity: 0.80,
         isDark: true
     )
 
