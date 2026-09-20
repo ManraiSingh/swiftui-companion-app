@@ -45,6 +45,8 @@ private struct DoodleEmojiItem: Identifiable {
 
 struct DoodleView: View {
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var canvasView = PKCanvasView()
@@ -96,14 +98,10 @@ struct DoodleView: View {
     @State private var partnerDoodle: UIImage?
     @State private var partnerDoodleSender = ""
 
-    private let cream = LinearGradient(
-        colors: [
-            Color(red: 0.98, green: 0.94, blue: 0.93),
-            Color(red: 0.95, green: 0.92, blue: 0.88)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    /// The chrome follows the theme. The canvas deliberately does not — what
+    /// you draw on is the artefact itself, and it lands on your partner's
+    /// widget exactly as it looks here.
+    private var cream: LinearGradient { themes.theme.gradient }
     private let accent = Color(red: 0.27, green: 0.24, blue: 0.21)
 
     private let palette: [(hex: String, color: Color)] = [
@@ -229,9 +227,9 @@ struct DoodleView: View {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.headline)
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.84))
+                    .background(themes.theme.surface(0.84))
                     .clipShape(Circle())
             }
 
@@ -240,9 +238,9 @@ struct DoodleView: View {
             VStack(spacing: 2) {
                 Text("Doodle 🎨")
                     .font(.title2).fontWeight(.black)
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
                 Text("Lands on their Home Screen")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(themes.theme.inkSoft)
             }
 
             Spacer()
@@ -268,15 +266,15 @@ struct DoodleView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("From \(partnerDoodleSender.isEmpty ? "your partner" : partnerDoodleSender)")
                     .font(.subheadline).fontWeight(.bold)
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
                 Text("Their latest doodle 💕")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(themes.theme.inkSoft)
             }
 
             Spacer()
         }
         .padding(12)
-        .background(.white.opacity(0.7))
+        .background(themes.theme.surface(0.7))
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .contentShape(Rectangle())
         .onTapGesture {
@@ -293,7 +291,7 @@ struct DoodleView: View {
             VStack(spacing: 16) {
                 Text("From \(partnerDoodleSender.isEmpty ? "your partner" : partnerDoodleSender)")
                     .font(.headline).fontWeight(.black)
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
 
                 Image(uiImage: image)
                     .resizable().scaledToFit()
@@ -313,10 +311,10 @@ struct DoodleView: View {
                 } label: {
                     Label("Save to Photos", systemImage: "square.and.arrow.down")
                         .font(.subheadline).fontWeight(.bold)
-                        .foregroundColor(accent)
+                        .foregroundColor(themes.theme.ink)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
-                        .background(Capsule().fill(.white.opacity(0.9)))
+                        .background(Capsule().fill(themes.theme.surface(0.9)))
                         .overlay(Capsule().stroke(.pink.opacity(0.3), lineWidth: 1))
                 }
 
@@ -453,7 +451,7 @@ struct DoodleView: View {
             } label: {
                 Image(systemName: "square.and.arrow.down")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(.white.opacity(0.94)))
                     .overlay(Circle().stroke(Color.black.opacity(0.1), lineWidth: 1))
@@ -468,7 +466,7 @@ struct DoodleView: View {
             } label: {
                 Image(systemName: "paintpalette.fill")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(.white.opacity(0.94)))
                     .overlay(Circle().stroke(canvasBGColor, lineWidth: 3))
@@ -940,7 +938,7 @@ struct DoodleView: View {
                             Circle().fill(.white.opacity(0.96)).padding(6)
                             Image(systemName: "plus")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(accent)
+                                .foregroundColor(themes.theme.ink)
                         }
                         .transition(.opacity)
                     }
@@ -1055,7 +1053,7 @@ struct DoodleView: View {
             }
 
             HStack(spacing: 14) {
-                Image(systemName: "pencil.tip").foregroundStyle(.secondary)
+                Image(systemName: "pencil.tip").foregroundStyle(themes.theme.inkSoft)
 
                 Slider(value: $brushWidth, in: 4...160)
 
@@ -1091,7 +1089,7 @@ struct DoodleView: View {
             }
         }
         .padding(14)
-        .background(.white.opacity(0.7))
+        .background(themes.theme.surface(0.7))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -1117,7 +1115,7 @@ struct DoodleView: View {
             Text(label)
                 .font(.system(size: 10, weight: .bold))
         }
-        .foregroundColor(accent)
+        .foregroundColor(themes.theme.ink)
         .frame(width: 68)
         .padding(.vertical, 8)
         .background(
@@ -1178,7 +1176,7 @@ struct DoodleView: View {
             VStack(spacing: 16) {
                 Text("Pin to widget?")
                     .font(.headline).fontWeight(.black)
-                    .foregroundColor(accent)
+                    .foregroundColor(themes.theme.ink)
 
                 HStack(spacing: 12) {
                     Button {
@@ -1186,10 +1184,10 @@ struct DoodleView: View {
                     } label: {
                         Text("Let it update")
                             .font(.subheadline).fontWeight(.bold)
-                            .foregroundColor(accent)
+                            .foregroundColor(themes.theme.ink)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
-                            .background(Color.white.opacity(0.9))
+                            .background(themes.theme.surface(0.9))
                             .clipShape(Capsule())
                     }
 
