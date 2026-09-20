@@ -33,14 +33,7 @@ struct InstantView: View {
     @State private var showArchive = false
     @State private var sendErrorMessage = ""
 
-    private let cream = LinearGradient(
-        colors: [
-            Color(red: 0.97, green: 0.95, blue: 0.92),
-            Color(red: 0.95, green: 0.92, blue: 0.88)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    private var cream: LinearGradient { themes.theme.gradient }
 
     private let accent = Color(red: 0.27, green: 0.24, blue: 0.21)
 
@@ -141,7 +134,7 @@ struct InstantView: View {
                         .fontWeight(.semibold)
                 }
                 .font(.headline)
-                .foregroundColor(accent)
+                .foregroundColor(themes.theme.ink)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(themes.theme.surface(0.9))
@@ -153,7 +146,7 @@ struct InstantView: View {
 
             Text("Instant")
                 .font(.headline)
-                .foregroundColor(accent)
+                .foregroundColor(themes.theme.ink)
 
             Spacer()
 
@@ -168,7 +161,7 @@ struct InstantView: View {
                     Text("Memories").fontWeight(.semibold)
                 }
                 .font(.subheadline)
-                .foregroundColor(accent)
+                .foregroundColor(themes.theme.ink)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(themes.theme.surface(0.9))
@@ -346,6 +339,7 @@ struct InstantView: View {
                 .padding(.horizontal)
 
                 TextField("Add a caption", text: $caption)
+                    .foregroundStyle(themes.theme.ink)
                     .padding(14)
                     .background(themes.theme.surface(0.85))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -368,8 +362,8 @@ struct InstantView: View {
                     .padding(.vertical, 16)
                     .background(
                         selectedImage == nil
-                        ? accent.opacity(0.3)
-                        : accent
+                        ? themes.theme.solidButton(accent).opacity(0.3)
+                        : themes.theme.solidButton(accent)
                     )
                     .foregroundColor(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -400,7 +394,7 @@ struct InstantView: View {
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
-                .background(accent)
+                .background(themes.theme.solidButton(accent))
                 .foregroundColor(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
         }
@@ -419,7 +413,7 @@ struct InstantView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
                 .background(themes.theme.surface(0.9))
-                .foregroundColor(accent)
+                .foregroundColor(themes.theme.ink)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
                 .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
         }
