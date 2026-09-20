@@ -30,7 +30,6 @@ struct ZiggyJumpRaceView: View {
     @State private var seed: Int64 = 0
     @State private var level: RaceLevel?
 
-    @State private var myDistance: CGFloat = 0
     @State private var theirDistance: CGFloat = 0
 
     @State private var racing = false
@@ -85,7 +84,6 @@ struct ZiggyJumpRaceView: View {
                         level: level,
                         ghostDistance: theirDistance,
                         onProgress: { distance in
-                            myDistance = distance
                             guard let side = assignedSide else { return }
                             FirestoreManager.shared.updateZiggyJumpRaceProgress(
                                 side: side, distance: Double(distance)
