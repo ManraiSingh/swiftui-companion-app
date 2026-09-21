@@ -102,10 +102,44 @@ struct ZiggyTheme: Identifiable, Equatable {
     /// is itself near-black and chocolate-on-black stops reading as a button.
     func solidButton(_ chocolate: Color) -> Color { isDark ? accent : chocolate }
 
+    /// A decorative edge that should recede rather than announce itself.
+    ///
+    /// The opposite job to `outline(_:)`. There the colour carries meaning and
+    /// earns its brightness; here it is trim, and a tinted hairline on a black
+    /// page reads as a warning rather than as decoration.
+    func quietEdge(_ tint: Color) -> Color {
+        isDark ? Color.white.opacity(0.12) : tint
+    }
+
     /// A matching wash behind that outline.
     func tintedFill(_ colour: Color) -> Color {
         colour.opacity(isDark ? 0.14 : 0.0)
     }
+
+    /// The card under a popup.
+    ///
+    /// Every modal in the app was `.ultraThinMaterial`, and that quietly
+    /// breaks here. The app pins itself to the light colour scheme so the
+    /// worlds keep their black-on-white ink — which means the system material
+    /// resolves *light* whatever the theme is, and a dark theme's popups came
+    /// up as pale grey slabs with dark text sitting on them. The material has
+    /// to be swapped for a real surface rather than re-tinted.
+    ///
+    /// Light themes keep the material untouched, so nothing already shipped
+    /// changes.
+    var popupSurface: AnyShapeStyle {
+        isDark
+            ? AnyShapeStyle(Color(red: 0.145, green: 0.142, blue: 0.157))
+            : AnyShapeStyle(.ultraThinMaterial)
+    }
+
+    /// A hand-picked dark colour, kept as-is on light themes and swapped for
+    /// the theme's own ink once the surface beneath it has gone dark.
+    ///
+    /// The counterpart to `solidButton(_:)`, for text rather than fills. The
+    /// popups hard-coded the app's chocolate for their titles and their
+    /// "Later" buttons, which is dark text on a dark card in the dark themes.
+    func inkOr(_ chocolate: Color) -> Color { isDark ? ink : chocolate }
 
     // MARK: - The set
 
