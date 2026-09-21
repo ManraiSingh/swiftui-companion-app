@@ -338,7 +338,12 @@ struct InstantView: View {
                 }
                 .padding(.horizontal)
 
-                TextField("Add a caption", text: $caption)
+                TextField(
+                    "",
+                    text: $caption,
+                    prompt: Text("Add a caption")
+                        .foregroundColor(themes.theme.inkSoft)
+                )
                     .foregroundStyle(themes.theme.ink)
                     .padding(14)
                     .background(themes.theme.surface(0.85))
@@ -362,10 +367,12 @@ struct InstantView: View {
                     .padding(.vertical, 16)
                     .background(
                         selectedImage == nil
-                        ? themes.theme.solidButton(accent).opacity(0.3)
+                        ? themes.theme.surface(0.9)
                         : themes.theme.solidButton(accent)
                     )
-                    .foregroundColor(.white)
+                    .foregroundColor(
+                        selectedImage == nil ? themes.theme.inkSoft : .white
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
                 .disabled(selectedImage == nil || isSending)
