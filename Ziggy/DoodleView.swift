@@ -141,20 +141,49 @@ struct DoodleView: View {
         ZStack {
             cream.ignoresSafeArea()
 
-            VStack(spacing: 14) {
+            // Three bands: title at the top, controls at the bottom, and the
+            // canvas centred in everything left over.
+            //
+            // The square canvas is always shorter than the space between them
+            // — it can only be as tall as it is wide — so there is height to
+            // place no matter what. Pooling it in one gap left a hole. Split
+            // either side of the canvas it reads as margin, and the canvas
+            // lands optically centred, which is where the eye expects the
+            // thing it is about to draw on.
+            VStack(spacing: 11) {
                 header
+                    .padding(.horizontal, 5)
 
-                if let partnerDoodle {
-                    partnerCard(partnerDoodle)
-                }
+                Spacer(minLength: 8)
 
                 canvasCard
+                    // The canvas, the spacers and nothing else are flexible
+                    // here, so without this the stack shares the free height
+                    // out between all three — and since the canvas is square,
+                    // every point of height the spacers win it loses off its
+                    // width too — 80pt of height taken elsewhere cost it
+                    // 200pt of size. It gets first claim now, and the
+                    // spacers divide whatever is left.
+                    .layoutPriority(1)
+
+                Spacer(minLength: 8)
 
                 toolbar
-
-                sendButton
+                    // The panel keeps a normal margin; only the canvas runs
+                    // wide. Giving both the narrow one would leave the
+                    // controls looking like they had slipped off the page.
+                    .padding(.horizontal, 5)
             }
-            .padding()
+            // Deliberately narrow. The canvas is square, so every point of
+            // width it gains it also gains in height — it is the only element
+            // on the screen that can eat the leftover space, and this is the
+            // one lever that feeds it.
+            .padding(.horizontal, 7)
+            // Was 4, which put the title hard against the status bar and made
+            // the screen read as if it had been pushed off the top.
+            .padding(.top, 16)
+            .padding(.bottom, 10)
+            .frame(maxHeight: .infinity, alignment: .top)
             // Without this the keyboard shrinks the whole stack, and since
             // the canvas is a fixed square that pulls its width in too —
             // leaving a narrow strip of canvas with gaps either side. The
@@ -245,40 +274,40 @@ struct DoodleView: View {
 
             Spacer()
 
-            Circle().fill(.clear).frame(width: 42, height: 42)
-        }
-    }
-
-    // MARK: - Partner's latest doodle
-
-    private func partnerCard(_ image: UIImage) -> some View {
-        HStack(spacing: 12) {
-            Image(uiImage: image)
-                .resizable().scaledToFit()
-                .frame(width: 64, height: 64)
-                .background(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(.pink.opacity(0.2), lineWidth: 1)
-                )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("From \(partnerDoodleSender.isEmpty ? "your partner" : partnerDoodleSender)")
-                    .font(.subheadline).fontWeight(.bold)
-                    .foregroundColor(themes.theme.ink)
-                Text("Their latest doodle 💕")
-                    .font(.caption).foregroundStyle(themes.theme.inkSoft)
+            // Their latest doodle lives here rather than in a card above
+            // the canvas. That card pushed the whole screen down the moment
+            // one arrived, so the layout you drew on was never the same
+            // twice. Here it costs nothing — the slot was already being held
+            // open by an invisible circle, purely to keep the title centred.
+            if let partnerDoodle {
+                Button { showPartnerDoodlePopup = true } label: {
+                    Image(uiImage: partnerDoodle)
+                        .resizable().scaledToFill()
+                        .frame(width: 42, height: 42)
+                        .background(.white)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(themes.theme.accent, lineWidth: 2))
+                        .overlay(alignment: .topTrailing) {
+                            // Unread dot, ringed in the page colour so it
+                            // reads as sitting on top of the thumbnail.
+                            Circle()
+                                .fill(themes.theme.accent)
+                                .frame(width: 11, height: 11)
+                                .overlay(
+                                    Circle().stroke(
+                                        themes.theme.isDark
+                                            ? Color(red: 0.05, green: 0.05, blue: 0.06)
+                                            : .white,
+                                        lineWidth: 2
+                                    )
+                                )
+                                .offset(x: 2, y: -1)
+                        }
+                }
+                .buttonStyle(.plain)
+            } else {
+                Circle().fill(.clear).frame(width: 42, height: 42)
             }
-
-            Spacer()
-        }
-        .padding(12)
-        .background(themes.theme.surface(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            showPartnerDoodlePopup = true
         }
     }
 
@@ -336,7 +365,7 @@ struct DoodleView: View {
                 }
             }
             .padding(22)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 26))
             .padding(.horizontal, 32)
         }
@@ -451,7 +480,8 @@ struct DoodleView: View {
             } label: {
                 Image(systemName: "square.and.arrow.down")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(themes.theme.ink)
+                    // On the white canvas, not on a themed surface.
+                    .foregroundColor(accent)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(.white.opacity(0.94)))
                     .overlay(Circle().stroke(Color.black.opacity(0.1), lineWidth: 1))
@@ -466,7 +496,8 @@ struct DoodleView: View {
             } label: {
                 Image(systemName: "paintpalette.fill")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(themes.theme.ink)
+                    // On the white canvas, not on a themed surface.
+                    .foregroundColor(accent)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(.white.opacity(0.94)))
                     .overlay(Circle().stroke(canvasBGColor, lineWidth: 3))
@@ -547,7 +578,7 @@ struct DoodleView: View {
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial)
+        .background(themes.theme.popupSurface)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
         .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
@@ -1010,46 +1041,63 @@ struct DoodleView: View {
     // MARK: - Toolbar
 
     private var toolbar: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 9) {
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+            // A four-wide grid, not a horizontal scroll.
+            //
+            // There are eight chips and the old row could show about four and
+            // a half of them, with no scrollbar to say so — Monoline,
+            // Watercolor and Crayon were off the right-hand edge and
+            // effectively unfindable. Two rows show all eight at once, and
+            // the second row is also what absorbs the leftover height on this
+            // screen, so the fix and the spacing problem cancel each other.
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.flexible(), spacing: 8),
+                    count: 4
+                ),
+                spacing: 8
+            ) {
+                Button {
+                    addTextItem()
+                } label: {
+                    toolChipLabel(icon: "character.cursor.ibeam", label: "Text")
+                }
+                .buttonStyle(.plain)
+
+                ForEach(inkTypes, id: \.label) { item in
                     Button {
-                        addTextItem()
+                        inkType = item.type
+                        isEraser = false
                     } label: {
-                        toolChipLabel(icon: "character.cursor.ibeam", label: "Text")
+                        VStack(spacing: 3) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 14, weight: .bold))
+                            Text(item.label)
+                                .font(.system(size: 9.5, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                        .foregroundColor(
+                            // Unselected used the dark chocolate, which
+                            // on a dark tile left Fountain and Marker
+                            // barely there next to a white-labelled Text.
+                            inkType == item.type && !isEraser
+                                ? .white : themes.theme.ink
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    inkType == item.type && !isEraser
+                                        ? accent
+                                        : themes.theme.surface(0.85)
+                                )
+                        )
                     }
                     .buttonStyle(.plain)
-
-                    ForEach(inkTypes, id: \.label) { item in
-                        Button {
-                            inkType = item.type
-                            isEraser = false
-                        } label: {
-                            VStack(spacing: 3) {
-                                Image(systemName: item.icon)
-                                    .font(.system(size: 15, weight: .bold))
-                                Text(item.label)
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .foregroundColor(
-                                inkType == item.type && !isEraser ? .white : accent
-                            )
-                            .frame(width: 68)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(
-                                        inkType == item.type && !isEraser
-                                            ? accent
-                                            : Color.white.opacity(0.85)
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
                 }
-                .padding(.vertical, 2)
             }
 
             HStack(spacing: 14) {
@@ -1087,10 +1135,26 @@ struct DoodleView: View {
                     }
                 }
             }
+            // Inside the panel rather than floating below it. Two separate
+            // slabs stacked with a gap between them read as leftovers; one
+            // panel with the action at the bottom of it reads as a deck.
+            Divider()
+                .overlay(themes.theme.inkSoft.opacity(0.22))
+                .padding(.horizontal, -11)
+
+            sendButton
         }
-        .padding(14)
+        .padding(11)
         .background(themes.theme.surface(0.7))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(themes.theme.quietEdge(.pink.opacity(0.16)), lineWidth: 1)
+        )
+        .shadow(
+            color: .black.opacity(themes.theme.isDark ? 0.45 : 0.07),
+            radius: 14, y: 6
+        )
     }
 
     private func toolButton(
@@ -1101,9 +1165,9 @@ struct DoodleView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: system)
-                .foregroundColor(active ? .white : (tint ?? accent))
+                .foregroundColor(active ? .white : (tint ?? themes.theme.ink))
                 .frame(width: 38, height: 38)
-                .background(active ? accent : Color.white.opacity(0.85))
+                .background(active ? accent : themes.theme.surface(0.85))
                 .clipShape(Circle())
         }
     }
@@ -1111,16 +1175,17 @@ struct DoodleView: View {
     private func toolChipLabel(icon: String, label: String) -> some View {
         VStack(spacing: 3) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
             Text(label)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 9.5, weight: .bold))
         }
         .foregroundColor(themes.theme.ink)
-        .frame(width: 68)
-        .padding(.vertical, 8)
+        // Sized by its grid column now, rather than a fixed 68pt.
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.85))
+                .fill(themes.theme.surface(0.85))
         )
     }
 
@@ -1137,7 +1202,8 @@ struct DoodleView: View {
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding()
+            .padding(.vertical, 13)
+            .padding(.horizontal, 16)
             .background(
                 LinearGradient(
                     colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
@@ -1210,7 +1276,7 @@ struct DoodleView: View {
                 }
             }
             .padding(22)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 26))
             .padding(.horizontal, 32)
         }
