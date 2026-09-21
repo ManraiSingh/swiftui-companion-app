@@ -20,6 +20,8 @@ struct ConnectFourGameView: View {
 
     @ObservedObject var petVM: PetViewModel
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @State private var assignedSide: C4Side?
     @State private var leftPlayer = ""
     @State private var rightPlayer = ""
@@ -94,8 +96,15 @@ struct ConnectFourGameView: View {
 
         ZStack {
 
+            // The games were left out of the theme on purpose — they are
+            // *worlds*, with a look somebody chose. That holds while the app
+            // is light. Once the rest of it goes dark, walking into a game
+            // means walking into a white flash, so the room they are played
+            // in follows the theme; the pieces keep their own colours.
             LinearGradient(
-                colors: [
+                colors: themes.theme.isDark
+                    ? themes.theme.background
+                    : [
                     Color(red: 0.90, green: 0.95, blue: 1.0),
                     Color(red: 0.97, green: 0.97, blue: 0.90)
                 ],
@@ -146,7 +155,7 @@ struct ConnectFourGameView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
+                    .background(themes.theme.surface(0.82))
                     .clipShape(Circle())
             }
 
@@ -172,7 +181,7 @@ struct ConnectFourGameView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
+                    .background(themes.theme.surface(0.82))
                     .clipShape(Circle())
             }
         }
@@ -283,7 +292,7 @@ struct ConnectFourGameView: View {
         // Fills the height under the header so the card reaches the
         // bottom instead of stopping short.
         .frame(maxHeight: .infinity)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
@@ -331,7 +340,7 @@ struct ConnectFourGameView: View {
             .foregroundColor(isReady ? .green : .secondary)
         }
         .padding(12)
-        .background(isMe ? sideColor.opacity(0.08) : Color.white.opacity(0.82))
+        .background(isMe ? sideColor.opacity(0.08) : themes.theme.surface(0.82))
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -377,7 +386,7 @@ struct ConnectFourGameView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(14)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -502,7 +511,7 @@ struct ConnectFourGameView: View {
         return ZStack {
 
             Circle()
-                .fill(Color.white.opacity(0.92))
+                .fill(themes.theme.surface(0.92))
                 .frame(width: cellSize * 0.8, height: cellSize * 0.8)
 
             if !owner.isEmpty {
@@ -586,7 +595,7 @@ struct ConnectFourGameView: View {
                     }
                 }
                 .padding(14)
-                .background(.white.opacity(0.72))
+                .background(themes.theme.surface(0.72))
                 .clipShape(RoundedRectangle(cornerRadius: 18))
             }
         }

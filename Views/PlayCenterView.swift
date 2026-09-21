@@ -162,10 +162,17 @@ struct PlayCenterView: View {
         .fullScreenCover(
             isPresented: $showTraceGame
         ) {
+            // The games draw a lot of their text with `.primary` and
+            // `.secondary`. The app pins itself to the light scheme so the
+            // worlds keep black ink, which means those resolve to black —
+            // invisible once a game's own background goes dark. Handing the
+            // cover the theme's scheme flips all of them at once, rather
+            // than colouring some eighty labels by hand.
 
             DrawingGameView(
                 petVM: petVM
             )
+            .environment(\.colorScheme, themes.theme.colorScheme)
             .swipeToDismiss()
         }
         .fullScreenCover(
@@ -175,6 +182,7 @@ struct PlayCenterView: View {
             TicTacToeGameView(
                 petVM: petVM
             )
+            .environment(\.colorScheme, themes.theme.colorScheme)
             .swipeToDismiss()
         }
         .fullScreenCover(
@@ -184,6 +192,7 @@ struct PlayCenterView: View {
             DotsAndBoxesGameView(
                 petVM: petVM
             )
+            .environment(\.colorScheme, themes.theme.colorScheme)
             .swipeToDismiss()
         }
         .fullScreenCover(
@@ -193,6 +202,7 @@ struct PlayCenterView: View {
             ConnectFourGameView(
                 petVM: petVM
             )
+            .environment(\.colorScheme, themes.theme.colorScheme)
             .swipeToDismiss()
         }
         .fullScreenCover(
@@ -202,6 +212,7 @@ struct PlayCenterView: View {
             MemoryMatchGameView(
                 petVM: petVM
             )
+            .environment(\.colorScheme, themes.theme.colorScheme)
             .swipeToDismiss()
         }
     }

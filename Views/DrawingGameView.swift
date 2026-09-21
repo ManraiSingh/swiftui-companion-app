@@ -306,6 +306,8 @@ struct DrawingGameView: View {
 
     @ObservedObject var petVM: PetViewModel
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @State private var assignedSide: TraceSide?
     @State private var leftPlayer = ""
     @State private var rightPlayer = ""
@@ -387,8 +389,15 @@ struct DrawingGameView: View {
 
         ZStack {
 
+            // The games were left out of the theme on purpose — they are
+            // *worlds*, with a look somebody chose. That holds while the app
+            // is light. Once the rest of it goes dark, walking into a game
+            // means walking into a white flash, so the room they are played
+            // in follows the theme; the pieces keep their own colours.
             LinearGradient(
-                colors: [
+                colors: themes.theme.isDark
+                    ? themes.theme.background
+                    : [
                     .pink.opacity(0.18),
                     .cyan.opacity(0.18),
                     .yellow.opacity(0.14)
@@ -439,7 +448,7 @@ struct DrawingGameView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
+                    .background(themes.theme.surface(0.82))
                     .clipShape(Circle())
             }
 
@@ -468,7 +477,7 @@ struct DrawingGameView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
+                    .background(themes.theme.surface(0.82))
                     .clipShape(Circle())
             }
         }
@@ -562,7 +571,7 @@ struct DrawingGameView: View {
             Spacer()
         }
         .padding(18)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
@@ -627,7 +636,7 @@ struct DrawingGameView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? Color.pink : Color.white.opacity(0.85))
+                .fill(isSelected ? Color.pink : themes.theme.surface(0.85))
         )
     }
 
@@ -670,7 +679,7 @@ struct DrawingGameView: View {
             .foregroundColor(isReady ? .green : .secondary)
         }
         .padding(12)
-        .background(isMe ? Color.pink.opacity(0.12) : Color.white.opacity(0.82))
+        .background(isMe ? Color.pink.opacity(0.12) : themes.theme.surface(0.82))
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -701,7 +710,7 @@ struct DrawingGameView: View {
                 .tint(selectedColor)
         }
         .padding(14)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -745,7 +754,7 @@ struct DrawingGameView: View {
         .foregroundColor(isComplete ? .green : .primary)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .background(.white.opacity(0.75))
+        .background(themes.theme.surface(0.75))
         .clipShape(Capsule())
     }
 
@@ -757,7 +766,7 @@ struct DrawingGameView: View {
             .foregroundColor(mine ? .white : .secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(mine ? selectedColor : Color.white.opacity(0.9))
+            .background(mine ? selectedColor : themes.theme.surface(0.9))
             .clipShape(Capsule())
             .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
     }
@@ -867,7 +876,7 @@ struct DrawingGameView: View {
                 width: size.width,
                 height: size.height
             )
-            .background(.white.opacity(0.38))
+            .background(themes.theme.surface(0.38))
             .clipShape(RoundedRectangle(cornerRadius: 28))
             .overlay(alignment: .top) {
 
@@ -962,7 +971,7 @@ struct DrawingGameView: View {
             .foregroundStyle(.secondary)
         }
         .padding(14)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -1042,7 +1051,7 @@ struct DrawingGameView: View {
             }
         }
         .padding(14)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 

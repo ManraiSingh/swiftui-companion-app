@@ -13,6 +13,8 @@ struct DotsAndBoxesGameView: View {
 
     @ObservedObject var petVM: PetViewModel
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @State private var assignedSide: DABSide?
     @State private var leftPlayer = ""
     @State private var rightPlayer = ""
@@ -131,8 +133,15 @@ struct DotsAndBoxesGameView: View {
 
         ZStack {
 
+            // The games were left out of the theme on purpose — they are
+            // *worlds*, with a look somebody chose. That holds while the app
+            // is light. Once the rest of it goes dark, walking into a game
+            // means walking into a white flash, so the room they are played
+            // in follows the theme; the pieces keep their own colours.
             LinearGradient(
-                colors: [
+                colors: themes.theme.isDark
+                    ? themes.theme.background
+                    : [
                     Color(red: 1.0, green: 0.90, blue: 0.95),
                     Color(red: 0.93, green: 0.90, blue: 1.0),
                     Color(red: 0.90, green: 0.96, blue: 1.0)
@@ -191,7 +200,7 @@ struct DotsAndBoxesGameView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
+                    .background(themes.theme.surface(0.82))
                     .clipShape(Circle())
             }
 
@@ -219,7 +228,7 @@ struct DotsAndBoxesGameView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                         .frame(width: 42, height: 42)
-                        .background(.white.opacity(0.82))
+                        .background(themes.theme.surface(0.82))
                         .clipShape(Circle())
                 }
 
@@ -230,7 +239,7 @@ struct DotsAndBoxesGameView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                         .frame(width: 42, height: 42)
-                        .background(.white.opacity(0.82))
+                        .background(themes.theme.surface(0.82))
                         .clipShape(Circle())
                 }
             }
@@ -422,7 +431,7 @@ struct DotsAndBoxesGameView: View {
         // Fills the height under the header so the card reaches the
         // bottom instead of stopping short.
         .frame(maxHeight: .infinity)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
@@ -476,7 +485,7 @@ struct DotsAndBoxesGameView: View {
             .foregroundColor(isReady ? .green : .secondary)
         }
         .padding(12)
-        .background(isMe ? sideColor.opacity(0.08) : Color.white.opacity(0.82))
+        .background(isMe ? sideColor.opacity(0.08) : themes.theme.surface(0.82))
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -524,7 +533,7 @@ struct DotsAndBoxesGameView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(14)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -639,7 +648,7 @@ struct DotsAndBoxesGameView: View {
         // that can't grow past the screen width doesn't leave a bare
         // band of background beneath it.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.white.opacity(0.4))
+        .background(themes.theme.surface(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 28))
         .overlay(
             RoundedRectangle(cornerRadius: 28)
@@ -758,7 +767,7 @@ struct DotsAndBoxesGameView: View {
                     }
                 }
                 .padding(14)
-                .background(.white.opacity(0.72))
+                .background(themes.theme.surface(0.72))
                 .clipShape(RoundedRectangle(cornerRadius: 18))
             }
         }

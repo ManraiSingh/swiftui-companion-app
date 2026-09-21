@@ -7,6 +7,8 @@ struct MemoryMatchGameView: View {
 
     @ObservedObject var petVM: PetViewModel
 
+    @ObservedObject private var themes = ThemeManager.shared
+
     @State private var assignedSide: String?
     @State private var leftPlayer = ""
     @State private var rightPlayer = ""
@@ -76,8 +78,15 @@ struct MemoryMatchGameView: View {
 
         ZStack {
 
+            // The games were left out of the theme on purpose — they are
+            // *worlds*, with a look somebody chose. That holds while the app
+            // is light. Once the rest of it goes dark, walking into a game
+            // means walking into a white flash, so the room they are played
+            // in follows the theme; the pieces keep their own colours.
             LinearGradient(
-                colors: [
+                colors: themes.theme.isDark
+                    ? themes.theme.background
+                    : [
                     Color(red: 0.94, green: 0.90, blue: 1.0),
                     Color(red: 1.0, green: 0.92, blue: 0.95)
                 ],
@@ -128,7 +137,7 @@ struct MemoryMatchGameView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
+                    .background(themes.theme.surface(0.82))
                     .clipShape(Circle())
             }
 
@@ -148,7 +157,7 @@ struct MemoryMatchGameView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .frame(width: 42, height: 42)
-                    .background(.white.opacity(0.82))
+                    .background(themes.theme.surface(0.82))
                     .clipShape(Circle())
             }
         }
@@ -255,7 +264,7 @@ struct MemoryMatchGameView: View {
         // Fills the height under the header so the card reaches the
         // bottom instead of stopping short.
         .frame(maxHeight: .infinity)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
@@ -299,7 +308,7 @@ struct MemoryMatchGameView: View {
             .foregroundColor(isReady ? .green : .secondary)
         }
         .padding(12)
-        .background(isMe ? accent.opacity(0.08) : Color.white.opacity(0.82))
+        .background(isMe ? accent.opacity(0.08) : themes.theme.surface(0.82))
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -337,7 +346,7 @@ struct MemoryMatchGameView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(14)
-        .background(.white.opacity(0.72))
+        .background(themes.theme.surface(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -354,7 +363,7 @@ struct MemoryMatchGameView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Capsule().fill(Color.white.opacity(0.7)))
+        .background(Capsule().fill(themes.theme.surface(0.7)))
     }
 
     private var resultBanner: some View {
@@ -405,7 +414,7 @@ struct MemoryMatchGameView: View {
         // that can't grow past the screen width doesn't leave a bare
         // band of background beneath it.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.white.opacity(0.5))
+        .background(themes.theme.surface(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 22))
     }
 
@@ -522,7 +531,7 @@ struct MemoryMatchGameView: View {
                     }
                 }
                 .padding(14)
-                .background(.white.opacity(0.72))
+                .background(themes.theme.surface(0.72))
                 .clipShape(RoundedRectangle(cornerRadius: 18))
             }
         }
