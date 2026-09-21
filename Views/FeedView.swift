@@ -89,7 +89,7 @@ struct FeedView: View {
                         }
                     }
                     .padding(25)
-                    .background(.ultraThinMaterial)
+                    .background(themes.theme.popupSurface)
                     .clipShape(
                         RoundedRectangle(
                             cornerRadius: 30

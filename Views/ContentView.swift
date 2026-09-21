@@ -684,7 +684,7 @@
 //        }
 //        .padding(.horizontal, 14).padding(.vertical, 11)
 //        .background(Capsule().fill(.white.opacity(0.94)))
-//        .overlay(Capsule().stroke(Color.orange.opacity(0.18), lineWidth: 1.5))
+//        .overlay(Capsule().stroke(ThemeManager.shared.theme.quietEdge(Color.orange.opacity(0.18)), lineWidth: 1.5))
 //        .shadow(color: .black.opacity(0.08), radius: 7, y: 3)
 //    }
 //    .buttonStyle(.plain)
@@ -1646,7 +1646,8 @@ struct ContentView: View {
             .overlay(alignment: .bottom) {
                 Image(systemName: "triangle.fill")
                     .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.92))
+                    // Must be the same surface as the bubble it hangs off.
+                    .foregroundStyle(themes.theme.surface(0.92))
                     .rotationEffect(.degrees(180))
                     .offset(y: 9)
             }
@@ -1797,7 +1798,9 @@ struct ContentView: View {
     private var messagePanel: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 6) {
-                Text("Send a little love").font(.subheadline).fontWeight(.black)
+                Text("Send a little love")
+                    .font(.subheadline).fontWeight(.black)
+                    .foregroundStyle(themes.theme.ink)
                 Text("💌").font(.caption)
                 Spacer()
             }
@@ -1996,7 +1999,7 @@ struct ContentView: View {
                     }
                 }
                 .padding(20)
-                .background(.ultraThinMaterial)
+                .background(themes.theme.popupSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 26))
                 .padding(.horizontal, 24)
 
@@ -2093,7 +2096,7 @@ struct ContentView: View {
                 }
             }
             .padding(22)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 26))
             .padding(.horizontal, 24)
         }
@@ -2170,7 +2173,7 @@ struct ContentView: View {
                 .padding(.top, 2)
             }
             .padding(22)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .padding(.horizontal, 28)
             .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
@@ -2215,7 +2218,7 @@ struct ContentView: View {
                 Text("Enjoying \(petVM.pet.name)? 💕")
                     .font(.title3)
                     .fontWeight(.black)
-                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                    .foregroundColor(themes.theme.inkOr(Color(red: 0.27, green: 0.24, blue: 0.21)))
 
                 Text("A quick rating helps other couples find us too 🥹")
                     .font(.subheadline)
@@ -2255,7 +2258,7 @@ struct ContentView: View {
                 .padding(.top, 2)
             }
             .padding(24)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .padding(.horizontal, 28)
             .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
@@ -2305,7 +2308,7 @@ struct ContentView: View {
                 Text("You're Connected! 💞")
                     .font(.title2)
                     .fontWeight(.black)
-                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                    .foregroundColor(themes.theme.inkOr(Color(red: 0.27, green: 0.24, blue: 0.21)))
 
                 Text("You and your partner can now raise \(petVM.pet.name) together 🐾")
                     .font(.subheadline)
@@ -2338,7 +2341,7 @@ struct ContentView: View {
                 }
             }
             .padding(24)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .padding(.horizontal, 28)
             .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
@@ -2367,7 +2370,7 @@ struct ContentView: View {
                 Text("New Doodle! 🎨")
                     .font(.title2)
                     .fontWeight(.black)
-                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                    .foregroundColor(themes.theme.inkOr(Color(red: 0.27, green: 0.24, blue: 0.21)))
 
                 Text("\(petVM.doodlePopupSender) drew you something")
                     .font(.subheadline)
@@ -2383,7 +2386,7 @@ struct ContentView: View {
                         Text("Later")
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                            .foregroundColor(themes.theme.inkOr(Color(red: 0.27, green: 0.24, blue: 0.21)))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
                             .background(themes.theme.surface(0.85))
@@ -2411,7 +2414,7 @@ struct ContentView: View {
                 }
             }
             .padding(24)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .padding(.horizontal, 28)
             .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
@@ -2440,7 +2443,7 @@ struct ContentView: View {
                 Text("New Instant! 📸")
                     .font(.title2)
                     .fontWeight(.black)
-                    .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                    .foregroundColor(themes.theme.inkOr(Color(red: 0.27, green: 0.24, blue: 0.21)))
 
                 Text("\(petVM.instantPopupSender) sent you a photo")
                     .font(.subheadline)
@@ -2456,7 +2459,7 @@ struct ContentView: View {
                         Text("Later")
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                            .foregroundColor(themes.theme.inkOr(Color(red: 0.27, green: 0.24, blue: 0.21)))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
                             .background(themes.theme.surface(0.85))
@@ -2485,7 +2488,7 @@ struct ContentView: View {
                 }
             }
             .padding(24)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .padding(.horizontal, 28)
             .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
@@ -2569,7 +2572,7 @@ struct ContentView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .background(themes.theme.popupSurface)
         // Losing focus (tapped outside) with nothing typed closes the bar —
         // otherwise it just sits there empty, looking like a stray second
         // input field once the keyboard goes down.
@@ -2773,7 +2776,7 @@ struct InviteConnectionView: View {
                 VStack(spacing: 8) {
                     Text(failed ? "Invite needs a retry" : "Joining your Ziggy")
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
-                        .foregroundColor(Color(red: 0.27, green: 0.24, blue: 0.21))
+                        .foregroundColor(themes.theme.inkOr(Color(red: 0.27, green: 0.24, blue: 0.21)))
 
                     Text(failed ? "Check your connection and try again." : "One moment while Ziggy connects you two.")
                         .font(.subheadline)
@@ -2848,6 +2851,15 @@ struct InviteConnectionView: View {
 // MARK: - Answer Sheet View
 // Standalone so it owns its own reveal state cleanly
 
+/// The tallest content the answer sheet has reported, so the sheet can be
+/// sized to what it holds instead of to a fixed half-screen.
+private struct SheetContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct AnswerSheetView: View {
 
     @ObservedObject private var themes = ThemeManager.shared
@@ -2860,17 +2872,30 @@ struct AnswerSheetView: View {
     @State private var showConfetti  = false
     @State private var pulseScale: CGFloat = 1.0
 
+    /// What the sheet is currently tall enough to need. Starts at roughly
+    /// the input state's height so the sheet opens at the right size rather
+    /// than resizing on the first frame.
+    @State private var sheetHeight: CGFloat = 360
+
     private var q:          DailyQuestion? { dailyQ.question }
     private var myAnswered: Bool           { !(q?.myAnswer.isEmpty ?? true) }
     private var bothDone:   Bool           { q?.bothAnswered ?? false }
 
     var body: some View {
         ZStack {
+            // The sheet had this pink-and-lavender gradient hardcoded, and
+            // that is what inverted the whole panel. Everything inside it
+            // already asks the theme for its surfaces, so on a dark theme
+            // they were drawing dark cards and dark fields onto a pale sheet
+            // — the answer box came out as a black hole with an invisible
+            // placeholder in it. Light themes keep the exact gradient.
             LinearGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.93, blue: 0.97),
-                    Color(red: 0.94, green: 0.93, blue: 1.0)
-                ],
+                colors: themes.theme.isDark
+                    ? themes.theme.background
+                    : [
+                        Color(red: 1.0, green: 0.93, blue: 0.97),
+                        Color(red: 0.94, green: 0.93, blue: 1.0)
+                    ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -2898,6 +2923,10 @@ struct AnswerSheetView: View {
 
                 Text(dailyQ.todayQuestion)
                     .font(.title3).fontWeight(.bold)
+                    // No colour at all before. That resolves to `.primary`,
+                    // which is black everywhere because the app pins itself
+                    // to the light scheme for the sake of the worlds.
+                    .foregroundStyle(themes.theme.ink)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 28)
                     .padding(.bottom, 28)
@@ -2919,18 +2948,50 @@ struct AnswerSheetView: View {
                     inputContent
                 }
 
-                Spacer()
             }
+            // Measured before the stack is stretched, not after. With a
+            // Spacer in here the stack grew to whatever the sheet already
+            // was, so the measurement only ever reported back the height it
+            // had just been given — and the empty half never went away.
+            .padding(.bottom, 26)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: SheetContentHeightKey.self,
+                        value: proxy.size.height
+                    )
+                }
+            )
+            .frame(maxHeight: .infinity, alignment: .top)
         }
-        .presentationDetents([.medium])
+        .onPreferenceChange(SheetContentHeightKey.self) { measured in
+            // `.medium` is half the screen whatever is in the sheet, and the
+            // input state is three short elements — hence the empty half.
+            // Measured and clamped instead: never so short it crowds the
+            // question, never taller than `.medium` was.
+            guard measured > 0 else { return }
+            sheetHeight = min(max(measured, 300), 560)
+        }
+        .presentationDetents([.height(sheetHeight)])
         .presentationCornerRadius(32)
     }
 
     // STATE 1 — Input
     private var inputContent: some View {
         VStack(spacing: 12) {
-            TextField("Your answer…", text: $dailyQ.myAnswerDraft, axis: .vertical)
+            TextField(
+                "",
+                text: $dailyQ.myAnswerDraft,
+                // A placeholder ignores `foregroundStyle` — `prompt:` is the
+                // only thing that colours it, which is why "Your answer…"
+                // stayed invisible on the dark field.
+                prompt: Text("Your answer…")
+                    .foregroundColor(themes.theme.inkSoft),
+                axis: .vertical
+            )
                 .font(.subheadline)
+                .foregroundStyle(themes.theme.ink)
+                .tint(themes.theme.accent)
                 .lineLimit(1...4)
                 .textInputAutocapitalization(.sentences)
                 .padding(.horizontal, 16).padding(.vertical, 14)
@@ -2959,9 +3020,17 @@ struct AnswerSheetView: View {
                 .background(
                     dailyQ.myAnswerDraft
                         .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? Color.gray : Color.pink
+                    ? (themes.theme.isDark
+                        ? Color.white.opacity(0.10)
+                        : Color.gray)
+                    : Color.pink
                 )
-                .foregroundColor(.white)
+                .foregroundColor(
+                    dailyQ.myAnswerDraft
+                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && themes.theme.isDark
+                    ? .white.opacity(0.4) : .white
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 18))
             }
             .disabled(
@@ -3011,6 +3080,7 @@ struct AnswerSheetView: View {
                         .foregroundStyle(.pink)
                     Text("Both of you answered 💕")
                         .font(.subheadline).fontWeight(.black)
+                        .foregroundStyle(themes.theme.ink)
                     Text("Tap to reveal each other's answers")
                         .font(.caption)
                         .foregroundStyle(themes.theme.inkSoft)
@@ -3201,7 +3271,7 @@ func quickPill(_ msg: QuickMessage, action: @escaping () -> Void) -> some View {
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
         .background(Capsule().fill(ThemeManager.shared.theme.surface(0.94)))
-        .overlay(Capsule().stroke(Color.orange.opacity(0.18), lineWidth: 1.5))
+        .overlay(Capsule().stroke(ThemeManager.shared.theme.quietEdge(Color.orange.opacity(0.18)), lineWidth: 1.5))
         .shadow(color: .black.opacity(0.08), radius: 7, y: 3)
     }
     .buttonStyle(.plain)

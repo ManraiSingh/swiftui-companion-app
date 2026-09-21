@@ -737,7 +737,7 @@ struct PlayCenterView: View {
                 .padding(.top, 2)
             }
             .padding(18)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 28))
             .overlay(
                 RoundedRectangle(cornerRadius: 28)
