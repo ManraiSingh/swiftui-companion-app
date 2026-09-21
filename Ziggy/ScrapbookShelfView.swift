@@ -103,6 +103,13 @@ struct ScrapbookShelfView: View {
 
     @StateObject private var manager = ScrapbookManager.shared
 
+    /// The shelf is one of the app's *worlds*, so the books, the objects and
+    /// the wood keep the colours they were drawn in — those are the content,
+    /// the way the doodle canvas is. What follows the theme is the room they
+    /// stand in: the wall behind the bookcase, the title, and the Edit button.
+    /// Turning the lights off in the room leaves the illustration alone.
+    @ObservedObject private var themes = ThemeManager.shared
+
     @State private var openBook: ScrapbookBook?
     @State private var showingNewBook = false
     @State private var paywall: PaywallReason?
@@ -239,8 +246,14 @@ struct ScrapbookShelfView: View {
 
         ZStack {
 
+            // The wall doubles as the back of the bookcase — the planks and
+            // posts are drawn over it and the gaps between the shelves are
+            // just this showing through. So darkening the wall darkens the
+            // inside of the bookcase in the same stroke.
             LinearGradient(
-                colors: [ScrapbookStyle.wallTop, ScrapbookStyle.wallBottom],
+                colors: themes.theme.isDark
+                    ? themes.theme.background
+                    : [ScrapbookStyle.wallTop, ScrapbookStyle.wallBottom],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -252,6 +265,26 @@ struct ScrapbookShelfView: View {
                     header
 
                     etagere
+                        // Same recipe the Home tiles use — a wash of the
+                        // colour, an outline of it, and a soft shadow in it.
+                        //
+                        // On a near-black wall the bookcase would otherwise
+                        // just stop existing at its edges; lighting the wood
+                        // from behind is what puts it back in a room. Light
+                        // themes get nothing, so nothing already shipped
+                        // changes.
+                        .shadow(
+                            color: themes.theme.isDark
+                                ? ScrapbookStyle.wood.opacity(0.30)
+                                : .clear,
+                            radius: 26
+                        )
+                        .shadow(
+                            color: themes.theme.isDark
+                                ? themes.theme.accent.opacity(0.12)
+                                : .clear,
+                            radius: 40
+                        )
                         .padding(.horizontal, 14)
                         .padding(.bottom, selection == nil ? 26 : 300)
 
@@ -329,11 +362,15 @@ struct ScrapbookShelfView: View {
 
                 Text("Scrapbook")
                     .font(.system(size: 30, weight: .bold, design: .serif))
-                    .foregroundStyle(ScrapbookStyle.outline)
+                    .foregroundStyle(themes.theme.inkOr(ScrapbookStyle.outline))
 
                 Text(subtitle)
                     .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(ScrapbookStyle.outline.opacity(0.6))
+                    .foregroundStyle(
+                        themes.theme.isDark
+                            ? themes.theme.inkSoft
+                            : ScrapbookStyle.outline.opacity(0.6)
+                    )
             }
 
             Spacer()
@@ -346,13 +383,28 @@ struct ScrapbookShelfView: View {
             } label: {
                 Text(editing ? "Done" : "Edit")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(editing ? ScrapbookStyle.paperWhite : ScrapbookStyle.outline)
+                    .foregroundStyle(
+                        editing
+                            ? ScrapbookStyle.paperWhite
+                            : themes.theme.inkOr(ScrapbookStyle.outline)
+                    )
                     .padding(.horizontal, 18)
                     .padding(.vertical, 9)
                     .background(
                         Capsule()
-                            .fill(editing ? ScrapbookStyle.outline : ScrapbookStyle.cream)
-                            .overlay(Capsule().stroke(ScrapbookStyle.outline, lineWidth: 2))
+                            .fill(
+                                editing
+                                    ? themes.theme.solidButton(ScrapbookStyle.outline)
+                                    : (themes.theme.isDark
+                                        ? themes.theme.surface(0.85)
+                                        : ScrapbookStyle.cream)
+                            )
+                            .overlay(
+                                Capsule().stroke(
+                                    themes.theme.quietEdge(ScrapbookStyle.outline),
+                                    lineWidth: 2
+                                )
+                            )
                     )
             }
             .buttonStyle(.plain)
@@ -900,12 +952,22 @@ private struct AddSlot: View {
                     .font(.system(size: 11 * unit, weight: .bold, design: .rounded))
                     .minimumScaleFactor(0.7)
             }
-            .foregroundStyle(ScrapbookStyle.outline.opacity(0.55))
+            // The empty slots are drawn in the shelf's own brown, which is a
+            // mid-tone: it reads as "faint" on the pale wall and as "almost
+            // gone" on the dark one. They need to be lighter than the wall,
+            // not darker, once the lights are off.
+            .foregroundStyle(
+                ThemeManager.shared.theme.isDark
+                    ? Color.white.opacity(0.42)
+                    : ScrapbookStyle.outline.opacity(0.55)
+            )
             .frame(width: width, height: 138 * unit)
             .background(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .strokeBorder(
-                        ScrapbookStyle.outline.opacity(0.45),
+                        ThemeManager.shared.theme.isDark
+                            ? Color.white.opacity(0.28)
+                            : ScrapbookStyle.outline.opacity(0.45),
                         style: StrokeStyle(lineWidth: 2, dash: [6, 5])
                     )
             )
