@@ -20,14 +20,24 @@ struct OnboardingView: View {
     @AppStorage("ziggy_username")
     private var username = ""
 
-    private let cream = LinearGradient(
-        colors: [
-            Color(red: 0.98, green: 0.94, blue: 0.93),
-            Color(red: 0.95, green: 0.92, blue: 0.88)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    /// The page these two are drawn on.
+    ///
+    /// Hardcoded light, while the cards standing on it ask the theme for
+    /// their surfaces — so on a dark theme you got dark cards and dark
+    /// labels sitting on a pale pink page. The page follows the theme now;
+    /// light themes keep the exact gradient they shipped with.
+    private var cream: LinearGradient {
+        LinearGradient(
+            colors: themes.theme.isDark
+                ? themes.theme.background
+                : [
+                    Color(red: 0.98, green: 0.94, blue: 0.93),
+                    Color(red: 0.95, green: 0.92, blue: 0.88)
+                ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 
     private let accent = Color(red: 0.27, green: 0.24, blue: 0.21)
 
@@ -75,7 +85,7 @@ struct OnboardingView: View {
 
                     Text("Hi, I'm Ziggy 💕")
                         .font(.system(size: 34, weight: .heavy, design: .rounded))
-                        .foregroundColor(accent)
+                        .foregroundColor(themes.theme.inkOr(accent))
 
                     Text("Your little love companion 🐾\nWhat should I call you?")
                         .font(.subheadline)
@@ -90,7 +100,15 @@ struct OnboardingView: View {
                         Image(systemName: "heart.fill")
                             .foregroundColor(.pink.opacity(0.7))
 
-                        TextField("Enter your name", text: $name)
+                        TextField(
+                            "",
+                            text: $name,
+                            // A placeholder ignores `foregroundStyle`; only
+                            // `prompt:` colours it, which is why it stayed
+                            // near-invisible on the dark field.
+                            prompt: Text("Enter your name")
+                                .foregroundColor(themes.theme.inkSoft)
+                        )
                             .submitLabel(.done)
                     }
                     .padding(16)

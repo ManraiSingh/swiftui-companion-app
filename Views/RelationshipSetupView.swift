@@ -13,14 +13,24 @@ struct RelationshipSetupView: View {
     @State private var isCreatingInvite = false
     @State private var inviteError = ""
 
-    private let cream = LinearGradient(
-        colors: [
-            Color(red: 0.98, green: 0.94, blue: 0.93),
-            Color(red: 0.95, green: 0.92, blue: 0.88)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    /// The page these two are drawn on.
+    ///
+    /// Hardcoded light, while the cards standing on it ask the theme for
+    /// their surfaces — so on a dark theme you got dark cards and dark
+    /// labels sitting on a pale pink page. The page follows the theme now;
+    /// light themes keep the exact gradient they shipped with.
+    private var cream: LinearGradient {
+        LinearGradient(
+            colors: themes.theme.isDark
+                ? themes.theme.background
+                : [
+                    Color(red: 0.98, green: 0.94, blue: 0.93),
+                    Color(red: 0.95, green: 0.92, blue: 0.88)
+                ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 
     private let accent = Color(red: 0.27, green: 0.24, blue: 0.21)
 
@@ -83,7 +93,7 @@ struct RelationshipSetupView: View {
 
                         Text("One Ziggy, Two Hearts 💞")
                             .font(.system(size: 26, weight: .heavy, design: .rounded))
-                            .foregroundColor(accent)
+                            .foregroundColor(themes.theme.inkOr(accent))
                             .multilineTextAlignment(.center)
 
                         Text("Connect with your partner so you\ncan raise Ziggy together 🐾")
@@ -98,7 +108,7 @@ struct RelationshipSetupView: View {
                         Text(inviteCreated ? "Invite your partner" : "Start a new connection")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(accent)
+                            .foregroundColor(themes.theme.inkOr(accent))
 
                         if inviteCreated {
 
@@ -111,7 +121,7 @@ struct RelationshipSetupView: View {
                                     Text(generatedCode)
                                         .font(.system(.title3, design: .rounded))
                                         .fontWeight(.heavy)
-                                        .foregroundColor(accent)
+                                        .foregroundColor(themes.theme.inkOr(accent))
 
                                     Spacer()
                                 }
@@ -151,7 +161,7 @@ struct RelationshipSetupView: View {
                                     Text("Continue without sharing")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
-                                        .foregroundColor(accent)
+                                        .foregroundColor(themes.theme.inkOr(accent))
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
                                         .background(themes.theme.surface(0.6))
@@ -228,14 +238,19 @@ struct RelationshipSetupView: View {
                         Text("Already have a code?")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundColor(accent)
+                            .foregroundColor(themes.theme.inkOr(accent))
 
                         HStack(spacing: 10) {
 
                             Image(systemName: "key.fill")
                                 .foregroundColor(.pink.opacity(0.7))
 
-                            TextField("Enter your love code", text: $joinCode)
+                            TextField(
+                                "",
+                                text: $joinCode,
+                                prompt: Text("Enter your love code")
+                                    .foregroundColor(themes.theme.inkSoft)
+                            )
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.characters)
                         }
