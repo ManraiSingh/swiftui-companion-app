@@ -1003,22 +1003,37 @@ struct ContentView: View {
         }
     }
 
+    /// The caption under Ziggy's mood, and the mark that goes beside it.
+    ///
+    /// These used to carry their own emoji inside the string. The line wraps
+    /// over Ziggy's room, so "I love seeing you guys play together ❤️" put a
+    /// lone heart on a line of its own — the emoji was being laid out as a
+    /// word. Drawn beside the text instead, it can't be wrapped away from it.
+    var cuteActivityIcon: String {
+        let action = petVM.pet.lastAction
+        if action.contains("Fed")    { return "fork.knife" }
+        if action.contains("Played") { return "heart.fill" }
+        if action.contains("Pizza")  { return "takeoutbag.and.cup.and.straw.fill" }
+        if action.contains("Hug")    { return "figure.2.arms.open" }
+        return "pawprint.fill"
+    }
+
     var cuteActivityText: String {
         let person = petVM.pet.lastActionBy
         let action = petVM.pet.lastAction
         if action.contains("Fed") {
-            return "🍖 \(person) fed me!"
+            return "\(person) fed me!"
         }
         if action.contains("Played") {
-            return "❤️ I love seeing you guys play together ❤️"
+            return "I love seeing you guys play together"
         }
         if action.contains("Pizza") {
-            return "🍕 \(petVM.pet.name) devoured your couple pizza!"
+            return "\(petVM.pet.name) devoured your couple pizza!"
         }
         if action.contains("Hug") {
             return "\(person) hugged me!"
         }
-        return "🐶 Waiting for someone..."
+        return "Waiting for someone..."
     }
 
     var speechBubbleText: String {
@@ -1581,10 +1596,20 @@ struct ContentView: View {
                     .minimumScaleFactor(0.55)
             }
 
-            Text(cuteActivityText)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(isDarkHeroBackground ? .white : .black)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 5) {
+
+                Image(systemName: cuteActivityIcon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
+                    // Holds the mark on the caption's first line rather than
+                    // letting it centre itself against two or three.
+                    .padding(.top, 1)
+
+                Text(cuteActivityText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isDarkHeroBackground ? .white : .black)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         // Over the sunlit afternoon room: black text and a deep red mood
         // word, lifted by a white halo. Over the dark night/rainy rooms
@@ -3278,11 +3303,35 @@ func ziggyEmotionImage(for id: String) -> String {
     ziggyEmotions.first { $0.id == id }?.image ?? ""
 }
 
+/// The mark on a built-in pill, and the colour it carries.
+///
+/// Only the seven the app ships with. A pill somebody wrote themselves keeps
+/// the emoji they picked for it — that one is their message, not an icon the
+/// app chose, and there is no symbol picker to offer them instead.
+private func quickMark(_ id: String) -> (symbol: String, tint: Color)? {
+    switch id {
+    case "miss":    return ("heart.fill",          Color(red: 0.94, green: 0.36, blue: 0.55))
+    case "night":   return ("moon.stars.fill",     Color(red: 0.52, green: 0.50, blue: 0.92))
+    case "morning": return ("sun.max.fill",        Color(red: 0.96, green: 0.68, blue: 0.20))
+    case "think":   return ("bubble.left.fill",    Color(red: 0.62, green: 0.45, blue: 0.92))
+    case "hug":     return ("figure.2.arms.open",  Color(red: 0.95, green: 0.50, blue: 0.35))
+    case "proud":   return ("star.fill",           Color(red: 0.95, green: 0.72, blue: 0.20))
+    case "home":    return ("house.fill",          Color(red: 0.30, green: 0.72, blue: 0.52))
+    default:        return nil
+    }
+}
+
 @ViewBuilder
 func quickPill(_ msg: QuickMessage, action: @escaping () -> Void) -> some View {
     Button(action: action) {
         HStack(spacing: 9) {
-            Text(msg.emoji).font(.headline)
+            if let mark = quickMark(msg.id) {
+                Image(systemName: mark.symbol)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(mark.tint)
+            } else {
+                Text(msg.emoji).font(.headline)
+            }
             Text(msg.label).font(.caption).fontWeight(.black).foregroundStyle(ThemeManager.shared.theme.ink)
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
