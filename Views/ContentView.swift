@@ -1226,9 +1226,17 @@ struct ContentView: View {
     private var compactHeader: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("You two & \(petVM.pet.name) 💞")
+                (
+                    Text("You two & \(petVM.pet.name) ")
+                        .foregroundColor(themes.theme.ink)
+                    + Text(Image(systemName: "heart.fill"))
+                        // A symbol at the title's own weight comes out
+                        // heavier than the emoji it replaced, so this run
+                        // carries its own smaller font.
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(Color(red: 0.95, green: 0.35, blue: 0.50))
+                )
                     .font(.system(size: 22, weight: .black))
-                    .foregroundStyle(themes.theme.ink)
                     // Held to one line. The header is measured and Ziggy is
                     // given whatever height is left over, so a long pet name
                     // wrapping here would quietly shrink him.
@@ -1659,8 +1667,9 @@ struct ContentView: View {
             showFeedView = true
         } label: {
             HStack(spacing: 5) {
-                Text("🍗")
-                    .font(.system(size: 15))
+                Image(systemName: "fork.knife")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.pink)
                 Text("Feed")
                     .font(.subheadline)
                     .fontWeight(.black)
@@ -1692,7 +1701,12 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
-                        Text("🐾").font(.system(size: 13))
+                        Image(systemName: "pawprint.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(
+                                themes.theme.isDark
+                                    ? themes.theme.accent : Color.secondary
+                            )
                         Text("\(petVM.pet.name) asks today")
                             .font(.caption2).fontWeight(.black)
                             .foregroundStyle(themes.theme.isDark ? themes.theme.accent : Color.secondary)
@@ -1801,7 +1815,9 @@ struct ContentView: View {
                 Text("Send a little love")
                     .font(.subheadline).fontWeight(.black)
                     .foregroundStyle(themes.theme.ink)
-                Text("💌").font(.caption)
+                Image(systemName: "envelope.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.55))
                 Spacer()
             }
             ScrollView(.horizontal, showsIndicators: false) {
