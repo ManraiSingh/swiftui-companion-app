@@ -639,29 +639,41 @@ private struct CameraPicker: UIViewControllerRepresentable {
 
 private extension UIImage {
 
-    /// Produces a small base64 JPEG so instants upload/download fast
-    /// (kept well under ~220 KB — Firestore's limit is 1 MB).
-    func instantBase64(maxBytes: Int = 220_000) -> String? {
+    /// A base64 JPEG that still fits a Firestore document once base64 has
+    /// added its third.
+    ///
+    /// This used to start at 480px and quality 0.5 inside a 220 KB budget,
+    /// which is why instants arrived soft — an instant is shown nearly
+    /// full-screen, and 480px across a phone's width is roughly a third of
+    /// the pixels the screen asks for. The ceiling was never the reason for
+    /// it: Firestore allows 1,048,576 bytes a document, and a scrapbook
+    /// photo in this same app already ships at 1600px inside 500 KB.
+    ///
+    /// Matched to that now. 500 KB encodes to about 667 KB of base64, which
+    /// leaves comfortable room for the caption and the rest of the fields.
+    /// The ladder still steps down until something fits, so a send can't
+    /// start failing on a photo that used to go through.
+    func instantBase64(maxBytes: Int = 500_000) -> String? {
 
         // Try progressively smaller dimensions until it fits.
-        for maxSide in [480, 400, 320, 260] as [CGFloat] {
+        for maxSide in [1600, 1280, 1024, 800] as [CGFloat] {
 
             let resized = resizedForInstant(maxSide: maxSide)
-            var quality: CGFloat = 0.5
+            var quality: CGFloat = 0.78
 
-            while quality >= 0.25 {
+            while quality >= 0.4 {
 
                 if let data = resized.jpegData(compressionQuality: quality),
                    data.count <= maxBytes {
                     return data.base64EncodedString()
                 }
-                quality -= 0.1
+                quality -= 0.08
             }
         }
 
-        // Last resort: smallest size, lowest quality.
-        return resizedForInstant(maxSide: 280)
-            .jpegData(compressionQuality: 0.25)?
+        // Last resort — still far above where this used to start.
+        return resizedForInstant(maxSide: 640)
+            .jpegData(compressionQuality: 0.4)?
             .base64EncodedString()
     }
 
