@@ -265,26 +265,32 @@ struct ScrapbookShelfView: View {
                     header
 
                     etagere
-                        // Same recipe the Home tiles use — a wash of the
-                        // colour, an outline of it, and a soft shadow in it.
+                        // The glow that lifts the bookcase off a near-black
+                        // wall, drawn as a gradient behind it rather than as
+                        // shadows on it.
                         //
-                        // On a near-black wall the bookcase would otherwise
-                        // just stop existing at its edges; lighting the wood
-                        // from behind is what puts it back in a room. Light
-                        // themes get nothing, so nothing already shipped
-                        // changes.
-                        .shadow(
-                            color: themes.theme.isDark
-                                ? ScrapbookStyle.wood.opacity(0.30)
-                                : .clear,
-                            radius: 26
-                        )
-                        .shadow(
-                            color: themes.theme.isDark
-                                ? themes.theme.accent.opacity(0.12)
-                                : .clear,
-                            radius: 40
-                        )
+                        // It was two `.shadow`s at radius 26 and 40. A shadow
+                        // is a blur of the thing it is attached to, and the
+                        // thing here is the whole illustration — every plank,
+                        // book and plant — so that was two full offscreen
+                        // blur passes over a large, complex view, repeated as
+                        // the shelf scrolled. This is a plain gradient fill:
+                        // same warm halo, no offscreen pass at all.
+                        .background {
+                            if themes.theme.isDark {
+                                RadialGradient(
+                                    colors: [
+                                        ScrapbookStyle.wood.opacity(0.26),
+                                        themes.theme.accent.opacity(0.07),
+                                        .clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 30,
+                                    endRadius: 340
+                                )
+                                .allowsHitTesting(false)
+                            }
+                        }
                         .padding(.horizontal, 14)
                         .padding(.bottom, selection == nil ? 26 : 300)
 
