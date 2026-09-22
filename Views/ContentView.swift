@@ -1599,14 +1599,18 @@ struct ContentView: View {
             HStack(alignment: .top, spacing: 5) {
 
                 Image(systemName: cuteActivityIcon)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 10.5, weight: .bold))
                     .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
                     // Holds the mark on the caption's first line rather than
                     // letting it centre itself against two or three.
                     .padding(.top, 1)
 
+                // Ziggy's own line, and deliberately quieter than the mood
+                // word above it. At 13 the longer ones ran to three lines
+                // across his room and started competing with the speech
+                // bubble for the same attention.
                 Text(cuteActivityText)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(isDarkHeroBackground ? .white : .black)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1669,7 +1673,7 @@ struct ContentView: View {
 
     private var speechBubble: some View {
         Text(speechBubbleText)
-            .font(.footnote).fontWeight(.bold)
+            .font(.system(size: 12.5, weight: .bold))
             .multilineTextAlignment(.center)
             .foregroundStyle(themes.theme.ink)
             .lineLimit(5).fixedSize(horizontal: false, vertical: true)
