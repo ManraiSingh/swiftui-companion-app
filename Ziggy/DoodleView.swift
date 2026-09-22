@@ -1466,7 +1466,12 @@ struct DoodleView: View {
 
         let maxBase64Bytes = 900_000
 
-        for quality in [0.7, 0.5, 0.35, 0.2] as [CGFloat] {
+        // Starts at 0.92 rather than 0.7. A doodle is flat colour and hard
+        // strokes, which is exactly what JPEG smears first — and it also
+        // compresses so well that the top rung almost always fits inside the
+        // budget anyway. The ladder is unchanged below, so nothing that used
+        // to send stops sending.
+        for quality in [0.92, 0.75, 0.55, 0.35, 0.2] as [CGFloat] {
             guard let data = image.jpegData(compressionQuality: quality) else { continue }
             // base64 is 4 bytes out for every 3 in.
             if (data.count + 2) / 3 * 4 <= maxBase64Bytes { return data }

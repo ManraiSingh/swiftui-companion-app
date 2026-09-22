@@ -79,7 +79,12 @@ class WidgetDataManager {
         guard let image = UIImage(data: raw) else { return }
         guard let url = WidgetDataManager.partnerDoodleURL() else { return }
 
-        let resized = WidgetDataManager.downscale(image, maxDimension: 420)
+        // 640, not 420. The widget comes in small and medium; a small
+        // widget is 155pt, which is 465 pixels on a 3x screen, so 420 was
+        // already below what the smaller of the two asks for and the doodle
+        // arrived slightly soft. A line drawing this size is a cheap PNG and
+        // sits well inside a widget's memory budget.
+        let resized = WidgetDataManager.downscale(image, maxDimension: 640)
         guard let png = resized.pngData() else { return }
 
         do {
