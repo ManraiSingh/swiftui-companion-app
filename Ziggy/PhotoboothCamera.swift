@@ -43,6 +43,18 @@ final class PhotoboothCamera: NSObject, ObservableObject {
 
     func start() {
 
+        #if targetEnvironment(simulator)
+        // A simulator has no camera, which would leave anyone testing this
+        // with one phone and one simulator unable to try the booth at all.
+        // The stand-in lens makes the simulator a real second person: it
+        // joins, counts down and hands up three frames like any other phone.
+        //
+        // Compiled in only for the simulator, so it cannot reach a shipped
+        // build — a device build has no branch to take.
+        isRunning = true
+        return
+        #else
+
         switch AVCaptureDevice.authorizationStatus(for: .video) {
 
         case .authorized:
@@ -59,6 +71,7 @@ final class PhotoboothCamera: NSObject, ObservableObject {
         default:
             accessDenied = true
         }
+        #endif
     }
 
     func stop() {
@@ -110,6 +123,12 @@ final class PhotoboothCamera: NSObject, ObservableObject {
 
     func capture(_ completion: @escaping (UIImage?) -> Void) {
 
+        #if targetEnvironment(simulator)
+        standInShot += 1
+        completion(PhotoboothStandIn.frame(number: standInShot))
+        return
+        #else
+
         guard configured, isRunning else {
             completion(nil)
             return
@@ -120,7 +139,17 @@ final class PhotoboothCamera: NSObject, ObservableObject {
         let settings = AVCapturePhotoSettings()
         settings.flashMode = .off
         output.capturePhoto(with: settings, delegate: self)
+        #endif
     }
+
+    #if targetEnvironment(simulator)
+    /// Which stand-in frame comes next, so the three shots are told apart.
+    private var standInShot: Int {
+        get { Self.standInCounter }
+        set { Self.standInCounter = newValue }
+    }
+    private static var standInCounter = 0
+    #endif
 }
 
 extension PhotoboothCamera: AVCapturePhotoCaptureDelegate {
@@ -153,7 +182,21 @@ extension PhotoboothCamera: AVCapturePhotoCaptureDelegate {
 // MARK: - Preview
 
 /// The live view, wrapped so SwiftUI can hold it.
-struct PhotoboothPreview: UIViewRepresentable {
+struct PhotoboothPreview: View {
+
+    let session: AVCaptureSession
+
+    var body: some View {
+        #if targetEnvironment(simulator)
+        PhotoboothStandIn.PreviewCard()
+        #else
+        LivePreview(session: session)
+        #endif
+    }
+}
+
+/// The real thing, wrapped so SwiftUI can hold it.
+struct LivePreview: UIViewRepresentable {
 
     let session: AVCaptureSession
 
