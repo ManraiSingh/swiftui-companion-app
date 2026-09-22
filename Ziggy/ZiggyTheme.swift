@@ -143,7 +143,12 @@ struct ZiggyTheme: Identifiable, Equatable {
 
     // MARK: - The set
 
-    static let all: [ZiggyTheme] = [dawn, sunset, meadow, lavender, rose, midnight]
+    /// Two: the one the app shipped with, and the lights-off one.
+    ///
+    /// `named(_:)` already falls back to dawn for an id it doesn't know, so
+    /// anyone sitting on one of the removed themes lands on Dawn the next
+    /// time the app opens rather than on a blank palette.
+    static let all: [ZiggyTheme] = [dawn, midnight]
 
     /// Exactly the colours the app shipped with, so choosing "Dawn" puts
     /// everything back where it was.
@@ -161,74 +166,6 @@ struct ZiggyTheme: Identifiable, Equatable {
         inkSoft: Color(red: 0.42, green: 0.41, blue: 0.45),
         surfaceTint: Color.white,
         cardOpacity: 0.76,
-        isDark: false
-    )
-
-    static let sunset = ZiggyTheme(
-        id: "sunset",
-        name: "Sunset",
-        blurb: "Warm peach and apricot, like late afternoon.",
-        background: [
-            Color(red: 1.00, green: 0.93, blue: 0.84),
-            Color(red: 0.99, green: 0.85, blue: 0.79),
-            Color(red: 0.97, green: 0.79, blue: 0.82)
-        ],
-        accent: Color(red: 0.93, green: 0.42, blue: 0.32),
-        ink: Color(red: 0.26, green: 0.15, blue: 0.13),
-        inkSoft: Color(red: 0.50, green: 0.37, blue: 0.34),
-        surfaceTint: Color(red: 1.00, green: 0.985, blue: 0.975),
-        cardOpacity: 0.80,
-        isDark: false
-    )
-
-    static let meadow = ZiggyTheme(
-        id: "meadow",
-        name: "Meadow",
-        blurb: "Fresh sage and sky. Calm and green.",
-        background: [
-            Color(red: 0.91, green: 0.97, blue: 0.91),
-            Color(red: 0.86, green: 0.95, blue: 0.93),
-            Color(red: 0.88, green: 0.93, blue: 0.86)
-        ],
-        accent: Color(red: 0.24, green: 0.62, blue: 0.45),
-        ink: Color(red: 0.13, green: 0.22, blue: 0.18),
-        inkSoft: Color(red: 0.36, green: 0.46, blue: 0.41),
-        surfaceTint: Color(red: 0.985, green: 1.00, blue: 0.985),
-        cardOpacity: 0.78,
-        isDark: false
-    )
-
-    static let lavender = ZiggyTheme(
-        id: "lavender",
-        name: "Lavender",
-        blurb: "Dusky violet and periwinkle.",
-        background: [
-            Color(red: 0.94, green: 0.92, blue: 0.99),
-            Color(red: 0.90, green: 0.88, blue: 0.98),
-            Color(red: 0.95, green: 0.91, blue: 0.97)
-        ],
-        accent: Color(red: 0.52, green: 0.38, blue: 0.82),
-        ink: Color(red: 0.19, green: 0.16, blue: 0.28),
-        inkSoft: Color(red: 0.43, green: 0.40, blue: 0.54),
-        surfaceTint: Color(red: 0.990, green: 0.985, blue: 1.00),
-        cardOpacity: 0.80,
-        isDark: false
-    )
-
-    static let rose = ZiggyTheme(
-        id: "rose",
-        name: "Rose",
-        blurb: "Blush and petal pink.",
-        background: [
-            Color(red: 1.00, green: 0.94, blue: 0.95),
-            Color(red: 0.99, green: 0.89, blue: 0.92),
-            Color(red: 0.97, green: 0.90, blue: 0.95)
-        ],
-        accent: Color(red: 0.86, green: 0.30, blue: 0.48),
-        ink: Color(red: 0.26, green: 0.14, blue: 0.19),
-        inkSoft: Color(red: 0.50, green: 0.36, blue: 0.41),
-        surfaceTint: Color(red: 1.00, green: 0.985, blue: 0.992),
-        cardOpacity: 0.82,
         isDark: false
     )
 
