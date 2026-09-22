@@ -301,7 +301,7 @@ struct DotsAndBoxesGameView: View {
                 }
             }
             .padding(24)
-            .background(.ultraThinMaterial)
+            .background(themes.theme.popupSurface)
             .clipShape(RoundedRectangle(cornerRadius: 30))
             .padding(.horizontal, 28)
             .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
