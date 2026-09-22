@@ -151,7 +151,8 @@ class FirestoreManager {
             scoresListener, ticTacToeListener, dotsAndBoxesListener,
             connectFourListener, memoryMatchListener, instantBadgeListener,
             instantViewListener, instantArchiveListener, bouquetListener,
-            doodleViewListener, doodleWidgetListener, ziggyJumpRaceListener
+            doodleViewListener, doodleWidgetListener, ziggyJumpRaceListener,
+            photoboothListener, photoboothShotsListener
         ] {
             listener?.remove()
         }
@@ -166,6 +167,7 @@ class FirestoreManager {
         bouquetListener = nil
         doodleViewListener = nil;       doodleWidgetListener = nil
         ziggyJumpRaceListener = nil
+        photoboothListener = nil;       photoboothShotsListener = nil
     }
 
     func savePet(_ pet: Pet) {
@@ -3946,6 +3948,201 @@ class FirestoreManager {
     // and the other has not been told which course to build.
 
     private var ziggyJumpRaceListener: ListenerRegistration?
+
+    // MARK: - Photobooth
+    //
+    // The booth is the race's lobby with a shutter on the end of it: both
+    // people join, both say ready, and one clock decides when the pictures
+    // are taken so the two halves of a frame are the same moment.
+    //
+    // The photos live in their own documents, one per side, rather than in
+    // the session. Three shots base64'd is a few hundred KB and a Firestore
+    // document stops at 1 MB — putting both sides' pictures in the state
+    // document would blow that as soon as the second person finished.
+
+    private var photoboothListener: ListenerRegistration?
+    private var photoboothShotsListener: ListenerRegistration?
+
+    private var photoboothRef: DocumentReference? {
+        guard !relationshipCode.isEmpty else { return nil }
+        return db.collection("relationships")
+            .document(relationshipCode)
+            .collection("games")
+            .document("photobooth")
+    }
+
+    private func photoboothShotsRef(_ side: String) -> DocumentReference? {
+        photoboothRef?.collection("shots").document(side)
+    }
+
+    /// Claims a side of the booth, the same way the race claims a lane.
+    func joinPhotobooth(
+        username: String,
+        completion: @escaping (String?) -> Void
+    ) {
+
+        guard let ref = photoboothRef else {
+            completion(nil)
+            return
+        }
+
+        let myDeviceID = deviceID
+
+        db.runTransaction { transaction, errorPointer in
+
+            do {
+
+                let snapshot = try transaction.getDocument(ref)
+                let data = snapshot.data() ?? [:]
+
+                let leftDeviceID = data["leftDeviceID"] as? String ?? ""
+                let rightDeviceID = data["rightDeviceID"] as? String ?? ""
+                let leftPlayer = data["leftPlayer"] as? String ?? ""
+                let status = data["status"] as? String ?? "lobby"
+
+                var updates: [String: Any] = ["updatedAt": Timestamp()]
+
+                // A finished strip drops the booth back to the lobby with
+                // both people still in their seats.
+                if status == "done" {
+                    updates["status"] = "lobby"
+                    updates["leftReady"] = false
+                    updates["rightReady"] = false
+                    updates["startAt"] = FieldValue.delete()
+                }
+
+                let side: String
+
+                if leftDeviceID == myDeviceID {
+                    side = "left"
+                    updates["leftPlayer"] = username
+                } else if rightDeviceID == myDeviceID {
+                    side = "right"
+                    updates["rightPlayer"] = username
+                } else if leftPlayer.isEmpty {
+                    side = "left"
+                    updates["leftPlayer"] = username
+                    updates["leftDeviceID"] = myDeviceID
+                    updates["leftReady"] = false
+                } else {
+                    side = "right"
+                    updates["rightPlayer"] = username
+                    updates["rightDeviceID"] = myDeviceID
+                    updates["rightReady"] = false
+                }
+
+                transaction.setData(updates, forDocument: ref, merge: true)
+                return side
+
+            } catch {
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+
+        } completion: { result, _ in
+            completion(result as? String)
+        }
+    }
+
+    func setPhotoboothReady(side: String, isReady: Bool) {
+
+        guard let ref = photoboothRef else { return }
+
+        ref.setData([
+            "\(side)Ready": isReady,
+            "updatedAt": Timestamp()
+        ], merge: true)
+    }
+
+    /// Puts a start time on the clock, a beat in the future.
+    ///
+    /// Both phones count down to the same instant rather than to "three
+    /// seconds from when my tap arrived", which is what keeps the two halves
+    /// of a frame from being taken seconds apart.
+    func startPhotobooth(inSeconds lead: TimeInterval = 4) {
+
+        guard let ref = photoboothRef else { return }
+
+        ref.setData([
+            "status": "counting",
+            "startAt": Timestamp(date: Date().addingTimeInterval(lead)),
+            "leftDone": false,
+            "rightDone": false,
+            "updatedAt": Timestamp()
+        ], merge: true)
+    }
+
+    /// Hands up one side's three shots.
+    func uploadPhotoboothShots(side: String, shots: [String]) {
+
+        guard let shotsRef = photoboothShotsRef(side),
+              let ref = photoboothRef else { return }
+
+        shotsRef.setData([
+            "shots": shots,
+            "updatedAt": Timestamp()
+        ])
+
+        ref.setData([
+            "\(side)Done": true,
+            "updatedAt": Timestamp()
+        ], merge: true)
+    }
+
+    func listenForPhotobooth(completion: @escaping ([String: Any]) -> Void) {
+
+        guard let ref = photoboothRef else { return }
+
+        photoboothListener?.remove()
+        photoboothListener = ref.addSnapshotListener { snapshot, error in
+            if error != nil { return }
+            completion(snapshot?.data() ?? [:])
+        }
+    }
+
+    /// Watches the other side's photos so the strip fills in the moment they
+    /// land, without anybody having to reopen the screen.
+    func listenForPhotoboothShots(
+        side: String,
+        completion: @escaping ([String]) -> Void
+    ) {
+
+        guard let shotsRef = photoboothShotsRef(side) else { return }
+
+        photoboothShotsListener?.remove()
+        photoboothShotsListener = shotsRef.addSnapshotListener { snapshot, error in
+            if error != nil { return }
+            completion(snapshot?.data()?["shots"] as? [String] ?? [])
+        }
+    }
+
+    func stopPhotoboothListeners() {
+        photoboothListener?.remove()
+        photoboothListener = nil
+        photoboothShotsListener?.remove()
+        photoboothShotsListener = nil
+    }
+
+    /// Clears the booth for another round — both sides' photos included, so
+    /// a new strip can't come out half-made of the last one.
+    func resetPhotobooth() {
+
+        guard let ref = photoboothRef else { return }
+
+        for side in ["left", "right"] {
+            photoboothShotsRef(side)?.setData(["shots": [], "updatedAt": Timestamp()])
+        }
+
+        ref.setData([
+            "status": "lobby",
+            "leftReady": false,
+            "rightReady": false,
+            "leftDone": false,
+            "rightDone": false,
+            "startAt": FieldValue.delete(),
+            "updatedAt": Timestamp()
+        ], merge: true)
+    }
 
     private var ziggyJumpRaceRef: DocumentReference? {
         guard !relationshipCode.isEmpty else { return nil }
