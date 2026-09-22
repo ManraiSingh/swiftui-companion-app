@@ -419,10 +419,16 @@ struct ActivityView: View {
     }
 
     private func iconBubble(_ event: Event) -> some View {
-        Text(emoji(for: event.title))
-            .font(.system(size: 30))
+
+        let mark = glyph(for: event.title)
+
+        return Image(systemName: mark.symbol)
+            .font(.system(size: 21, weight: .semibold))
+            .foregroundStyle(mark.tint)
             .frame(width: 52, height: 52)
-            .background(Circle().fill(Color.pink.opacity(0.12)))
+            .background(
+                Circle().fill(mark.tint.opacity(themes.theme.isDark ? 0.22 : 0.14))
+            )
     }
 
     private func eventText(_ event: Event, isMe: Bool) -> some View {
@@ -468,13 +474,45 @@ struct ActivityView: View {
         .frame(maxHeight: .infinity)
     }
 
-    private func emoji(for title: String) -> String {
-        if title.contains("Fed")     { return "🍖" }
-        if title.contains("Played")  { return "🎾" }
-        if title.contains("Pizza")   { return "🍕" }
-        if title.contains("Hug")     { return "❤️" }
-        if title.contains("Instant") { return "📸" }
-        return "✨"
+    /// What a moment is drawn as, and in what colour.
+    ///
+    /// These were emoji — at 30pt 🍖 and 🍕 were two orange smudges, and every
+    /// bubble behind them was the same pink whatever had happened. A symbol
+    /// carries the shape and the circle carries the kind, so a feed of mostly
+    /// feeding is readable at a glance.
+    private func glyph(for title: String) -> (symbol: String, tint: Color) {
+
+        if title.contains("Fed") {
+            return ("fork.knife", Color(red: 0.95, green: 0.55, blue: 0.20))
+        }
+        if title.contains("Played") {
+            return ("gamecontroller.fill", Color(red: 0.25, green: 0.72, blue: 0.45))
+        }
+        if title.contains("Pizza") {
+            return ("takeoutbag.and.cup.and.straw.fill",
+                    Color(red: 0.90, green: 0.65, blue: 0.20))
+        }
+        if title.contains("Hug") {
+            return ("heart.fill", Color(red: 0.94, green: 0.36, blue: 0.55))
+        }
+        if title.contains("Instant") {
+            return ("camera.fill", Color(red: 0.36, green: 0.60, blue: 0.95))
+        }
+        return ("sparkles", Color(red: 0.62, green: 0.45, blue: 0.92))
+    }
+
+    /// Trailing emoji, trimmed.
+    ///
+    /// Some titles are stored with one on the end ("Sent an Instant 📸"), which
+    /// sat right beside the bubble showing the same thing twice.
+    private func trimmed(_ title: String) -> String {
+        var out = title
+        while let last = out.unicodeScalars.last,
+              last == " " || last == "\u{FE0F}" || last.properties.isEmoji,
+              !last.isASCII {
+            out.unicodeScalars.removeLast()
+        }
+        return out.trimmingCharacters(in: .whitespaces)
     }
 
     /// Rebuilds the memory's text using Ziggy's CURRENT name, so renaming
@@ -482,10 +520,10 @@ struct ActivityView: View {
     /// that was current when each event was first logged.
     private func displayTitle(for event: Event) -> String {
         let name = petVM.pet.name
-        if event.title.contains("Fed")    { return "Fed \(name) 🍖" }
-        if event.title.contains("Played") { return "Played with \(name) 🎾" }
-        if event.title.contains("Pizza")  { return "Made Pizza for \(name) 🍕" }
-        return event.title
+        if event.title.contains("Fed")    { return "Fed \(name)" }
+        if event.title.contains("Played") { return "Played with \(name)" }
+        if event.title.contains("Pizza")  { return "Made Pizza for \(name)" }
+        return trimmed(event.title)
     }
 
     // MARK: - Questions Tab
