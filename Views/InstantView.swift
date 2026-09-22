@@ -47,12 +47,39 @@ struct InstantView: View {
             y: instantData?["captionY"] as? Double ?? 0.85
         )
     }
-    private var partnerImage: UIImage? {
-        guard
-            let b64 = instantData?["imageBase64"] as? String,
-            let data = Data(base64Encoded: b64)
-        else { return nil }
-        return UIImage(data: data)
+    /// Their photo, decoded once.
+    ///
+    /// This used to be a computed property that ran `Data(base64Encoded:)`
+    /// and `UIImage(data:)` every time it was read — and `body` reads it
+    /// twice. So a full-size photo was being decoded twice per render, on
+    /// the main thread, for every unrelated state change on the screen.
+    /// Decoded off the main thread when the data actually changes instead,
+    /// and held here.
+    @State private var partnerImage: UIImage?
+
+    /// The base64 the held image was decoded from, so an identical update
+    /// from the listener doesn't decode it all over again.
+    @State private var partnerImageKey = ""
+
+    private func refreshPartnerImage(from data: [String: Any]?) {
+
+        let b64 = data?["imageBase64"] as? String ?? ""
+        guard b64 != partnerImageKey else { return }
+        partnerImageKey = b64
+
+        guard !b64.isEmpty else {
+            partnerImage = nil
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let decoded = Data(base64Encoded: b64).flatMap(UIImage.init(data:))
+            DispatchQueue.main.async {
+                // A newer instant may have landed while this was decoding.
+                guard b64 == partnerImageKey else { return }
+                partnerImage = decoded
+            }
+        }
     }
     private var isMyInstant: Bool { sender == me }
     private var hasPartnerInstant: Bool {
@@ -500,6 +527,8 @@ struct InstantView: View {
     private func listenForInstant() {
 
         FirestoreManager.shared.listenForInstantView { data in
+
+            refreshPartnerImage(from: data)
 
             withAnimation(.easeInOut(duration: 0.4)) {
                 instantData = data
