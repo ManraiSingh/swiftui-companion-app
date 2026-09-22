@@ -9,7 +9,6 @@ import SwiftUI
 
 struct FeedView: View {
 
-    @ObservedObject private var themes = ThemeManager.shared
     @AppStorage("hasSeenFeedTutorial")
     private var hasSeenFeedTutorial = false
 
@@ -89,7 +88,11 @@ struct FeedView: View {
                         }
                     }
                     .padding(25)
-                    .background(themes.theme.popupSurface)
+                    // Same reason as the Back pill above: the text in this
+                    // card is `.primary`, which is black, and the room behind
+                    // it is always light. The material resolves light, which
+                    // is exactly what this one wants.
+                    .background(.ultraThinMaterial)
                     .clipShape(
                         RoundedRectangle(
                             cornerRadius: 30
@@ -117,7 +120,13 @@ struct FeedView: View {
                         .foregroundColor(.black)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(themes.theme.surface(0.9))
+                        // Not a themed surface. This screen is one of the
+                        // app's *worlds* — a fixed, sunlit room that does
+                        // not change with the theme — so its chrome is fixed
+                        // too. On a dark theme the themed version turned this
+                        // into a near-black pill with the black label below
+                        // still sitting on it, which is unreadable.
+                        .background(.white.opacity(0.9))
                         .clipShape(Capsule())
                         .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
                     }
