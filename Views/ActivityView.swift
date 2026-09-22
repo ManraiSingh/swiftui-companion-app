@@ -333,6 +333,7 @@ struct ActivityView: View {
 
                 HStack(spacing: 6) {
                     Text("Bouquets").font(.subheadline).fontWeight(.black)
+                        .foregroundStyle(themes.theme.ink)
                     Text("\u{1F490}").font(.caption)
                     Spacer()
                 }
@@ -363,7 +364,7 @@ struct ActivityView: View {
                 VStack(spacing: 1) {
                     Text(mine ? "You gave" : "For you")
                         .font(.system(size: 11, weight: .black, design: .rounded))
-                        .foregroundStyle(accent)
+                        .foregroundStyle(themes.theme.inkOr(accent))
                     Text(bouquet.sentAt, format: .dateTime.day().month(.abbreviated))
                         .font(.system(size: 10))
                         .foregroundStyle(themes.theme.inkSoft)
@@ -405,7 +406,10 @@ struct ActivityView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 22)
-                .fill(isMe ? Color.white.opacity(0.9) : Color.pink.opacity(0.08))
+                // Was a flat white box, which on a dark page is a slab of
+                // paper in the middle of everything else. Same weight, taken
+                // from the theme instead.
+                .fill(isMe ? themes.theme.surface(0.9) : Color.pink.opacity(0.08))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22)
@@ -430,12 +434,18 @@ struct ActivityView: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
                 .background(
-                    Capsule().fill(isMe ? accent : Color.pink)
+                    Capsule().fill(
+                        isMe
+                            ? (themes.theme.isDark
+                                ? Color.white.opacity(0.22)
+                                : accent)
+                            : Color.pink
+                    )
                 )
 
             Text(displayTitle(for: event))
                 .font(.headline)
-                .foregroundColor(accent)
+                .foregroundColor(themes.theme.inkOr(accent))
                 .multilineTextAlignment(isMe ? .leading : .trailing)
 
             Text(event.timestamp.formatted(date: .abbreviated, time: .shortened))
@@ -449,7 +459,7 @@ struct ActivityView: View {
             Text("🐾").font(.system(size: 64))
             Text("No memories yet")
                 .font(.title3).fontWeight(.semibold)
-                .foregroundColor(accent)
+                .foregroundColor(themes.theme.inkOr(accent))
             Text("Feed, play and send love —\nyour moments show up here 💕")
                 .font(.subheadline).foregroundColor(themes.theme.inkSoft)
                 .multilineTextAlignment(.center)
@@ -512,7 +522,7 @@ struct ActivityView: View {
             Text("💌").font(.system(size: 64))
             Text("No answers yet")
                 .font(.title3).fontWeight(.semibold)
-                .foregroundColor(accent)
+                .foregroundColor(themes.theme.inkOr(accent))
             Text("Answer today's question together —\nyour answers build up here 🐾")
                 .font(.subheadline).foregroundColor(themes.theme.inkSoft)
                 .multilineTextAlignment(.center)
