@@ -824,6 +824,14 @@ struct ContentView: View {
     ]
 
     @State private var showComposeBar = false
+
+    /// Set when Send is tapped, read once the sheet has actually gone.
+    ///
+    /// The emotion popup can't be raised in the same breath as dismissing a
+    /// sheet — the sheet is still on its way out and the popup never lands,
+    /// which is the "tap it again" bug the old floating bar had. Staged here
+    /// and fired from `onDismiss` instead, so the two never overlap.
+    @State private var composeWantsSend = false
     @State private var otherCardsHeight: CGFloat = 0
     @State private var composeKeyboardHeight: CGFloat = 0
     @FocusState private var composeFocused: Bool
@@ -1117,20 +1125,6 @@ struct ContentView: View {
             // so the home screen underneath never needs to react to it.
             .ignoresSafeArea(.keyboard, edges: .bottom)
 
-            // While composing, tapping anywhere outside the floating bar
-            // just resigns focus — `onChange(of: composeFocused)` on the
-            // bar then closes it if there's nothing typed, instead of
-            // leaving an empty bar sitting there looking like a second
-            // input field.
-            if showComposeBar {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        composeFocused = false
-                    }
-            }
-
             if showLoveInfo {
                 loveInfoPopup
                     .zIndex(11)
@@ -1200,15 +1194,18 @@ struct ContentView: View {
             // keyboard by hand and padding up by that much used to leave it
             // floating ~100pt high, because the padding stacked on top of the
             // home-indicator inset the bar was already sitting above.
-            if showComposeBar {
-                VStack {
-                    Spacer()
-                    floatingComposeBar
-                        .padding(.bottom, 8)
+        }
+        .sheet(
+            isPresented: $showComposeBar,
+            onDismiss: {
+                guard composeWantsSend else { return }
+                composeWantsSend = false
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEmotionPopup = true
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(15)
             }
+        ) {
+            composeSheet
         }
         .fullScreenCover(isPresented: $showFeedView)        { FeedView(petVM: petVM).swipeToDismiss() }
         .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM).swipeToDismiss() }
@@ -2541,7 +2538,7 @@ struct ContentView: View {
         .transition(.opacity)
     }
 
-    // Tapping this opens `floatingComposeBar` right above the keyboard,
+    // Tapping this opens `composeSheet`,
     // instead of typing here directly — this row sits mid-page, and typing
     // straight into it left no way to see the text once the keyboard
     // covered it.
@@ -2582,59 +2579,106 @@ struct ContentView: View {
     // tracking — a real floating bar, not a sheet, so there's no modal to
     // dismiss and no delay before the emotion popup that used to cause a
     // second tap.
-    private var floatingComposeBar: some View {
-        HStack(spacing: 10) {
-            TextField("Write your own tiny note", text: $customQuickMessage)
-                .focused($composeFocused)
-                .textInputAutocapitalization(.sentences)
-                .submitLabel(.send)
-                .onSubmit { sendTappedFromComposer() }
-                .font(.subheadline)
-                .padding(.horizontal, 14).padding(.vertical, 13)
-                .background(.white)
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.pink.opacity(0.25), lineWidth: 1))
+    /// The tiny-note composer.
+    ///
+    /// Was a capsule floating above the keyboard, which read as a stray
+    /// second search field rather than somewhere to write. This is a sheet
+    /// with a real box in it: Cancel and Send sit in the bar at the top, so
+    /// they stay reachable when the keyboard is up rather than being buried
+    /// underneath it.
+    private var composeSheet: some View {
 
-            Button {
-                sendTappedFromComposer()
-            } label: {
-                Image(systemName: "paperplane.fill")
-                    .font(.headline).foregroundColor(.white)
-                    .frame(width: 46, height: 46)
-                    .background(
-                        customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? AnyShapeStyle(Color.gray)
-                        : AnyShapeStyle(
-                            LinearGradient(
-                                colors: [.pink, Color(red: 0.95, green: 0.55, blue: 0.6)],
-                                startPoint: .leading, endPoint: .trailing
+        ZStack {
+
+            themes.theme.gradient.ignoresSafeArea()
+
+            VStack(spacing: 14) {
+
+                HStack {
+
+                    Button {
+                        composeFocused = false
+                        showComposeBar = false
+                    } label: {
+                        Text("Cancel")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundStyle(themes.theme.inkSoft)
+                    }
+
+                    Spacer()
+
+                    Text("Tiny note")
+                        .font(.headline).fontWeight(.black)
+                        .foregroundStyle(themes.theme.ink)
+
+                    Spacer()
+
+                    Button {
+                        sendTappedFromComposer()
+                    } label: {
+                        Text("Send")
+                            .font(.subheadline).fontWeight(.black)
+                            .foregroundStyle(
+                                composeIsEmpty ? themes.theme.inkSoft : .white
                             )
-                        )
-                    )
-                    .clipShape(Circle())
-            }
-            .disabled(customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(themes.theme.popupSurface)
-        // Losing focus (tapped outside) with nothing typed closes the bar —
-        // otherwise it just sits there empty, looking like a stray second
-        // input field once the keyboard goes down.
-        .onChange(of: composeFocused) { _, isFocused in
-            guard !isFocused,
-                  customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else { return }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule().fill(
+                                    composeIsEmpty
+                                        ? themes.theme.surface(0.9)
+                                        : Color(red: 0.95, green: 0.35, blue: 0.50)
+                                )
+                            )
+                    }
+                    .disabled(composeIsEmpty)
+                }
 
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showComposeBar = false
+                TextField(
+                    "",
+                    text: $customQuickMessage,
+                    prompt: Text("Something only they'd understand…")
+                        .foregroundColor(themes.theme.inkSoft),
+                    axis: .vertical
+                )
+                    .focused($composeFocused)
+                    .textInputAutocapitalization(.sentences)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(themes.theme.ink)
+                    .tint(themes.theme.accent)
+                    .lineLimit(2...5)
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(themes.theme.surface(0.92))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(
+                                themes.theme.quietEdge(Color.pink.opacity(0.22)),
+                                lineWidth: 1.5
+                            )
+                    )
+
+                Spacer(minLength: 0)
             }
+            .padding(18)
         }
+        // Sized to the bar plus the box at rest. Short on purpose: the
+        // keyboard takes the bottom half of the screen, and a taller sheet
+        // only pushes the box up under its own title.
+        .presentationDetents([.height(196)])
+        .presentationCornerRadius(28)
+        .presentationDragIndicator(.hidden)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 composeFocused = true
             }
         }
+    }
+
+    private var composeIsEmpty: Bool {
+        customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func sendTappedFromComposer() {
@@ -2650,10 +2694,8 @@ struct ContentView: View {
         // Both changes in the same animation block — no artificial delay
         // between them, which is what caused the "click again" bug (the
         // bar was still mid-dismiss when the popup tried to appear).
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            showComposeBar = false
-            showEmotionPopup = true
-        }
+        composeWantsSend = true
+        showComposeBar = false
     }
 
     // MARK: - Helpers
