@@ -27,6 +27,7 @@ struct PhotoboothView: View {
     @ObservedObject var petVM: PetViewModel
     @ObservedObject private var themes = ThemeManager.shared
     @StateObject private var camera = PhotoboothCamera()
+    @StateObject private var feed = PhotoboothLiveFeed()
 
     // MARK: Session
 
@@ -298,18 +299,13 @@ struct PhotoboothView: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(Color.black)
 
-                if camera.isRunning {
-                    PhotoboothPreview(session: camera.session, live: camera.liveFrame)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 26, weight: .semibold))
-                        Text(camera.accessDenied ? "Camera access is off" : "Starting the camera…")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    }
-                    .foregroundStyle(.white.opacity(0.5))
+                // Both halves, in the order they will print. Posing together
+                // is guesswork if you cannot see what the other half of the
+                // frame is doing.
+                HStack(spacing: 1.5) {
+                    if iAmLeft { mine; theirs } else { theirs; mine }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
                 if let n = secondsToNext, n > 0 {
                     Text("\(n)")
@@ -349,6 +345,53 @@ struct PhotoboothView: View {
             Spacer(minLength: 0)
         }
         .padding(.bottom, 20)
+    }
+
+    private var mine: some View {
+        ZStack {
+            Color.black
+            if camera.isRunning {
+                PhotoboothPreview(session: camera.session, live: camera.liveFrame)
+            } else {
+                paneNote(camera.accessDenied ? "Camera access is off"
+                                             : "Starting the camera…",
+                         icon: "camera.fill")
+            }
+        }
+    }
+
+    private var theirs: some View {
+        ZStack {
+            Color.black
+            if let frame = feed.partnerFrame {
+                Image(uiImage: frame)
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(feed.partnerIsLive ? 1 : 0.45)
+                    .overlay(alignment: .bottom) {
+                        if !feed.partnerIsLive {
+                            Text("reconnecting…")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .padding(.bottom, 8)
+                        }
+                    }
+            } else {
+                paneNote("Waiting for \(theirName)", icon: "person.fill.questionmark")
+            }
+        }
+    }
+
+    private func paneNote(_ text: String, icon: String) -> some View {
+        VStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .semibold))
+            Text(text)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(.white.opacity(0.45))
+        .padding(8)
     }
 
     // MARK: Review
@@ -531,10 +574,14 @@ struct PhotoboothView: View {
     private func connect() {
 
         camera.backdrop = backdrop
+        camera.onPreviewFrame = { [feed] frame in feed.offer(frame) }
         camera.start()
 
         FirestoreManager.shared.joinPhotobooth(username: username) { assigned in
-            DispatchQueue.main.async { side = assigned }
+            DispatchQueue.main.async {
+                side = assigned
+                if let assigned { feed.start(mySide: assigned) }
+            }
         }
 
         FirestoreManager.shared.listenForPhotobooth { data in
@@ -575,7 +622,9 @@ struct PhotoboothView: View {
     private func leave() {
         ticker?.invalidate()
         ticker = nil
+        camera.onPreviewFrame = nil
         camera.stop()
+        feed.stop()
         FirestoreManager.shared.stopPhotoboothListeners()
     }
 

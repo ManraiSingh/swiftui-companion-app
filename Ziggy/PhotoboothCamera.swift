@@ -41,6 +41,7 @@ final class PhotoboothCamera: NSObject, ObservableObject {
     /// What to put behind you, live. Set from the screen as you choose.
     var backdrop: PhotoboothBackdrop = .asIs {
         didSet {
+            frameSink.handler = onPreviewFrame
             guard backdrop != oldValue else { return }
             // Mirrored into a lock-guarded box, because the frame callback
             // runs on the capture queue and cannot read main-actor state.
@@ -63,6 +64,11 @@ final class PhotoboothCamera: NSObject, ObservableObject {
     /// further behind the person moving in front of it.
     private let busy = BusyFlag()
     private let liveBackdrop = BackdropBox()
+
+    /// Handed every preview frame the camera produces, so the live feed can
+    /// pick the few it wants to send. Set by the screen.
+    var onPreviewFrame: ((UIImage) -> Void)?
+    private let frameSink = FrameSink()
 
     // MARK: Lifecycle
 
@@ -255,11 +261,21 @@ extension PhotoboothCamera: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
 
-        // Only when a backdrop is actually standing in for the room.
+        guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
         let wanted = liveBackdrop.get()
+
+        // The plain frame goes out to the live feed either way — what your
+        // partner sees of you should not depend on whether you happen to
+        // have a backdrop turned on.
+        if let sink = frameSink.handler,
+           let plain = PhotoboothCamera.mirroredImage(from: pixels) {
+            Task { @MainActor in sink(plain) }
+        }
+
+        // Segmentation is only for a backdrop that was actually asked for.
         guard wanted != .asIs,
               let colours = wanted.colours,
-              let pixels = CMSampleBufferGetImageBuffer(sampleBuffer),
               busy.take()
         else { return }
 
@@ -308,6 +324,32 @@ extension PhotoboothCamera: AVCaptureVideoDataOutputSampleBufferDelegate {
             guard self.backdrop != .asIs else { return }
             self.liveFrame = image
         }
+    }
+}
+
+extension PhotoboothCamera {
+
+    /// A plain, mirrored still from one camera frame.
+    nonisolated static func mirroredImage(from pixels: CVPixelBuffer) -> UIImage? {
+
+        let image = CIImage(cvPixelBuffer: pixels)
+            .transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+
+        guard let cg = PhotoboothDarkroom.context
+            .createCGImage(image, from: image.extent) else { return nil }
+
+        return UIImage(cgImage: cg)
+    }
+}
+
+/// Holds the screen's frame handler where the capture queue can reach it.
+nonisolated private final class FrameSink: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: ((UIImage) -> Void)?
+
+    var handler: ((UIImage) -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return stored }
+        set { lock.lock(); stored = newValue; lock.unlock() }
     }
 }
 
