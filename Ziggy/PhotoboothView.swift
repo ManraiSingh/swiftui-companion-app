@@ -53,7 +53,9 @@ struct PhotoboothView: View {
 
     @State private var film: PhotoboothFilm = .original
     @State private var paper: PhotoboothPaper = .classic
-    @State private var backdrop: PhotoboothBackdrop = .asIs
+    @State private var backdrop: PhotoboothBackdrop = .asIs {
+        didSet { camera.backdrop = backdrop }
+    }
 
     @State private var savedToast = false
 
@@ -174,6 +176,13 @@ struct PhotoboothView: View {
             }
             .padding(.horizontal, 22)
 
+            // Chosen here rather than only at the end: the backdrop is live
+            // in the preview now, so it is something you stand in front of
+            // while you pose, not a coat of paint applied afterwards.
+            picker("Backdrop", PhotoboothBackdrop.allCases, selected: backdrop) { b in
+                swatchChip(b.swatch, label: b.label, on: backdrop == b) { backdrop = b }
+            }
+
             Spacer(minLength: 8)
 
             VStack(spacing: 10) {
@@ -290,7 +299,7 @@ struct PhotoboothView: View {
                     .fill(Color.black)
 
                 if camera.isRunning {
-                    PhotoboothPreview(session: camera.session)
+                    PhotoboothPreview(session: camera.session, live: camera.liveFrame)
                         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 } else {
                     VStack(spacing: 8) {
@@ -330,6 +339,12 @@ struct PhotoboothView: View {
                  : "Shot \(min(shotsTaken + 1, shotCount)) of \(shotCount)")
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(themes.theme.inkSoft)
+
+            if !waitingOnThem {
+                picker("Backdrop", PhotoboothBackdrop.allCases, selected: backdrop) { b in
+                    swatchChip(b.swatch, label: b.label, on: backdrop == b) { backdrop = b }
+                }
+            }
 
             Spacer(minLength: 0)
         }
@@ -515,6 +530,7 @@ struct PhotoboothView: View {
 
     private func connect() {
 
+        camera.backdrop = backdrop
         camera.start()
 
         FirestoreManager.shared.joinPhotobooth(username: username) { assigned in

@@ -114,7 +114,7 @@ enum PhotoboothBackdrop: String, CaseIterable, Identifiable {
     }
 
     /// Two stops, drawn top to bottom behind the subject.
-    var colours: [UIColor]? {
+    nonisolated var colours: [UIColor]? {
         switch self {
         case .asIs:  return nil
         case .blush: return [UIColor(red: 1.00, green: 0.82, blue: 0.84, alpha: 1),
@@ -144,7 +144,7 @@ enum PhotoboothBackdrop: String, CaseIterable, Identifiable {
 /// Image, and a strip runs this a dozen times over.
 enum PhotoboothDarkroom {
 
-    static let context = CIContext(options: [.useSoftwareRenderer: false])
+    nonisolated static let context = CIContext(options: [.useSoftwareRenderer: false])
 
     // MARK: Film
 

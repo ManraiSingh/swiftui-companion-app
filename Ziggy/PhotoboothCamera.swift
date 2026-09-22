@@ -32,12 +32,37 @@ final class PhotoboothCamera: NSObject, ObservableObject {
     /// No camera on this device — a simulator, in practice.
     @Published private(set) var unavailable = false
 
+    /// The frame to show when a backdrop is standing in for your room.
+    ///
+    /// `.asIs` leaves this nil and the plain preview layer does the work, so
+    /// nobody pays for segmentation they didn't ask for.
+    @Published private(set) var liveFrame: UIImage?
+
+    /// What to put behind you, live. Set from the screen as you choose.
+    var backdrop: PhotoboothBackdrop = .asIs {
+        didSet {
+            guard backdrop != oldValue else { return }
+            // Mirrored into a lock-guarded box, because the frame callback
+            // runs on the capture queue and cannot read main-actor state.
+            liveBackdrop.set(backdrop)
+            if backdrop == .asIs { liveFrame = nil }
+        }
+    }
+
     let session = AVCaptureSession()
 
     private let output = AVCapturePhotoOutput()
+    private let frames = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "ziggy.photobooth.camera")
+    private let vision = DispatchQueue(label: "ziggy.photobooth.vision")
     private var configured = false
     private var pending: ((UIImage?) -> Void)?
+
+    /// One frame in flight at a time. Segmentation is slower than the camera
+    /// delivers, and queueing every frame would put the preview further and
+    /// further behind the person moving in front of it.
+    private let busy = BusyFlag()
+    private let liveBackdrop = BackdropBox()
 
     // MARK: Lifecycle
 
@@ -109,6 +134,15 @@ final class PhotoboothCamera: NSObject, ObservableObject {
         session.sessionPreset = .photo
         if session.canAddInput(input) { session.addInput(input) }
         if session.canAddOutput(output) { session.addOutput(output) }
+
+        frames.alwaysDiscardsLateVideoFrames = true
+        frames.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String:
+                kCVPixelFormatType_32BGRA
+        ]
+        frames.setSampleBufferDelegate(self, queue: vision)
+        if session.canAddOutput(frames) { session.addOutput(frames) }
+
         session.commitConfiguration()
 
         configured = true
@@ -179,6 +213,104 @@ extension PhotoboothCamera: AVCapturePhotoCaptureDelegate {
     }
 }
 
+/// The chosen backdrop, readable from the capture queue.
+nonisolated private final class BackdropBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: PhotoboothBackdrop = .asIs
+
+    nonisolated func set(_ new: PhotoboothBackdrop) {
+        lock.lock(); value = new; lock.unlock()
+    }
+
+    nonisolated func get() -> PhotoboothBackdrop {
+        lock.lock(); defer { lock.unlock() }
+        return value
+    }
+}
+
+/// A one-at-a-time gate, readable from the camera's own queue.
+nonisolated private final class BusyFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    /// Takes the slot if it's free. False means a frame is still being worked
+    /// on and this one should be dropped rather than queued behind it.
+    nonisolated func take() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if value { return false }
+        value = true
+        return true
+    }
+
+    nonisolated func release() {
+        lock.lock(); value = false; lock.unlock()
+    }
+}
+
+extension PhotoboothCamera: AVCaptureVideoDataOutputSampleBufferDelegate {
+
+    nonisolated func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+
+        // Only when a backdrop is actually standing in for the room.
+        let wanted = liveBackdrop.get()
+        guard wanted != .asIs,
+              let colours = wanted.colours,
+              let pixels = CMSampleBufferGetImageBuffer(sampleBuffer),
+              busy.take()
+        else { return }
+
+        defer { busy.release() }
+
+        // Mirrored, to match what the preview layer would have shown.
+        let frame = CIImage(cvPixelBuffer: pixels)
+            .transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+
+        let request = VNGeneratePersonSegmentationRequest()
+        // `.fast` rather than `.balanced`: this runs every frame, and a
+        // preview that keeps up matters more here than a perfect edge.
+        request.qualityLevel = .fast
+        request.outputPixelFormat = kCVPixelFormatType_OneComponent8
+
+        guard (try? VNImageRequestHandler(cvPixelBuffer: pixels, options: [:])
+                .perform([request])) != nil,
+              let buffer = request.results?.first?.pixelBuffer
+        else { return }
+
+        let extent = frame.extent
+        var mask = CIImage(cvPixelBuffer: buffer)
+            .transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+        mask = mask.transformed(by: CGAffineTransform(
+            scaleX: extent.width / mask.extent.width,
+            y: extent.height / mask.extent.height
+        ))
+        mask = mask.transformed(by: CGAffineTransform(
+            translationX: extent.minX - mask.extent.minX,
+            y: extent.minY - mask.extent.minY
+        ))
+
+        let blend = CIFilter.blendWithMask()
+        blend.inputImage = frame
+        blend.backgroundImage = PhotoboothCutout.backdropImage(colours, extent: extent)
+        blend.maskImage = mask
+
+        guard let out = blend.outputImage,
+              let cg = PhotoboothDarkroom.context.createCGImage(out, from: extent)
+        else { return }
+
+        let image = UIImage(cgImage: cg)
+
+        Task { @MainActor in
+            // Another choice may have landed while this frame was in Vision.
+            guard self.backdrop != .asIs else { return }
+            self.liveFrame = image
+        }
+    }
+}
+
 // MARK: - Preview
 
 /// The live view, wrapped so SwiftUI can hold it.
@@ -186,11 +318,22 @@ struct PhotoboothPreview: View {
 
     let session: AVCaptureSession
 
+    /// The processed frame when a backdrop is in play, the plain camera layer
+    /// otherwise — the layer is free, and segmenting a room nobody asked to
+    /// replace would cost battery for nothing.
+    var live: UIImage?
+
     var body: some View {
         #if targetEnvironment(simulator)
         PhotoboothStandIn.PreviewCard()
         #else
-        LivePreview(session: session)
+        if let live {
+            Image(uiImage: live)
+                .resizable()
+                .scaledToFill()
+        } else {
+            LivePreview(session: session)
+        }
         #endif
     }
 }
@@ -268,7 +411,11 @@ enum PhotoboothCutout {
         return UIImage(cgImage: result, scale: image.scale, orientation: .up)
     }
 
-    private static func gradient(_ colours: [UIColor], extent: CGRect) -> CIImage {
+    nonisolated static func backdropImage(_ colours: [UIColor], extent: CGRect) -> CIImage {
+        gradient(colours, extent: extent)
+    }
+
+    nonisolated private static func gradient(_ colours: [UIColor], extent: CGRect) -> CIImage {
 
         let g = CIFilter.linearGradient()
         g.point0 = CGPoint(x: extent.midX, y: extent.maxY)
