@@ -72,7 +72,8 @@ struct SettingsView: View {
 
                         // Profile
                         settingsCard(
-                            icon: "👤",
+                            symbol: "person.fill",
+                            tint: Color(red: 0.36, green: 0.55, blue: 0.92),
                             title: "Your Name"
                         ) {
 
@@ -100,7 +101,8 @@ struct SettingsView: View {
                         // never passes back through onboarding, so this is
                         // their way in — and it stays quiet once taken.
                         settingsCard(
-                            icon: account.isSignedIn ? "🔒" : "☁️",
+                            symbol: account.isSignedIn ? "lock.fill" : "icloud.fill",
+                            tint: Color(red: 0.30, green: 0.72, blue: 0.62),
                             title: account.isSignedIn
                                 ? "Your Memories Are Safe"
                                 : "Keep Your Memories Safe"
@@ -115,7 +117,9 @@ struct SettingsView: View {
                         // simply wants to pay has nowhere to do it — and an App
                         // Review reviewer has nothing to find.
                         premiumCard(
-                            icon: subscription.isSubscribed ? "💐" : "✨",
+                            symbol: subscription.isSubscribed
+                                ? "checkmark.seal.fill" : "sparkles",
+                            tint: gold,
                             title: "Ziggy Forever"
                         ) {
                             subscriptionCard
@@ -123,7 +127,8 @@ struct SettingsView: View {
 
                         // Pet
                         settingsCard(
-                            icon: "🐶",
+                            symbol: "pawprint.fill",
+                            tint: Color(red: 0.90, green: 0.55, blue: 0.30),
                             title: "Rename \(petVM.pet.name)"
                         ) {
 
@@ -145,7 +150,8 @@ struct SettingsView: View {
 
                         // Relationship
                         settingsCard(
-                            icon: "💞",
+                            symbol: "heart.fill",
+                            tint: Color(red: 0.94, green: 0.36, blue: 0.55),
                             title: "Your Love Code"
                         ) {
 
@@ -222,7 +228,8 @@ struct SettingsView: View {
                         // looking for account deletion searches for that word,
                         // and so does anybody who wants to be gone.
                         settingsCard(
-                            icon: "🗑️",
+                            symbol: "trash.fill",
+                            tint: Color(red: 0.90, green: 0.32, blue: 0.32),
                             title: account.isSignedIn ? "Delete My Account" : "Delete My Data"
                         ) {
 
@@ -501,7 +508,8 @@ struct SettingsView: View {
     /// Kept separate from `settingsCard` rather than adding a flag to it, so
     /// nothing else on this screen can be changed by accident.
     private func premiumCard<Content: View>(
-        icon: String,
+        symbol: String,
+        tint: Color,
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -510,8 +518,7 @@ struct SettingsView: View {
 
             HStack(spacing: 10) {
 
-                Text(icon)
-                    .font(.title2)
+                settingsGlyph(symbol, tint)
 
                 Text(title)
                     .font(.headline)
@@ -574,7 +581,11 @@ struct SettingsView: View {
     /// sitting on it, which is exactly what you get.
     private var themeCard: some View {
 
-        settingsCard(icon: "🎨", title: "Theme") {
+        settingsCard(
+            symbol: "circle.lefthalf.filled",
+            tint: Color(red: 0.62, green: 0.45, blue: 0.92),
+            title: "Theme"
+        ) {
 
             VStack(alignment: .leading, spacing: 10) {
 
@@ -641,8 +652,26 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
+    /// A section's mark, drawn rather than set in emoji.
+    ///
+    /// An emoji is whatever the system font decides it is, and at this size
+    /// 👤 and 🐶 were two beige blobs. A symbol in the section's own colour,
+    /// on a tile of the same colour, reads at a glance and matches the tiles
+    /// the games and the home screen already use.
+    private func settingsGlyph(_ symbol: String, _ tint: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 15, weight: .bold))
+            .foregroundStyle(tint)
+            .frame(width: 32, height: 32)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(tint.opacity(themes.theme.isDark ? 0.24 : 0.15))
+            )
+    }
+
     private func settingsCard<Content: View>(
-        icon: String,
+        symbol: String,
+        tint: Color,
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -651,8 +680,7 @@ struct SettingsView: View {
 
             HStack(spacing: 10) {
 
-                Text(icon)
-                    .font(.title2)
+                settingsGlyph(symbol, tint)
 
                 Text(title)
                     .font(.headline)
