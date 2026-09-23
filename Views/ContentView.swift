@@ -893,10 +893,14 @@ struct ContentView: View {
                         .tabItem { Label("Home", systemImage: "house.fill") }
                     ScrapbookShelfView()
                         .tabItem { Label("Scrapbook", systemImage: "books.vertical.fill") }
-                    // In the middle, where the thing you *do* together sits
-                    // between the two places you look back on it.
-                    PhotoboothView(petVM: petVM)
-                        .tabItem { Label("Booth", systemImage: "camera.viewfinder") }
+                    // Built, but not shipped yet — the camera half of it can
+                    // only be judged on a real device with a real partner at
+                    // the other end, and none of that has happened. The code
+                    // stays on main; this is the one line that lets it out.
+                    if ZiggyFeatures.photobooth {
+                        PhotoboothView(petVM: petVM)
+                            .tabItem { Label("Booth", systemImage: "camera.viewfinder") }
+                    }
                     ActivityView(petVM: petVM)
                         .tabItem { Label("Activity", systemImage: "clock.fill") }
                     SettingsView(petVM: petVM)
