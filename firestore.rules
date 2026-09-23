@@ -38,10 +38,14 @@ service cloud.firestore {
       // the field being absent — a relationship created before the app wrote
       // membership has no `members` at all, and reading it directly would
       // throw rather than deny.
+      //
+      // Deliberately does not guard with `resource != null`. For a document
+      // that does not exist, every mention of `resource` raises — the
+      // comparison included — so such a guard can never fire and only reads
+      // as though absence were handled here. It is handled by `exists()`, at
+      // the one rule below that has to cope with it.
       function current() {
-        return resource != null && 'members' in resource.data
-          ? resource.data.members
-          : [];
+        return 'members' in resource.data ? resource.data.members : [];
       }
 
       function proposed() {
@@ -53,17 +57,22 @@ service cloud.firestore {
       // Reading a relationship that isn't there yet.
       //
       // Claiming a code is a transaction: look, and write only if nobody
-      // holds it. Without this clause that look is denied — `resource` is
-      // null for a document that does not exist, `current()` is therefore
-      // empty, and nobody is ever in an empty list. The rule that was meant
-      // to protect relationships would instead stop anyone from starting one,
-      // and every new couple would meet "Could not create invite".
+      // holds it. Without this clause that look is denied — reading a
+      // relationship you are not yet in is exactly what claiming one
+      // requires. The rule that was meant to protect relationships would
+      // instead stop anyone from starting one, and every new couple would
+      // meet "Could not create invite".
+      //
+      // `exists()` rather than a null check on `resource`: for a document
+      // that is not there, touching `resource` at all raises, so the
+      // question has to be asked without it.
       //
       // Nothing is exposed by allowing it. A document that does not exist has
       // no contents to read, so this says only whether a code is free — which
       // a guesser could already learn by trying to join one.
       allow get: if signedIn()
-                 && (resource == null || request.auth.uid in current());
+                 && (!exists(/databases/$(database)/documents/relationships/$(code))
+                     || request.auth.uid in current());
 
       // Querying is a different matter: it runs over documents that do exist,
       // so it stays members-only and gains no exemption.
