@@ -36,15 +36,44 @@ struct ZiggyJumpHomeView: View {
     /// dark ground below it rather than floating in the sky.
     private let groundFraction: CGFloat = 0.63
 
+    /// Which drawing of Ziggy belongs to this instant.
+    ///
+    /// The same four-frame jump the game plays — launch, rising, hanging,
+    /// falling — picked off velocity rather than off a timer. Holding one
+    /// pose for the whole arc is what made the first version of this look
+    /// like a cardboard cut-out being lifted on a string.
+    private static func frame(
+        airborne: Bool,
+        airTime: Double,
+        velocity: CGFloat,
+        scroll: CGFloat
+    ) -> String {
+
+        guard airborne else {
+            return trot[Int(scroll / 28) % trot.count]
+        }
+
+        if airTime < 0.05 { return "z4" }
+        if velocity > 240 { return "z5" }
+        if velocity > -240 { return "z6" }
+        return "z7"
+    }
+
     /// The three frames of Ziggy's trot, the same ones the game runs.
     private static let trot = ["z3", "z7", "z2"]
 
-    /// Where in a crate's pass the jump starts and ends, as a fraction of the
-    /// loop. Tuned so he leaves the ground before the crate reaches him and
-    /// lands after it has gone by.
-    private let jumpFrom = 0.545
-    private let jumpTo = 0.815
-    private let crateHeight: CGFloat = 58
+    // The demo runs the game's own numbers rather than an approximation of
+    // them, so the arc on this screen is the arc you get when you play.
+    private let gravity: CGFloat = 2200
+    private let jumpVelocity: CGFloat = 700
+    private let runSpeed: CGFloat = 300
+    private let spriteSize: CGFloat = 92
+    private let crateHeight: CGFloat = 44
+    private let crateWidth: CGFloat = 46
+
+    /// How long one jump lasts, straight off the physics: up and back down
+    /// again is `2v/g`. A shade over six tenths of a second.
+    private var airTime: Double { Double(2 * jumpVelocity / gravity) }
 
     var body: some View {
 
@@ -52,9 +81,43 @@ struct ZiggyJumpHomeView: View {
 
             scenery
 
+            // The sky moves, so the heading cannot rely on what is behind it
+            // — the moon drifts straight through the lettering otherwise.
+            // A wash at the top gives the title and the close button their
+            // own ground without putting a bar across the picture.
+            LinearGradient(
+                colors: [.black.opacity(0.45), .black.opacity(0.14), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 320)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
             VStack(spacing: 0) {
 
                 header
+
+                // A heading, not a label floating in the scene.
+                //
+                // It used to be drawn inside the scenery, which meant Ziggy
+                // climbed through it every time he jumped. Up here it sits
+                // above the action by construction, and the run below has the
+                // whole middle of the screen to itself.
+                VStack(spacing: 3) {
+
+                    Text("Ziggy Jump")
+                        .font(.system(size: 44, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.38), radius: 14, y: 6)
+
+                    Text("Run. Jump. Don't stop.")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
+                }
+                .padding(.top, 4)
 
                 Spacer(minLength: 0)
 
@@ -116,61 +179,63 @@ struct ZiggyJumpHomeView: View {
 
                 let time = timeline.date.timeIntervalSinceReferenceDate
 
-                // One crate every `cycle` seconds, and a jump timed to clear
-                // it. Everything is read off the clock rather than stepped, so
-                // there is no state to keep and nothing to reset — the loop is
-                // wherever the current second says it is.
-                let speed: CGFloat = 150
-                let spacing: CGFloat = 470
-                let cycle = Double(spacing / speed)
+                // One crate every `cycle` seconds, and a jump timed so the
+                // top of the arc lands over it. Everything is read off the
+                // clock rather than stepped, so there is no state to keep and
+                // nothing to reset — the loop is wherever the second says.
+                let spacing: CGFloat = 520
+                let cycle = Double(spacing / runSpeed)
                 let phase = time.truncatingRemainder(dividingBy: cycle) / cycle
 
-                let ziggyX = geometry.size.width * 0.40
-                let crateX = geometry.size.width + 80 - CGFloat(phase) * spacing
+                let ziggyX = geometry.size.width * 0.38
+                let entryX = geometry.size.width + 70
+                let crateX = entryX - CGFloat(phase) * spacing
 
-                // Apex over the crate, not before it.
-                let airborne = phase > jumpFrom && phase < jumpTo
-                let through = (phase - jumpFrom) / (jumpTo - jumpFrom)
-                let lift = airborne ? CGFloat(sin(.pi * through)) * 104 : 0
+                // When the crate arrives, and therefore when to be highest.
+                let meets = Double((entryX - ziggyX) / spacing)
+                let half = airTime / cycle / 2
+                let leaves = meets - half
+                let lands = meets + half
+
+                let airborne = phase > leaves && phase < lands
+                let t = airborne ? (phase - leaves) * cycle : 0
+
+                // The real parabola, not a sine: it leaves fast, hangs at the
+                // top and drops away. That difference is the whole reason a
+                // jump reads as weight rather than as a bounce.
+                let lift = airborne
+                    ? jumpVelocity * CGFloat(t) - 0.5 * gravity * CGFloat(t * t)
+                    : 0
+                let velocity = airborne
+                    ? jumpVelocity - gravity * CGFloat(t)
+                    : 0
 
                 ZStack {
 
                     SkyBackdrop(
                         sky: Sky.at(time / 46),
-                        scroll: CGFloat(time) * speed,
+                        scroll: CGFloat(time) * runSpeed,
                         groundY: groundY
                     )
 
                     CrateView(height: crateHeight)
-                        .frame(width: 62, height: crateHeight)
+                        .frame(width: crateWidth, height: crateHeight)
                         .position(x: crateX, y: groundY - crateHeight / 2)
 
-                    // Drawn under Ziggy: at the top of a jump he crosses it,
-                    // and passing in front reads as depth where being sliced
-                    // in half by the lettering read as a mistake.
-                    Text("Ziggy Jump")
-                        .font(.system(size: 34, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.45), radius: 10, y: 4)
-                        .position(
-                            x: geometry.size.width * 0.5,
-                            y: groundY - 214
-                        )
-
-                    Image(airborne
-                          ? "z7"
-                          : Self.trot[Int(CGFloat(time) * speed / 28) % Self.trot.count])
+                    Image(Self.frame(
+                        airborne: airborne,
+                        airTime: t,
+                        velocity: velocity,
+                        scroll: CGFloat(time) * runSpeed
+                    ))
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 148, height: 148)
-                        .shadow(color: .black.opacity(0.3), radius: 16, y: 10)
+                        .frame(width: spriteSize, height: spriteSize)
+                        .shadow(color: .black.opacity(0.28), radius: 12, y: 8)
                         .position(
                             x: ziggyX,
-                            y: groundY - (0.856 - 0.5) * 148
-                                - lift
-                                + (airborne ? 0 : CGFloat(sin(time * 1.9)) * 2.6)
+                            y: groundY - (0.856 - 0.5) * spriteSize - lift
                         )
-
                 }
             }
         }
