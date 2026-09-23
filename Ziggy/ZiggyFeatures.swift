@@ -17,5 +17,9 @@ enum ZiggyFeatures {
     /// camera, the live view of the other person, and how the cutout holds up
     /// on a real face in real light. Those need two real devices. Flip this
     /// to `true` once they have been through it.
+    ///
+    /// When it does go out, `NSCameraUsageDescription` in Info.plist needs the
+    /// booth added back to it — the string has to describe what the build in
+    /// front of the reviewer actually does, and right now that is Instants.
     static let photobooth = false
 }
