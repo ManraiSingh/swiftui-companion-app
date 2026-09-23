@@ -627,11 +627,18 @@ struct QuestionHistoryCard: View {
         }
         .padding(14)
         .background(
+            // The card was a fixed pink-and-lavender wash while everything
+            // printed on it asks the theme for its colour — so on a dark
+            // theme the question went white on pale pink and the answer
+            // bubbles came out dark on it. Light themes keep the gradient
+            // exactly as it was.
             LinearGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.93, blue: 0.97),
-                    Color(red: 0.94, green: 0.93, blue: 1.0)
-                ],
+                colors: themes.theme.isDark
+                    ? [themes.theme.surface(0.82), themes.theme.surface(0.66)]
+                    : [
+                        Color(red: 1.0, green: 0.93, blue: 0.97),
+                        Color(red: 0.94, green: 0.93, blue: 1.0)
+                    ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
