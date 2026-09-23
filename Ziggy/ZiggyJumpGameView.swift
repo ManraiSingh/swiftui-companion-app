@@ -1208,7 +1208,9 @@ struct ZiggyJumpGameView: View {
 
 // MARK: - Crate
 
-private struct CrateView: View {
+/// Not private: the title screen runs a little demo of the game, and it
+/// should be jumping the same crate you will be.
+struct CrateView: View {
 
     /// Warm and constant all day. Everything around it changes colour with
     /// the sky, so the one thing that can kill you is the one thing that

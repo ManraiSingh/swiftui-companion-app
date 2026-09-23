@@ -36,6 +36,16 @@ struct ZiggyJumpHomeView: View {
     /// dark ground below it rather than floating in the sky.
     private let groundFraction: CGFloat = 0.63
 
+    /// The three frames of Ziggy's trot, the same ones the game runs.
+    private static let trot = ["z3", "z7", "z2"]
+
+    /// Where in a crate's pass the jump starts and ends, as a fraction of the
+    /// loop. Tuned so he leaves the ground before the crate reaches him and
+    /// lands after it has gone by.
+    private let jumpFrom = 0.545
+    private let jumpTo = 0.815
+    private let crateHeight: CGFloat = 58
+
     var body: some View {
 
         ZStack {
@@ -106,33 +116,61 @@ struct ZiggyJumpHomeView: View {
 
                 let time = timeline.date.timeIntervalSinceReferenceDate
 
+                // One crate every `cycle` seconds, and a jump timed to clear
+                // it. Everything is read off the clock rather than stepped, so
+                // there is no state to keep and nothing to reset — the loop is
+                // wherever the current second says it is.
+                let speed: CGFloat = 150
+                let spacing: CGFloat = 470
+                let cycle = Double(spacing / speed)
+                let phase = time.truncatingRemainder(dividingBy: cycle) / cycle
+
+                let ziggyX = geometry.size.width * 0.40
+                let crateX = geometry.size.width + 80 - CGFloat(phase) * spacing
+
+                // Apex over the crate, not before it.
+                let airborne = phase > jumpFrom && phase < jumpTo
+                let through = (phase - jumpFrom) / (jumpTo - jumpFrom)
+                let lift = airborne ? CGFloat(sin(.pi * through)) * 104 : 0
+
                 ZStack {
 
                     SkyBackdrop(
                         sky: Sky.at(time / 46),
-                        scroll: CGFloat(time * 42),
+                        scroll: CGFloat(time) * speed,
                         groundY: groundY
                     )
 
-                    Image("z1")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 148, height: 148)
-                        .shadow(color: .black.opacity(0.3), radius: 16, y: 10)
-                        .position(
-                            x: geometry.size.width * 0.5,
-                            y: groundY - (0.856 - 0.5) * 148
-                                + CGFloat(sin(time * 1.9)) * 2.6
-                        )
+                    CrateView(height: crateHeight)
+                        .frame(width: 62, height: crateHeight)
+                        .position(x: crateX, y: groundY - crateHeight / 2)
 
+                    // Drawn under Ziggy: at the top of a jump he crosses it,
+                    // and passing in front reads as depth where being sliced
+                    // in half by the lettering read as a mistake.
                     Text("Ziggy Jump")
                         .font(.system(size: 34, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.45), radius: 10, y: 4)
                         .position(
                             x: geometry.size.width * 0.5,
-                            y: groundY - 196
+                            y: groundY - 214
                         )
+
+                    Image(airborne
+                          ? "z7"
+                          : Self.trot[Int(CGFloat(time) * speed / 28) % Self.trot.count])
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 148, height: 148)
+                        .shadow(color: .black.opacity(0.3), radius: 16, y: 10)
+                        .position(
+                            x: ziggyX,
+                            y: groundY - (0.856 - 0.5) * 148
+                                - lift
+                                + (airborne ? 0 : CGFloat(sin(time * 1.9)) * 2.6)
+                        )
+
                 }
             }
         }
