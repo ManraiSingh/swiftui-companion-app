@@ -134,7 +134,16 @@ struct SettingsView: View {
 
                             VStack(spacing: 12) {
 
-                                TextField("Pet Name", text: $petName)
+                                TextField(
+                                    "",
+                                    text: $petName,
+                                    // A placeholder ignores `foregroundStyle`;
+                                    // only `prompt:` colours it.
+                                    prompt: Text("Pet Name")
+                                        .foregroundColor(themes.theme.inkSoft)
+                                )
+                                    .foregroundStyle(themes.theme.ink)
+                                    .tint(themes.theme.accent)
                                     .padding(12)
                                     .background(themes.theme.surface(0.7))
                                     .clipShape(RoundedRectangle(cornerRadius: 14))
