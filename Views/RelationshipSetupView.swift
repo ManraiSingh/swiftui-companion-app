@@ -251,6 +251,8 @@ struct RelationshipSetupView: View {
                                 prompt: Text("Enter your love code")
                                     .foregroundColor(themes.theme.inkSoft)
                             )
+                                .foregroundStyle(themes.theme.ink)
+                                .tint(themes.theme.accent)
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.characters)
                         }
