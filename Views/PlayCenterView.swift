@@ -646,10 +646,11 @@ struct PlayCenterView: View {
             }
         } label: {
             HStack(spacing: 14) {
-                Text("🏆")
-                    .font(.system(size: 30))
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.95, green: 0.74, blue: 0.22))
                     .frame(width: 52, height: 52)
-                    .background(Color.yellow.opacity(0.18))
+                    .background(Color.yellow.opacity(themes.theme.isDark ? 0.20 : 0.16))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -698,7 +699,9 @@ struct PlayCenterView: View {
     ) -> some View {
         HStack(spacing: 4) {
             if isLeading {
-                Text("👑").font(.system(size: 9))
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 8, weight: .black))
+                    .foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.28))
             }
             Text(label)
                 .font(.system(size: 10, weight: .bold))
@@ -760,8 +763,10 @@ struct PlayCenterView: View {
                     .frame(width: 52, height: 52)
 
                 if isLeading {
-                    Text("👑")
-                        .font(.system(size: 17))
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.28))
+                        .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
                         .offset(x: 8, y: -6)
                 }
             }
@@ -848,7 +853,7 @@ struct PlayCenterView: View {
             // the shortest iPhone, so there's nothing to scroll.
             VStack(spacing: 14) {
 
-                Text("Scoreboard 🏆")
+                Text("Scoreboard")
                     .font(.title3).fontWeight(.black)
 
                 headToHeadPanel
