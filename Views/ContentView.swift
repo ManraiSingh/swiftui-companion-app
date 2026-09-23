@@ -2845,14 +2845,23 @@ struct InviteConnectionView: View {
     @State private var isConnecting = false
     @State private var failed = false
 
-    private let cream = LinearGradient(
-        colors: [
-            Color(red: 0.98, green: 0.94, blue: 0.93),
-            Color(red: 0.95, green: 0.92, blue: 0.88)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    /// The page this screen is drawn on.
+    ///
+    /// Fixed light while its title asks the theme for its ink — so on a dark
+    /// theme "Joining your Ziggy" came out white on cream and disappeared.
+    /// Light themes keep the exact gradient.
+    private var cream: LinearGradient {
+        LinearGradient(
+            colors: themes.theme.isDark
+                ? themes.theme.background
+                : [
+                    Color(red: 0.98, green: 0.94, blue: 0.93),
+                    Color(red: 0.95, green: 0.92, blue: 0.88)
+                ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
 
     var body: some View {
         ZStack {
