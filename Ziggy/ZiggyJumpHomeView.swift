@@ -32,9 +32,11 @@ struct ZiggyJumpHomeView: View {
     @State private var showRace = false
     @State private var best = UserDefaults.standard.integer(forKey: "ziggyJumpBest")
 
-    /// Where the platform sits. High enough that the two cards land on the
-    /// dark ground below it rather than floating in the sky.
-    private let groundFraction: CGFloat = 0.63
+    /// Where the road sits inside the preview card — most of the card is
+    /// sky, with a strip of road along the bottom for Ziggy to run on.
+    /// Most of the card is sky, with a thin strip of road along the bottom.
+    /// At 0.76 a quarter of the window was empty tarmac under the action.
+    private let groundFraction: CGFloat = 0.87
 
     /// Which drawing of Ziggy belongs to this instant.
     ///
@@ -79,56 +81,51 @@ struct ZiggyJumpHomeView: View {
 
         ZStack {
 
-            scenery
-
-            // The sky moves, so the heading cannot rely on what is behind it
-            // — the moon drifts straight through the lettering otherwise.
-            // A wash at the top gives the title and the close button their
-            // own ground without putting a bar across the picture.
+            // A flat page behind everything, so the running scene can be a
+            // bounded thing sitting on it rather than a wallpaper the menu
+            // floats over. Full-bleed scenery left a screen's worth of empty
+            // sky at the top and a dead band between the road and the
+            // buttons; a card has edges, and edges can be composed with.
             LinearGradient(
-                colors: [.black.opacity(0.45), .black.opacity(0.14), .clear],
+                colors: [
+                    Color(red: 0.07, green: 0.08, blue: 0.15),
+                    Color(red: 0.13, green: 0.11, blue: 0.21),
+                    Color(red: 0.06, green: 0.07, blue: 0.12)
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 320)
-            .frame(maxHeight: .infinity, alignment: .top)
             .ignoresSafeArea()
-            .allowsHitTesting(false)
 
             VStack(spacing: 0) {
 
                 header
 
-                // A heading, not a label floating in the scene.
-                //
-                // It used to be drawn inside the scenery, which meant Ziggy
-                // climbed through it every time he jumped. Up here it sits
-                // above the action by construction, and the run below has the
-                // whole middle of the screen to itself.
                 VStack(spacing: 3) {
 
                     Text("Ziggy Jump")
                         .font(.system(size: 44, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.38), radius: 14, y: 6)
 
                     Text("Run. Jump. Don't stop.")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
+                        .foregroundStyle(.white.opacity(0.55))
                 }
-                .padding(.top, 4)
+                .padding(.top, 2)
 
-                Spacer(minLength: 0)
+                // Takes whatever height is left over. On a tall phone the
+                // window is simply taller — nothing is stranded.
+                previewCard
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
 
                 VStack(spacing: 11) {
 
                     card(
                         badge: "1P",
                         title: "Single player",
-                        detail: best > 0
-                            ? "Endless run. Your best is \(best)."
-                            : "Endless run. See how far you get.",
+                        detail: "Endless run. See how far you get.",
                         accent: Color(red: 0.99, green: 0.74, blue: 0.40)
                     ) {
                         showSolo = true
@@ -144,6 +141,7 @@ struct ZiggyJumpHomeView: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                .padding(.top, 18)
                 .padding(.bottom, showsClose ? 42 : 18)
             }
         }
@@ -160,6 +158,37 @@ struct ZiggyJumpHomeView: View {
                 best = UserDefaults.standard.integer(forKey: "ziggyJumpBest")
             }
         }
+    }
+
+    // MARK: The window
+
+    /// The game, running, in a frame you could put on a wall.
+    private var previewCard: some View {
+
+        scenery
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(.white.opacity(0.16), lineWidth: 1.5)
+            )
+            .overlay(alignment: .topLeading) {
+                if best > 0 {
+                    HStack(spacing: 5) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(Color(red: 0.99, green: 0.74, blue: 0.40))
+                        Text("BEST \(best)")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(.black.opacity(0.42)))
+                    .overlay(Capsule().stroke(.white.opacity(0.18), lineWidth: 1))
+                    .padding(14)
+                }
+            }
+            .shadow(color: .black.opacity(0.5), radius: 24, y: 14)
     }
 
     // MARK: Scenery
@@ -239,7 +268,6 @@ struct ZiggyJumpHomeView: View {
                 }
             }
         }
-        .ignoresSafeArea()
     }
 
     // MARK: Furniture
