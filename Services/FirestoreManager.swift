@@ -3993,6 +3993,19 @@ class FirestoreManager {
                 if (data["winner"] as? String ?? "").isEmpty {
                     updates["winner"] = username
                     updates["status"] = "complete"
+
+                    // Counted the same way the other games count, inside the
+                    // transaction that decides the race. Both phones call this
+                    // when they cross, and only the one that commits first
+                    // finds `winner` empty — so the point can never be
+                    // awarded twice, or to the person who came second.
+                    if !username.isEmpty {
+                        transaction.setData(
+                            ["ziggyJump": [username: FieldValue.increment(Int64(1))]],
+                            forDocument: self.scoresRef,
+                            merge: true
+                        )
+                    }
                 }
 
                 transaction.setData(updates, forDocument: gameRef, merge: true)

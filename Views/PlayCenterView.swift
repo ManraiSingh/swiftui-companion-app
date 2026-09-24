@@ -24,7 +24,8 @@ struct PlayCenterView: View {
         ("ticTacToe", "Tic Tac Toe"),
         ("connectFour", "Connect 4"),
         ("dotsAndBoxes", "Dots and Boxes"),
-        ("memoryMatch", "Memory Match")
+        ("memoryMatch", "Memory Match"),
+        ("ziggyJump", "Ziggy Jump")
     ]
 
     var body: some View {
@@ -536,6 +537,62 @@ struct PlayCenterView: View {
         }
     }
 
+    /// The hop and the thing being hopped over — the hero card's idea, small
+    /// enough to survive a 30pt disc. Ziggy himself is a drawn character and
+    /// turns to mush at this size, so the arc stands in for him.
+    private var ziggyJumpIcon: some View {
+
+        let ink = Color(red: 0.99, green: 0.74, blue: 0.40)
+
+        return ZStack {
+
+            // The road he takes off from and lands on. Without it the arc had
+            // nothing to span and read as a dome sitting over the crate.
+            Path { path in
+                path.move(to: CGPoint(x: 2, y: 34))
+                path.addLine(to: CGPoint(x: 38, y: 34))
+            }
+            .stroke(ink.opacity(0.45), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+
+            // Wide and shallow. A steeper curve over a crate this small stops
+            // reading as a jump and starts reading as a tent.
+            Path { path in
+                path.move(to: CGPoint(x: 2, y: 34))
+                path.addQuadCurve(
+                    to: CGPoint(x: 38, y: 34),
+                    control: CGPoint(x: 20, y: 4)
+                )
+            }
+            .stroke(
+                ink,
+                style: StrokeStyle(lineWidth: 2.4, lineCap: .round, dash: [3.6, 3.4])
+            )
+
+            // Him, on the way up rather than at the apex — a dot on the peak
+            // caps the curve into a roof, and this way the hop has a
+            // direction.
+            Circle()
+                .fill(ink)
+                .frame(width: 6.5, height: 6.5)
+                .position(x: 12.8, y: 21.4)
+
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [ink, Color(red: 0.86, green: 0.47, blue: 0.26)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .stroke(Color(red: 0.30, green: 0.16, blue: 0.14), lineWidth: 1.3)
+                )
+                .frame(width: 10, height: 9.5)
+                .position(x: 24, y: 29.5)
+        }
+        .frame(width: 40, height: 40)
+    }
+
     private var connectFourIcon: some View {
 
         HStack(spacing: -10) {
@@ -806,6 +863,7 @@ struct PlayCenterView: View {
         case "ticTacToe":    ticTacToeIcon.scaleEffect(0.52)
         case "connectFour":  connectFourIcon.scaleEffect(0.46)
         case "dotsAndBoxes": dotsAndBoxesIcon.scaleEffect(0.55)
+        case "ziggyJump":    ziggyJumpIcon.scaleEffect(0.62)
         default:             memoryMatchIcon.scaleEffect(0.50)
         }
     }
