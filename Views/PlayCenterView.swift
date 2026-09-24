@@ -20,11 +20,11 @@ struct PlayCenterView: View {
     @State private var showScoreboardPopup = false
     @State private var showResetConfirm = false
 
-    private let competitiveGames: [(id: String, title: String, emoji: String)] = [
-        ("ticTacToe", "Tic Tac Toe", "X O"),
-        ("connectFour", "Connect 4", "🔴🟡"),
-        ("dotsAndBoxes", "Dots and Boxes", "🔲"),
-        ("memoryMatch", "Memory Match", "🧠")
+    private let competitiveGames: [(id: String, title: String)] = [
+        ("ticTacToe", "Tic Tac Toe"),
+        ("connectFour", "Connect 4"),
+        ("dotsAndBoxes", "Dots and Boxes"),
+        ("memoryMatch", "Memory Match")
     ]
 
     var body: some View {
@@ -793,16 +793,30 @@ struct PlayCenterView: View {
         )
     }
 
-    private func scoreRow(_ game: (id: String, title: String, emoji: String)) -> some View {
+    /// The same drawings the game cards carry, shrunk into the scoreboard's
+    /// 30pt disc.
+    ///
+    /// Scaled rather than redrawn at a second size, so the row and the card
+    /// can never drift apart. The rows were the last place still showing the
+    /// old emoji — 🔲 for Dots and Boxes, 🧠 for Memory Match, and "X O",
+    /// which was never an emoji at all but two letters being squeezed to fit.
+    @ViewBuilder
+    private func scoreIcon(_ id: String) -> some View {
+        switch id {
+        case "ticTacToe":    ticTacToeIcon.scaleEffect(0.52)
+        case "connectFour":  connectFourIcon.scaleEffect(0.46)
+        case "dotsAndBoxes": dotsAndBoxesIcon.scaleEffect(0.55)
+        default:             memoryMatchIcon.scaleEffect(0.50)
+        }
+    }
+
+    private func scoreRow(_ game: (id: String, title: String)) -> some View {
         let mine = wins(game.id, myUsername)
         let theirs = partnerWins(game.id)
 
         return HStack(spacing: 10) {
 
-            Text(game.emoji)
-                .font(.system(size: 13))
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
+            scoreIcon(game.id)
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(themes.theme.surface(0.8)))
 
