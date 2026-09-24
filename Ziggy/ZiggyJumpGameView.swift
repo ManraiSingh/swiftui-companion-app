@@ -677,14 +677,21 @@ struct ZiggyJumpGameView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { engine.tap() }
 
-                header
-
                 if engine.isRacing { raceBar } else { scoreBadge }
 
                 if !engine.isRacing, engine.phase == .ready { readyCard }
                 if !engine.isRacing, engine.phase == .over { overCard }
                 if engine.phase == .counting { countdownOverlay }
                 if engine.phase == .finished { finishedOverlay }
+
+                // Last, so it is on top of everything.
+                //
+                // Three of those overlays open with a full-screen dimming
+                // layer, and a Color takes touches whether or not anything is
+                // listening to them. Drawn before them, the close button was
+                // underneath: die in a solo run and the only way out was to
+                // play again, and a finished race trapped you the same way.
+                header
             }
             .onAppear {
                 engine.configure(geometry.size)
