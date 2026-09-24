@@ -12,8 +12,6 @@
 	<array>
 		<string>Default</string>
 	</array>
-	<key>com.apple.developer.game-center</key>
-	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>

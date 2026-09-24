@@ -594,7 +594,6 @@ final class ZiggyJumpEngine: NSObject, ObservableObject {
             best = score
             UserDefaults.standard.set(best, forKey: Self.bestKey)
         }
-        ZiggyGameCenter.shared.submit(score: score)
     }
 
     /// Solo only. A race that has finished goes back to its lobby instead,
@@ -651,11 +650,6 @@ struct ZiggyJumpGameView: View {
 
     @StateObject private var engine = ZiggyJumpEngine()
 
-    // Observed rather than owned — it is a singleton that outlives the screen.
-    @ObservedObject private var gameCenter = ZiggyGameCenter.shared
-
-    @State private var showLeaderboard = false
-
     private var sky: Sky { Sky.at(engine.dayProgress) }
 
     var body: some View {
@@ -678,8 +672,7 @@ struct ZiggyJumpGameView: View {
                 ziggy
 
                 // The whole screen is the button. Everything interactive sits
-                // above this, so the close and leaderboard buttons still take
-                // their own taps.
+                // above this, so the close button still takes its own taps.
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture { engine.tap() }
@@ -696,7 +689,6 @@ struct ZiggyJumpGameView: View {
             .onAppear {
                 engine.configure(geometry.size)
                 engine.begin()
-                gameCenter.authenticate()
                 if let race { engine.startRace(race.level) }
             }
             .onChange(of: geometry.size) { _, new in
@@ -715,9 +707,6 @@ struct ZiggyJumpGameView: View {
             .onDisappear { engine.end() }
         }
         .ignoresSafeArea()
-        .sheet(isPresented: $showLeaderboard) {
-            GameCenterLeaderboard(leaderboardID: ZiggyGameCenter.jumpLeaderboardID)
-        }
     }
 
     // MARK: World
@@ -907,15 +896,10 @@ struct ZiggyJumpGameView: View {
             HStack {
 
                 Button { dismiss() } label: {
-                    glyph("xmark", bright: true)
+                    glyph("xmark")
                 }
 
                 Spacer()
-
-                Button { showLeaderboard = true } label: {
-                    glyph("rosette", bright: gameCenter.isAuthenticated)
-                }
-                .disabled(!gameCenter.isAuthenticated)
             }
             .padding(.horizontal, 18)
             .padding(.top, 58)
@@ -924,10 +908,10 @@ struct ZiggyJumpGameView: View {
         }
     }
 
-    private func glyph(_ name: String, bright: Bool) -> some View {
+    private func glyph(_ name: String) -> some View {
         Image(systemName: name)
             .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white.opacity(bright ? 0.95 : 0.35))
+            .foregroundStyle(.white.opacity(0.95))
             .frame(width: 40, height: 40)
             .background(.black.opacity(0.30), in: Circle())
             .overlay(Circle().stroke(.white.opacity(0.16), lineWidth: 1))
@@ -1159,21 +1143,6 @@ struct ZiggyJumpGameView: View {
                             )
                     }
 
-                    if gameCenter.isAuthenticated {
-                        Button {
-                            showLeaderboard = true
-                        } label: {
-                            Text("Leaderboard")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.85))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .stroke(.white.opacity(0.22), lineWidth: 1.5)
-                                )
-                        }
-                    }
                 }
                 .padding(.top, 2)
             }
