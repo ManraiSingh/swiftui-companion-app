@@ -855,6 +855,7 @@ struct PlayCenterView: View {
 
                 Text("Scoreboard")
                     .font(.title3).fontWeight(.black)
+                    .foregroundStyle(themes.theme.ink)
 
                 headToHeadPanel
 

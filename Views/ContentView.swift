@@ -1311,6 +1311,7 @@ struct ContentView: View {
                             .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
                         Text("\(petVM.pet.loveScore)")
                             .font(.system(size: 34, weight: .black))
+                            .foregroundStyle(themes.theme.ink)
                     }
 
                     Text(petVM.pet.mood)
@@ -1372,7 +1373,12 @@ struct ContentView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.white)
+                    // White on a light theme, exactly as it shipped. Only the
+                    // dark themes swap it — this card's text takes the theme's
+                    // ink, which on Midnight was white on white.
+                    .fill(themes.theme.isDark
+                          ? themes.theme.popupSurface
+                          : AnyShapeStyle(.white))
             )
             .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
             .padding(.horizontal, 34)
@@ -1934,6 +1940,7 @@ struct ContentView: View {
                     Text("New one-tap message")
                         .font(.headline)
                         .fontWeight(.black)
+                        .foregroundStyle(themes.theme.ink)
 
                     Text("Save it once, then send it with a single tap.")
                         .font(.caption)
@@ -2088,6 +2095,7 @@ struct ContentView: View {
                 Text("How should \(petVM.pet.name) feel? 💭")
                     .font(.headline)
                     .fontWeight(.black)
+                    .foregroundStyle(themes.theme.ink)
 
                 HStack(spacing: 8) {
                     Text(newQuickEmoji)
@@ -2169,6 +2177,7 @@ struct ContentView: View {
                 Text("How should \(petVM.pet.name) feel? 💭")
                     .font(.headline)
                     .fontWeight(.black)
+                    .foregroundStyle(themes.theme.ink)
 
                 Text("\u{201C}\(customQuickMessage.trimmingCharacters(in: .whitespacesAndNewlines))\u{201D}")
                     .font(.subheadline)
