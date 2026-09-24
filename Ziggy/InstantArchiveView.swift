@@ -200,21 +200,27 @@ struct InstantArchiveView: View {
             // of it. Filling overflows the tile by design, so a stack sized to
             // the overflowing image put the date below the visible area and
             // the clip took the bottom half of it off.
-            Group {
-                if let image = InstantImageCache.shared.image(
-                    for: instant.id,
-                    base64: instant.imageBase64
-                ) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Color.secondary.opacity(0.15)
+            // The picture rides as an overlay rather than as the content.
+            //
+            // As content it is a layout child, and a wide enough photo made
+            // the cell wider than the column it was given: the first tile ran
+            // off the left edge of the screen, taking half its own date label
+            // with it, while the other two sat correctly. An overlay is
+            // measured by what it covers and can never push its box out.
+            Color.secondary.opacity(0.15)
+                .frame(maxWidth: .infinity)
+                .frame(height: 132)
+                .overlay {
+                    if let image = InstantImageCache.shared.image(
+                        for: instant.id,
+                        base64: instant.imageBase64
+                    ) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 132)
-            .clipped()
+                .clipped()
             .blur(radius: locked(instant) ? 11 : 0)
             .overlay {
                 if locked(instant) {
