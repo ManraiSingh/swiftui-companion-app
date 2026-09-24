@@ -236,6 +236,8 @@ class WidgetDataManager {
             } else if title.contains("played") {
                 action = "played"
             } else if title.contains("pizza") {
+                // Kept for history: the pizza game was removed, but couples
+                // who played it still have these events stored.
                 action = "pizza"
             } else if title.contains("hug") {
                 action = "hug"

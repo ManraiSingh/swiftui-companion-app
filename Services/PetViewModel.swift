@@ -539,36 +539,6 @@ class PetViewModel: ObservableObject {
         save()
     }
 
-    func completePizzaParty() {
-
-        pet.hunger = 100
-        pet.happiness = 100
-        pet.energy = min(100, pet.energy + 8)
-        pet.loveScore = 100
-        pet.lastAction = "Made Pizza for \(pet.name) 🍕"
-        pet.lastActionBy = UserManager.shared.username
-        pet.lastActionTime = Date()
-        pet.lastUpdated = Date()
-        addEvent(title: "Made Pizza for \(pet.name) 🍕", person: UserManager.shared.username)
-
-        FirestoreManager.shared.sendEmotion(
-            title: "activity:pizza",
-            from: UserManager.shared.username,
-            type: "activity"
-        )
-
-        showEphemeral(
-            EphemeralMessage(
-                text: ziggyActivityText(action: "pizza", by: UserManager.shared.username, hoursAgo: 0),
-                role: .sender,
-                kind: .activity
-            ),
-            disappearAfter: 5
-        )
-
-        save()
-    }
-
     func hug() {
 
         pet.happiness = min(100, pet.happiness + 5)
@@ -734,6 +704,8 @@ class PetViewModel: ObservableObject {
                         let action: String
                         if title.contains("fed")    { action = "fed" }
                         else if title.contains("played") { action = "played" }
+                        // Kept for history: the pizza game was removed, but couples who
+                        // played it still have these events stored.
                         else if title.contains("pizza")  { action = "pizza" }
                         else if title.contains("hug")    { action = "hug" }
                         else                             { action = "fed" }

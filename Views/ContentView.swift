@@ -1029,6 +1029,8 @@ struct ContentView: View {
         let action = petVM.pet.lastAction
         if action.contains("Fed")    { return "fork.knife" }
         if action.contains("Played") { return "heart.fill" }
+        // Kept for history: the pizza game was removed, but couples who
+        // played it still have these events stored.
         if action.contains("Pizza")  { return "takeoutbag.and.cup.and.straw.fill" }
         if action.contains("Hug")    { return "figure.2.arms.open" }
         return "pawprint.fill"

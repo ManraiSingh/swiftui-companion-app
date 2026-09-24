@@ -522,6 +522,9 @@ struct ActivityView: View {
         let name = petVM.pet.name
         if event.title.contains("Fed")    { return "Fed \(name)" }
         if event.title.contains("Played") { return "Played with \(name)" }
+        // Nothing writes Pizza events any more — the game is gone. This stays
+        // for the couples who played it while it was here, whose timelines
+        // still hold those entries.
         if event.title.contains("Pizza")  { return "Made Pizza for \(name)" }
         return trimmed(event.title)
     }
