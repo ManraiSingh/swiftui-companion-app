@@ -181,8 +181,11 @@ struct PaywallView: View {
             perk("books.vertical.fill", "Unlimited books and pages",
                  "Scrapbook as much as you like")
 
+            // Read off the constant rather than written out. This said 30 days
+            // while the free tier actually kept 7, and the sentence shown when
+            // you hit that wall — which does interpolate it — said so.
             perk("photo.stack.fill", "Every instant, kept forever",
-                 "Not just the last 30 days")
+                 "Not just the last \(ZiggySubscription.Free.instantDays) days")
 
             perk("square.and.arrow.down.fill", "Save to your photos",
                  "Doodles, instants and bouquets")
