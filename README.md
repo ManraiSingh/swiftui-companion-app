@@ -6,6 +6,8 @@ Two people pair with a private code and look after Ziggy together — feeding, p
 
 Available on the [App Store](https://apps.apple.com/app/id6785883853).
 
+**Current release:** 2.0.1 · iOS 17+ · Swift 6
+
 ---
 
 ## Features
@@ -25,19 +27,28 @@ A shared, page-based scrapbook. The shelf is an open bookcase holding books and 
 The page editor supports photos with twelve recolourable frames, seven brushes, text in sixteen fonts, emoji, cut-out ransom-note letters with independent paper and ink colours, and fifteen drawn paper stickers. Paper stickers can carry typed captions or hold a photo inside them. Every element can be moved, scaled, rotated and locked, and all of it syncs per element so both partners can work on the same page at once. A finished book can be exported as a vector PDF.
 
 **Doodle**
-A PencilKit canvas with seven pen types, a hold-and-slide colour picker, custom canvas backgrounds, and on-canvas text. Finished drawings appear on the partner's Home Screen widget within seconds. A doodle can be pinned so it stays on the widget until replaced, and either partner's drawing can be saved to the photo library.
+A PencilKit canvas with eight tools, a hold-and-slide colour picker, custom canvas backgrounds, and on-canvas text. Finished drawings appear on the partner's Home Screen widget within seconds. A doodle can be pinned so it stays on the widget until replaced, and either partner's drawing can be saved to the photo library.
 
 **Instants**
 Photos from the camera or library with a draggable caption. The current instant remains deliberately ephemeral — each new one replaces it — but every instant is also kept in an archive, browsable as a dated grid with full-screen viewing, saving to Photos, and sender-only deletion.
 
 **Notes**
-One-tap messages that reorder by frequency of use, plus a custom composer that floats above the keyboard and lets the sender choose which expression Ziggy wears on delivery.
+One-tap messages that reorder by frequency of use, plus a composer that opens as a sheet and lets the sender choose which expression Ziggy wears on delivery.
 
 **Games**
-Five real-time two-player games: Trace Together, Tic Tac Toe, Connect 4, Dots and Boxes and Memory Match. Each has a shared lobby and ready-up flow, with results tallied server-side into a persistent scoreboard.
+Five real-time two-player games — Trace Together, Tic Tac Toe, Connect 4, Dots and Boxes and Memory Match — each with a shared lobby and ready-up flow. Results are tallied inside the same transaction that decides the winner, so a round can never be counted twice.
+
+**Ziggy Jump**
+An endless runner with two modes. Solo keeps a personal best on the device; Race puts both partners on one seeded course, with the other player shown as a live ghost and the first to the flag taking the point. Race wins join the shared scoreboard alongside the turn-based games.
+
+**Themes**
+Two themes, Dawn and Midnight, stored in the shared App Group so the widget can read the choice. Every screen follows the selection, including the games, the scrapbook and every modal.
 
 **Daily questions**
 A shared prompt each day drawn from a bank of over 200. Answers are revealed once both partners have responded.
+
+**Ziggy Forever**
+An optional subscription covering unlimited books and pages, the full instant archive, saving to Photos, unlimited bouquets, the complete sticker drawer and unwatermarked PDF export. The entitlement is written to the relationship document rather than held on one device, so a single purchase unlocks the app for both partners and neither phone has to reach the billing provider to know the answer.
 
 **Home Screen widget**
 A WidgetKit extension showing Ziggy's current mood in a room that follows the clock, the partner's latest message, or their most recent doodle. Includes a guided walkthrough for adding it, since iOS provides no way to install a widget programmatically.
@@ -55,8 +66,10 @@ A live-synced log of both partners' actions, presented as a shared conversation.
 | Area | Technology |
 |------|------------|
 | UI | SwiftUI |
+| Concurrency | Swift 6, default MainActor isolation |
 | Realtime backend | Cloud Firestore (snapshot listeners, transactions, batched writes) |
 | Authentication | Firebase Anonymous Auth, Sign in with Apple |
+| Subscriptions | RevenueCat, with the entitlement mirrored to Firestore |
 | Credential storage | Keychain Services, synchronised via iCloud Keychain |
 | Push notifications | Cloud Functions (TypeScript) with APNs |
 | Analytics | Firebase Analytics |
@@ -83,7 +96,9 @@ PetViewModel
    +- FirestoreManager        realtime sync, messages, instants, games, scoreboard
    +- ScrapbookManager        shelf, pages and per-element scrapbook sync
    +- ZiggyAccount            Sign in with Apple, linking and account recovery
+   +- ZiggySubscription       entitlement, free-tier limits and paywall reasons
    +- RelationshipManager     pairing and relationship code
+   +- ThemeManager            selected theme, shared with the widget
    +- PersistenceManager      local pet cache
    +- WidgetDataManager       shared App Group store
    +- NotificationManager     local and scheduled reminders
@@ -100,6 +115,7 @@ Everything belonging to a couple lives beneath a single document, which keeps ac
 relationships/{code}
 ├─ members[]                     the uids permitted to read and write
 ├─ data/                         pet, emotions, instant, doodle, games, scores
+├─ games/{game}                  per-game state, including the Ziggy Jump race
 ├─ instants/{id}                 the kept instant archive
 ├─ devices/{uid}                 push tokens
 ├─ dailyQuestions/{id}
@@ -120,12 +136,15 @@ Ziggy/
 │                    Widget, Notification and DailyQuestion managers
 ├─ Views/            Onboarding, pairing, home, feed, instant, activity,
 │                    settings, play centre, widget walkthrough
-├─ Ziggy/            App entry point, assets, Firebase config, Doodle, games,
-│                    account and keychain, instant archive, and the scrapbook
-│                    (shelf, book, canvas, elements, decorations, PDF export)
+├─ Ziggy/            App entry point, assets, Firebase config, theme, Doodle,
+│                    games, Ziggy Jump, subscription and paywall, account and
+│                    keychain, instant archive, and the scrapbook (shelf, book,
+│                    canvas, elements, decorations, PDF export)
 ├─ ZiggyWidget/      Home Screen widget extension
 ├─ functions/        Cloud Functions (TypeScript) for partner notifications,
 │                    and maintenance scripts
+├─ tests/            Firestore security rule tests against the emulator
+├─ docs/             Support, terms and landing pages
 └─ firestore.rules   Membership-scoped security rules
 ```
 
@@ -135,9 +154,19 @@ Ziggy/
 
 `firestore.rules` restricts every document beneath a relationship to the uids listed in its `members` array, and caps membership at two. The cap is what makes a guessed pairing code far less useful: a relationship whose second partner has already joined cannot admit a third.
 
+Reading a relationship that does not exist yet is allowed, because claiming a code requires looking before writing. The check uses `exists()` rather than a null test on `resource`: for a document that is not there, any reference to `resource` raises rather than returning null, so the question has to be asked without it.
+
 Because a member is a device identity rather than a person, a partner who never signed in and then changes phone would otherwise be permanently locked out by their own stale identity. Settings therefore includes an action that clears the other member, freeing a place so they can rejoin.
 
 `functions/scripts/audit-members.js` reports any relationship missing a `members` array — which the rules would lock out — and repairs what it can from the `devices` subcollection. It should be run before the rules are deployed.
+
+### Testing the rules
+
+```bash
+cd tests && npm install && npm test
+```
+
+The suite runs the real `firestore.rules` against the Firestore emulator. It is the one file in the repository where a mistake is silent: nothing fails to build and no screen looks wrong, so the tests exist to make it fail here instead.
 
 ---
 
@@ -148,6 +177,7 @@ Because a member is a device identity rather than a person, a partner who never 
 - Xcode 16 or later
 - iOS 17 or later
 - A Firebase project (the free Spark plan is sufficient for development)
+- A RevenueCat project, if you need the subscription paths
 
 ### Setup
 
@@ -157,14 +187,15 @@ Because a member is a device identity rather than a person, a partner who never 
 4. Enable Anonymous Authentication, Apple as a sign-in provider, and Cloud Firestore in the Firebase console.
 5. Enable the Sign in with Apple capability on the App ID in the Apple Developer portal.
 6. Set the App Group identifier on both the app and widget targets so they share a container.
-7. Deploy the Cloud Functions in `functions/` if push notifications are required. They expect APNs credentials to be configured as secrets.
-8. Run the membership audit, then deploy the rules with `firebase deploy --only firestore:rules`.
+7. Add your RevenueCat API key and configure the offering if you need the paywall to load products.
+8. Deploy the Cloud Functions in `functions/` if push notifications are required. They expect APNs credentials to be configured as secrets.
+9. Run the membership audit, then `cd tests && npm test`, then deploy the rules with `firebase deploy --only firestore:rules`.
 
 ---
 
 ## Roadmap
 
-- Subscription tier covering the scrapbook, the instant archive and saving to Photos
+- Photobooth: a two-sided camera with live backdrops, built and behind a flag in `ZiggyFeatures` pending testing on two physical devices
 - Firebase App Check
 - Move instant, doodle and scrapbook images to Cloud Storage, currently encoded into Firestore documents
 - Approval step when joining an existing relationship
