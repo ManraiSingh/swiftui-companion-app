@@ -21,6 +21,10 @@
 		B54457B32FDF0EEA00A6F47A /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457B22FDF0EEA00A6F47A /* OnboardingView.swift */; };
 		B54457B52FDF16CC00A6F47A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457B42FDF16CC00A6F47A /* SettingsView.swift */; };
 		B57A3A342FDC1A4C00332034 /* Pet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A332FDC1A4C00332034 /* Pet.swift */; };
+		B5AA10122FE70012AA000012 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
+		B5AA10222FE70022AA000022 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
+		B5AA10112FE70011AA000011 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
+		B5AA10212FE70021AA000021 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
 		B57A3A362FDC1A7200332034 /* PetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A352FDC1A7200332034 /* PetViewModel.swift */; };
 		B57A3A382FDDE8A500332034 /* PersistenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A372FDDE8A500332034 /* PersistenceManager.swift */; };
 		B57A3A3A2FDDF50600332034 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A392FDDF50600332034 /* Event.swift */; };
@@ -76,6 +80,8 @@
 		B54457B22FDF0EEA00A6F47A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B54457B42FDF16CC00A6F47A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B57A3A332FDC1A4C00332034 /* Pet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pet.swift; sourceTree = "<group>"; };
+		B5AA10022FE70002AA000002 /* ZiggySprite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySprite.swift; sourceTree = "<group>"; };
+		B5AA10012FE70001AA000001 /* ZiggySkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySkin.swift; sourceTree = "<group>"; };
 		B57A3A352FDC1A7200332034 /* PetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetViewModel.swift; sourceTree = "<group>"; };
 		B57A3A372FDDE8A500332034 /* PersistenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceManager.swift; sourceTree = "<group>"; };
 		B57A3A392FDDF50600332034 /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
@@ -181,6 +187,8 @@
 			isa = PBXGroup;
 			children = (
 				B57A3A332FDC1A4C00332034 /* Pet.swift */,
+				B5AA10022FE70002AA000002 /* ZiggySprite.swift */,
+				B5AA10012FE70001AA000001 /* ZiggySkin.swift */,
 				B57A3A392FDDF50600332034 /* Event.swift */,
 				B54457AF2FDF0BF000A6F47A /* UserManager.swift */,
 			);
@@ -346,6 +354,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B57A3A342FDC1A4C00332034 /* Pet.swift in Sources */,
+				B5AA10122FE70012AA000012 /* ZiggySprite.swift in Sources */,
+				B5AA10112FE70011AA000011 /* ZiggySkin.swift in Sources */,
 				B54457AE2FDEEF7300A6F47A /* FirestoreManager.swift in Sources */,
 				B57A3A3D2FDE156700332034 /* WidgetDataManager.swift in Sources */,
 				B57A3A382FDDE8A500332034 /* PersistenceManager.swift in Sources */,
@@ -373,6 +383,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B57A3A3E2FDE160800332034 /* Pet.swift in Sources */,
+				B5AA10222FE70022AA000022 /* ZiggySprite.swift in Sources */,
+				B5AA10212FE70021AA000021 /* ZiggySkin.swift in Sources */,
 				B54457B12FDF0BF000A6F47A /* UserManager.swift in Sources */,
 				B57A3A402FDE1A3800332034 /* WidgetDataManager.swift in Sources */,
 				B57A3A3F2FDE161100332034 /* Event.swift in Sources */,
