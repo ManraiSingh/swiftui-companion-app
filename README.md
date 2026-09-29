@@ -6,7 +6,7 @@ Two people pair with a private code and look after Ziggy together — feeding, p
 
 Available on the [App Store](https://apps.apple.com/app/id6785883853).
 
-**Current release:** 2.0.1 · iOS 17+ · Swift 6
+
 
 ---
 
