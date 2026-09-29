@@ -44,6 +44,11 @@ An endless runner with two modes. Solo keeps a personal best on the device; Race
 **Themes**
 Two themes, Dawn and Midnight, stored in the shared App Group so the widget can read the choice. Every screen follows the selection, including the games, the scrapbook and every modal.
 
+**Wardrobe**
+Ten accessories Ziggy can wear, all free, chosen from a store of live previews rather than pictures of hats. The choice belongs to the relationship rather than the phone — one of you dresses him and both of you see it, on the home card and on each other's widget.
+
+Ziggy is eight separate drawings, one per mood, so an accessory is drawn in code and laid over whichever mood is showing rather than shipped as eight dressed-up images each. The eight moods are eight *poses*, though — he sits, he lies down, he puts his paws up — so the crown of his head is somewhere different in every one. `ZiggyAnchor` carries where it is and how wide his head is in each, measured off the artwork by finding the topmost fur-coloured pixel, so the floating hearts, the flames and the Zzz cannot drag an anchor above his head. One hat therefore fits all eight moods, the Ziggy Jump frames, and anything drawn later, for nothing.
+
 **Daily questions**
 A shared prompt each day drawn from a bank of over 200. Answers are revealed once both partners have responded.
 
@@ -99,13 +104,14 @@ PetViewModel
    +- ZiggySubscription       entitlement, free-tier limits and paywall reasons
    +- RelationshipManager     pairing and relationship code
    +- ThemeManager            selected theme, shared with the widget
+   +- SkinManager             the accessory Ziggy is wearing, shared with the widget
    +- PersistenceManager      local pet cache
    +- WidgetDataManager       shared App Group store
    +- NotificationManager     local and scheduled reminders
    +- DailyQuestionManager    daily prompts
 ```
 
-`Pet` is compiled into both the app and the widget extension, so mood logic cannot drift between the two.
+`Pet` is compiled into both the app and the widget extension, so mood logic cannot drift between the two. The skin model and its renderer are shared the same way, so a hat sits on his head identically in both.
 
 ### Data model
 
@@ -114,7 +120,7 @@ Everything belonging to a couple lives beneath a single document, which keeps ac
 ```
 relationships/{code}
 ├─ members[]                     the uids permitted to read and write
-├─ data/                         pet, emotions, instant, doodle, games, scores
+├─ data/                         pet, emotions, instant, doodle, games, scores, skin
 ├─ games/{game}                  per-game state, including the Ziggy Jump race
 ├─ instants/{id}                 the kept instant archive
 ├─ devices/{uid}                 push tokens
@@ -131,15 +137,16 @@ Scrapbook elements are stored one document per element rather than one per page.
 
 ```
 Ziggy/
-├─ Models/           Pet, Event, UserManager
+├─ Models/           Pet, Event, UserManager, and the skin model and renderer
+│                    — compiled into the widget as well as the app
 ├─ Services/         PetViewModel and the Firestore, Relationship, Persistence,
 │                    Widget, Notification and DailyQuestion managers
 ├─ Views/            Onboarding, pairing, home, feed, instant, activity,
 │                    settings, play centre, widget walkthrough
-├─ Ziggy/            App entry point, assets, Firebase config, theme, Doodle,
-│                    games, Ziggy Jump, subscription and paywall, account and
-│                    keychain, instant archive, and the scrapbook (shelf, book,
-│                    canvas, elements, decorations, PDF export)
+├─ Ziggy/            App entry point, assets, Firebase config, theme, wardrobe,
+│                    Doodle, games, Ziggy Jump, subscription and paywall,
+│                    account and keychain, instant archive, and the scrapbook
+│                    (shelf, book, canvas, elements, decorations, PDF export)
 ├─ ZiggyWidget/      Home Screen widget extension
 ├─ functions/        Cloud Functions (TypeScript) for partner notifications,
 │                    and maintenance scripts
@@ -196,6 +203,7 @@ The suite runs the real `firestore.rules` against the Firestore emulator. It is 
 ## Roadmap
 
 - Photobooth: a two-sided camera with live backdrops, built and behind a flag in `ZiggyFeatures` pending testing on two physical devices
+- Full hand-drawn Ziggy variants. `ZiggySkin.spriteSet` already exists: give it a prefix and the renderer looks for `<prefix>_<mood>` before falling back to the stock drawing, so a complete alternate Ziggy is eight images and one catalogue entry
 - Firebase App Check
 - Move instant, doodle and scrapbook images to Cloud Storage, currently encoded into Firestore documents
 - Approval step when joining an existing relationship
