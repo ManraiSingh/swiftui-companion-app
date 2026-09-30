@@ -6,8 +6,6 @@ Two people pair with a private code and look after Ziggy together — feeding, p
 
 Available on the [App Store](https://apps.apple.com/app/id6785883853).
 
-
-
 ---
 
 ## Features
@@ -27,7 +25,7 @@ A shared, page-based scrapbook. The shelf is an open bookcase holding books and 
 The page editor supports photos with twelve recolourable frames, seven brushes, text in sixteen fonts, emoji, cut-out ransom-note letters with independent paper and ink colours, and fifteen drawn paper stickers. Paper stickers can carry typed captions or hold a photo inside them. Every element can be moved, scaled, rotated and locked, and all of it syncs per element so both partners can work on the same page at once. A finished book can be exported as a vector PDF.
 
 **Doodle**
-A PencilKit canvas with eight tools, a hold-and-slide colour picker, custom canvas backgrounds, and on-canvas text. Finished drawings appear on the partner's Home Screen widget within seconds. A doodle can be pinned so it stays on the widget until replaced, and either partner's drawing can be saved to the photo library.
+A PencilKit canvas with seven pens and on-canvas text — all eight in one row, rather than a strip you scroll — plus a hold-and-slide colour picker and custom canvas backgrounds. Finished drawings appear on the partner's Home Screen widget within seconds. A doodle can be pinned so it stays on the widget until replaced, and either partner's drawing can be saved to the photo library.
 
 **Instants**
 Photos from the camera or library with a draggable caption. The current instant remains deliberately ephemeral — each new one replaces it — but every instant is also kept in an archive, browsable as a dated grid with full-screen viewing, saving to Photos, and sender-only deletion.
