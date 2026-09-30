@@ -33,6 +33,13 @@ Photos from the camera or library with a draggable caption. The current instant 
 **Notes**
 One-tap messages that reorder by frequency of use, plus a composer that opens as a sheet and lets the sender choose which expression Ziggy wears on delivery.
 
+**Bouquets**
+A bouquet built stem by stem and sent to your partner. Eighteen drawn flowers and foliage, six wrapping papers and eight ribbon colours. Tapping a flower adds a stem; dragging its head aims it — the angle follows your finger and the length is how far away it is, both bounded, so a stem can lean and stretch but never leave the tie.
+
+A note can be tucked in among them, written in any of the scrapbook's fonts. The card is the one thing placed by hand rather than grown out of the tie, so it takes the gestures a card should: drag to move, pinch to resize, twist to tilt. It arrives as a sealed envelope that opens when your partner taps it.
+
+Three bouquets are free; Ziggy Forever makes them unlimited.
+
 **Games**
 Five real-time two-player games — Trace Together, Tic Tac Toe, Connect 4, Dots and Boxes and Memory Match — each with a shared lobby and ready-up flow. Results are tallied inside the same transaction that decides the winner, so a round can never be counted twice.
 
