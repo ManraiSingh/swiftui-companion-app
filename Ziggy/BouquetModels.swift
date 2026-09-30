@@ -59,6 +59,16 @@ struct BouquetLetter: Equatable {
     var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    /// How far the card can be pinched. Small enough to tuck behind a stem,
+    /// big enough to be the thing you notice first — and bounded either side
+    /// so it cannot be shrunk to a dot nobody can grab again.
+    static let minScale: Double = 0.6
+    static let maxScale: Double = 2.1
+
+    /// Matching the lean a stem is allowed, so a card tucked among them looks
+    /// like it was put there rather than dropped.
+    static let maxTilt: Double = 24
 }
 
 struct Bouquet: Identifiable, Equatable {

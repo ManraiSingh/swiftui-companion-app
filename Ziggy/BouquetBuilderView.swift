@@ -38,6 +38,13 @@ struct BouquetBuilderView: View {
     /// The stem under the finger, so aiming feels immediate.
     @State private var aiming: (id: String, rotation: Double, scale: Double)?
     @State private var draggingLetter = false
+    @State private var pinchingLetter = false
+    @State private var twistingLetter = false
+
+    /// Where the card started when the current pinch or twist began, so the
+    /// gesture is applied to that rather than compounding every frame.
+    @State private var letterScaleBase: Double?
+    @State private var letterTiltBase: Double?
 
     private let cream = LinearGradient(
         colors: [
@@ -159,7 +166,7 @@ struct BouquetBuilderView: View {
 
                 if bouquet.stems.isEmpty { emptyHint }
 
-                BouquetView(bouquet: live, showsLetter: !draggingLetter)
+                BouquetView(bouquet: live, showsLetter: !handlingLetter)
 
                 if !bouquet.letter.isEmpty { letterHandle(in: size) }
 
@@ -261,19 +268,37 @@ struct BouquetBuilderView: View {
             }
     }
 
+    /// Moving, resizing and tilting the note.
+    ///
+    /// The card is the one thing in the bouquet you place by hand rather than
+    /// grow out of the tie, so it takes the gestures a card should: drag to
+    /// move, pinch to resize, twist to tilt. `scale` and `rotation` were in
+    /// the model and saved with the bouquet from the start — nothing had ever
+    /// been wired up to change them, so every card went out the same size.
     private func letterHandle(in size: CGSize) -> some View {
 
         let u = unit(in: size)
+        let w = 62 * bouquet.letter.scale * u
+        let h = 45 * bouquet.letter.scale * u
 
         return Color.white.opacity(0.001)
-            .frame(width: 62 * bouquet.letter.scale * u,
-                   height: 45 * bouquet.letter.scale * u)
+            // The target never shrinks below a thumb, however small the card
+            // is pinched — otherwise the way to make it small is also the way
+            // to make it impossible to grab again.
+            .frame(width: max(w, 56), height: max(h, 48))
+            .contentShape(Rectangle())
             .overlay {
-                if draggingLetter {
+                if handlingLetter {
                     BouquetEnvelope(ribbon: ribbon)
-                        .frame(width: 62 * bouquet.letter.scale * u,
-                               height: 45 * bouquet.letter.scale * u)
+                        .frame(width: w, height: h)
                         .rotationEffect(.degrees(bouquet.letter.rotation))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .stroke(accent.opacity(0.45),
+                                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                                .frame(width: w + 8, height: h + 8)
+                                .rotationEffect(.degrees(bouquet.letter.rotation))
+                        )
                 }
             }
             .position(x: bouquet.letter.x * size.width,
@@ -287,7 +312,49 @@ struct BouquetBuilderView: View {
                         bouquet.letter.y = min(max(Double(value.location.y / size.height), 0.16), 0.86)
                     }
                     .onEnded { _ in draggingLetter = false }
+                    .simultaneously(with: pinchLetter)
+                    .simultaneously(with: twistLetter)
             )
+    }
+
+    /// True while the card is being moved, resized or tilted — the composed
+    /// bouquet hides its own copy so this one can follow the fingers.
+    private var handlingLetter: Bool {
+        draggingLetter || pinchingLetter || twistingLetter
+    }
+
+    private var pinchLetter: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let base = letterScaleBase ?? bouquet.letter.scale
+                if letterScaleBase == nil { letterScaleBase = base }
+                pinchingLetter = true
+                bouquet.letter.scale = min(
+                    max(base * value.magnification, BouquetLetter.minScale),
+                    BouquetLetter.maxScale
+                )
+            }
+            .onEnded { _ in
+                letterScaleBase = nil
+                pinchingLetter = false
+            }
+    }
+
+    private var twistLetter: some Gesture {
+        RotateGesture()
+            .onChanged { value in
+                let base = letterTiltBase ?? bouquet.letter.rotation
+                if letterTiltBase == nil { letterTiltBase = base }
+                twistingLetter = true
+                bouquet.letter.rotation = min(
+                    max(base + value.rotation.degrees, -BouquetLetter.maxTilt),
+                    BouquetLetter.maxTilt
+                )
+            }
+            .onEnded { _ in
+                letterTiltBase = nil
+                twistingLetter = false
+            }
     }
 
     /// Writing the note, offered on the bouquet itself.
