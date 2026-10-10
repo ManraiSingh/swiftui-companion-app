@@ -50,7 +50,7 @@ An endless runner with two modes. Solo keeps a personal best on the device; Race
 Two themes, Dawn and Midnight, stored in the shared App Group so the widget can read the choice. Every screen follows the selection, including the games, the scrapbook and every modal.
 
 **Wardrobe**
-Ten accessories Ziggy can wear, all free, chosen from a store of live previews rather than pictures of hats. The choice belongs to the relationship rather than the phone — one of you dresses him and both of you see it, on the home card and on each other's widget.
+Six accessories Ziggy can wear, all free, chosen from a store of live previews rather than flat icons. The choice belongs to the relationship rather than the phone — one of you dresses him and both of you see it, on the home card and on each other's widget.
 
 Ziggy is eight separate drawings, one per mood, so an accessory is drawn in code and laid over whichever mood is showing rather than shipped as eight dressed-up images each. The eight moods are eight *poses*, though — he sits, he lies down, he puts his paws up — so the crown of his head is somewhere different in every one. `ZiggyAnchor` carries where it is and how wide his head is in each, measured off the artwork by finding the topmost fur-coloured pixel, so the floating hearts, the flames and the Zzz cannot drag an anchor above his head. One hat therefore fits all eight moods, the Ziggy Jump frames, and anything drawn later, for nothing.
 

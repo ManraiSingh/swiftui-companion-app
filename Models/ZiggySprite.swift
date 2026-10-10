@@ -118,13 +118,9 @@ struct ZiggyAccessoryView: View {
             switch piece {
             case .bow:         bow
             case .crown:       crown
-            case .partyHat:    partyHat
-            case .beanie:      beanie
             case .flowerCrown: flowerCrown
             case .halo:        halo
             case .headphones:  headphones
-            case .cap:         cap
-            case .topHat:      topHat
             case .sprout:      sprout
             }
         }
@@ -198,71 +194,6 @@ struct ZiggyAccessoryView: View {
         }
     }
 
-    private var partyHat: some View {
-        ZStack {
-            Path { p in
-                p.move(to: CGPoint(x: w * 0.5, y: h * 0.06))
-                p.addLine(to: CGPoint(x: w * 0.96, y: h * 0.90))
-                p.addLine(to: CGPoint(x: w * 0.04, y: h * 0.90))
-                p.closeSubpath()
-            }
-            .fill(teal)
-
-            // Stripes, clipped to the cone by drawing them inside the mask.
-            ForEach(0..<3, id: \.self) { i in
-                Capsule().fill(cream.opacity(0.85))
-                    .frame(width: w * (0.30 + Double(i) * 0.22), height: h * 0.055)
-                    .position(x: w * 0.5, y: h * (0.42 + Double(i) * 0.19))
-            }
-
-            Circle().fill(pink)
-                .frame(width: w * 0.26, height: w * 0.26)
-                .position(x: w * 0.5, y: h * 0.06)
-        }
-        .mask {
-            // Keeps the stripes inside the cone without hand-fitting each one.
-            Path { p in
-                p.move(to: CGPoint(x: w * 0.5, y: h * -0.14))
-                p.addLine(to: CGPoint(x: w * 0.96, y: h * 0.90))
-                p.addLine(to: CGPoint(x: w * 0.04, y: h * 0.90))
-                p.closeSubpath()
-            }
-            .fill(.black)
-            .overlay {
-                Circle()
-                    .fill(.black)
-                    .frame(width: w * 0.26, height: w * 0.26)
-                    .position(x: w * 0.5, y: h * 0.06)
-            }
-        }
-    }
-
-    private var beanie: some View {
-        ZStack {
-            // Dome
-            Path { p in
-                p.addArc(
-                    center: CGPoint(x: w * 0.5, y: h * 0.72),
-                    radius: w * 0.46,
-                    startAngle: .degrees(180), endAngle: .degrees(360),
-                    clockwise: false
-                )
-                p.closeSubpath()
-            }
-            .fill(navy)
-
-            // Turned-up band
-            RoundedRectangle(cornerRadius: h * 0.10, style: .continuous)
-                .fill(teal)
-                .frame(width: w * 0.98, height: h * 0.30)
-                .position(x: w * 0.5, y: h * 0.76)
-
-            Circle().fill(cream)
-                .frame(width: w * 0.24, height: w * 0.24)
-                .position(x: w * 0.5, y: h * 0.16)
-        }
-    }
-
     private var flowerCrown: some View {
         ZStack {
             Capsule().fill(leaf)
@@ -319,47 +250,6 @@ struct ZiggyAccessoryView: View {
                     .frame(width: w * 0.20, height: h * 0.46)
                     .position(x: i == 0 ? w * 0.09 : w * 0.91, y: h * 0.74)
             }
-        }
-    }
-
-    private var cap: some View {
-        ZStack {
-            // Peak first, so the dome laps over it.
-            Ellipse().fill(pink.opacity(0.9))
-                .frame(width: w * 0.66, height: h * 0.34)
-                .position(x: w * 0.74, y: h * 0.80)
-
-            Path { p in
-                p.addArc(
-                    center: CGPoint(x: w * 0.46, y: h * 0.82),
-                    radius: w * 0.42,
-                    startAngle: .degrees(180), endAngle: .degrees(360),
-                    clockwise: false
-                )
-                p.closeSubpath()
-            }
-            .fill(pink)
-
-            Circle().fill(cream)
-                .frame(width: w * 0.10, height: w * 0.10)
-                .position(x: w * 0.46, y: h * 0.44)
-        }
-    }
-
-    private var topHat: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: w * 0.04, style: .continuous)
-                .fill(navy)
-                .frame(width: w * 0.62, height: h * 0.72)
-                .position(x: w * 0.5, y: h * 0.40)
-
-            Ellipse().fill(pink)
-                .frame(width: w * 0.64, height: h * 0.14)
-                .position(x: w * 0.5, y: h * 0.66)
-
-            Ellipse().fill(navy)
-                .frame(width: w, height: h * 0.20)
-                .position(x: w * 0.5, y: h * 0.84)
         }
     }
 

@@ -67,8 +67,7 @@ struct ZiggyAnchor: Sendable {
 /// more than four accessories that nearly do.
 enum ZiggyAccessory: String, CaseIterable, Identifiable, Sendable {
 
-    case bow, crown, partyHat, beanie, flowerCrown,
-         halo, headphones, cap, topHat, sprout
+    case bow, crown, flowerCrown, halo, headphones, sprout
 
     nonisolated var id: String { rawValue }
 
@@ -76,13 +75,9 @@ enum ZiggyAccessory: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .bow:         return "Bow"
         case .crown:       return "Crown"
-        case .partyHat:    return "Party Hat"
-        case .beanie:      return "Beanie"
         case .flowerCrown: return "Flowers"
         case .halo:        return "Halo"
         case .headphones:  return "Headphones"
-        case .cap:         return "Cap"
-        case .topHat:      return "Top Hat"
         case .sprout:      return "Sprout"
         }
     }
@@ -92,13 +87,9 @@ enum ZiggyAccessory: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .bow:         return 0.56
         case .crown:       return 0.64
-        case .partyHat:    return 0.50
-        case .beanie:      return 0.84
         case .flowerCrown: return 0.94
         case .halo:        return 0.58
         case .headphones:  return 0.96
-        case .cap:         return 0.86
-        case .topHat:      return 0.64
         case .sprout:      return 0.30
         }
     }
@@ -107,13 +98,9 @@ enum ZiggyAccessory: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .bow:         return 0.62
         case .crown:       return 0.58
-        case .partyHat:    return 1.25
-        case .beanie:      return 0.74
         case .flowerCrown: return 0.32
         case .halo:        return 0.30
         case .headphones:  return 0.64
-        case .cap:         return 0.54
-        case .topHat:      return 0.86
         case .sprout:      return 1.00
         }
     }
@@ -121,19 +108,15 @@ enum ZiggyAccessory: String, CaseIterable, Identifiable, Sendable {
     /// How far the piece sinks into the head, as a fraction of its own height.
     ///
     /// Without this everything perches exactly on the crown like it is
-    /// balanced there. A beanie should swallow the top of his head; a halo
-    /// should float clear of it, which is what a negative value means.
+    /// balanced there. A halo should float clear of his head, which is what
+    /// a negative value means.
     nonisolated var sink: Double {
         switch self {
         case .bow:         return 0.16
         case .crown:       return 0.24
-        case .partyHat:    return 0.10
-        case .beanie:      return 0.50
         case .flowerCrown: return 0.48
         case .halo:        return -0.90
         case .headphones:  return 0.62
-        case .cap:         return 0.44
-        case .topHat:      return 0.12
         case .sprout:      return 0.04
         }
     }
@@ -192,13 +175,9 @@ struct ZiggySkin: Identifiable, Sendable {
     private static let blurbs: [ZiggyAccessory: String] = [
         .bow:         "A little bow",
         .crown:       "His Majesty",
-        .partyHat:    "It's a celebration",
-        .beanie:      "Cosy",
         .flowerCrown: "Picked for him",
         .halo:        "He's been good",
         .headphones:  "In his own world",
-        .cap:         "Off out",
-        .topHat:      "Very formal",
         .sprout:      "Something's growing"
     ]
 }
