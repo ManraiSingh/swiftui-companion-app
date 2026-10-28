@@ -124,7 +124,12 @@ struct ZiggyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // Works out once, at the top, whether this is a phone upright, a
+            // phone sideways or an iPad, and hands it down. Every screen reads
+            // the answer rather than measuring for itself.
+            ZiggyShapeReader {
+                ContentView()
+            }
                 .preferredColorScheme(.light)
                 .onAppear {
                     requestNotificationPermission()

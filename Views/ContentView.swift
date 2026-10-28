@@ -761,6 +761,7 @@ struct ContentView: View {
 
     @Environment(\.requestReview) private var requestReview
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.ziggyShape) private var shape
 
     @AppStorage("ziggy_has_asked_for_review")
     private var hasAskedForReview = false
@@ -1097,6 +1098,16 @@ struct ContentView: View {
             // percentage — which is correct on any iPhone by construction.
             GeometryReader { geo in
 
+                // Sideways, or on an iPad, the cards go beside Ziggy rather
+                // than under him. Stacked, they need about 600pt of height and
+                // a sideways phone has 390 — so the single column is not a
+                // tight fit there, it does not fit at all.
+                if shape.isWide {
+
+                    wideHome(geo)
+
+                } else {
+
                 // 5 gaps between the 6 VStack children (header, hero, daily,
                 // dock, panel, spacer) plus the outer top/bottom padding.
                 let fixedChrome: CGFloat = 13 * 5 + 16
@@ -1129,6 +1140,7 @@ struct ContentView: View {
                 // of a guess-driven gap.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .onPreferenceChange(CardHeightKey.self) { otherCardsHeight = $0 }
+                }
             }
             // Without this, focusing the compose field's TextField made the
             // keyboard shrink the safe area GeometryReader measures above —
@@ -1243,6 +1255,35 @@ struct ContentView: View {
                 composeKeyboardHeight = 0
             }
         }
+    }
+
+    // Sideways phone or iPad: Ziggy and the header on the left, the cards
+    // in a scrolling column on the right.
+    private func wideHome(_ geo: GeometryProxy) -> some View {
+        let gap: CGFloat = 16
+        let column = (geo.size.width - gap * 3) / 2
+
+        return HStack(alignment: .top, spacing: gap) {
+            VStack(spacing: 13) {
+                compactHeader
+                ziggyHero(width: column, heroHeight: max(geo.size.height - 90, 220))
+                Spacer(minLength: 0)
+            }
+            .frame(width: column)
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 13) {
+                    dailyQuestionCard
+                    actionDock(containerWidth: column)
+                    messagePanel
+                }
+                .padding(.bottom, 8)
+            }
+            .frame(width: column)
+        }
+        .padding(.horizontal, gap)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - Header

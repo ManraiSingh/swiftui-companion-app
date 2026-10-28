@@ -21,10 +21,6 @@
 		B54457B32FDF0EEA00A6F47A /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457B22FDF0EEA00A6F47A /* OnboardingView.swift */; };
 		B54457B52FDF16CC00A6F47A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54457B42FDF16CC00A6F47A /* SettingsView.swift */; };
 		B57A3A342FDC1A4C00332034 /* Pet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A332FDC1A4C00332034 /* Pet.swift */; };
-		B5AA10122FE70012AA000012 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
-		B5AA10222FE70022AA000022 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
-		B5AA10112FE70011AA000011 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
-		B5AA10212FE70021AA000021 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
 		B57A3A362FDC1A7200332034 /* PetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A352FDC1A7200332034 /* PetViewModel.swift */; };
 		B57A3A382FDDE8A500332034 /* PersistenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A372FDDE8A500332034 /* PersistenceManager.swift */; };
 		B57A3A3A2FDDF50600332034 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A392FDDF50600332034 /* Event.swift */; };
@@ -35,6 +31,10 @@
 		B57A3A432FDE21FB00332034 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A422FDE21FB00332034 /* ActivityView.swift */; };
 		B57A3A452FDE281100332034 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A442FDE281100332034 /* NotificationManager.swift */; };
 		B5A63FC53038CE540086B36B /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = B5A63FC43038CE540086B36B /* RevenueCat */; };
+		B5AA10112FE70011AA000011 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
+		B5AA10122FE70012AA000012 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
+		B5AA10212FE70021AA000021 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
+		B5AA10222FE70022AA000022 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
 		B5AD651E2FE0A3C5007BFF84 /* RelationshipManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */; };
 		B5AD65202FE15315007BFF84 /* RelationshipSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */; };
 		B5AD65222FE17C0D007BFF84 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65212FE17C0D007BFF84 /* FeedView.swift */; };
@@ -80,8 +80,6 @@
 		B54457B22FDF0EEA00A6F47A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		B54457B42FDF16CC00A6F47A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B57A3A332FDC1A4C00332034 /* Pet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pet.swift; sourceTree = "<group>"; };
-		B5AA10022FE70002AA000002 /* ZiggySprite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySprite.swift; sourceTree = "<group>"; };
-		B5AA10012FE70001AA000001 /* ZiggySkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySkin.swift; sourceTree = "<group>"; };
 		B57A3A352FDC1A7200332034 /* PetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetViewModel.swift; sourceTree = "<group>"; };
 		B57A3A372FDDE8A500332034 /* PersistenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceManager.swift; sourceTree = "<group>"; };
 		B57A3A392FDDF50600332034 /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
@@ -89,6 +87,8 @@
 		B57A3A412FDE1CE300332034 /* ZiggyWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZiggyWidgetExtension.entitlements; sourceTree = "<group>"; };
 		B57A3A422FDE21FB00332034 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		B57A3A442FDE281100332034 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		B5AA10012FE70001AA000001 /* ZiggySkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySkin.swift; sourceTree = "<group>"; };
+		B5AA10022FE70002AA000002 /* ZiggySprite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySprite.swift; sourceTree = "<group>"; };
 		B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipManager.swift; sourceTree = "<group>"; };
 		B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipSetupView.swift; sourceTree = "<group>"; };
 		B5AD65212FE17C0D007BFF84 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
@@ -559,7 +559,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Debug;
@@ -605,7 +605,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
@@ -649,7 +649,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Debug;
@@ -693,7 +693,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
@@ -747,6 +747,7 @@
 				kind = upToNextMajorVersion;
 				minimumVersion = 5.85.0;
 			};
+		};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
