@@ -42,6 +42,7 @@
 		B5AD65462FE327CA007BFF84 /* InstantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65452FE327CA007BFF84 /* InstantView.swift */; };
 		B5AD65482FE6C890007BFF84 /* PlayCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65472FE6C890007BFF84 /* PlayCenterView.swift */; };
 		B5AD656A2FE5F5CB007BFF84 /*   DailyQuestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65692FE5F5CB007BFF84 /*   DailyQuestionManager.swift */; };
+		B5C0FFEE0000000000000A03 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = B5C0FFEE0000000000000A02 /* WebRTC */; };
 		B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5FAE0A10000000000000A22 /* FirebaseAuth */; };
 /* End PBXBuildFile section */
 
@@ -145,6 +146,7 @@
 				B5A63FC53038CE540086B36B /* RevenueCat in Frameworks */,
 				B5FAE0A10000000000000A11 /* FirebaseAuth in Frameworks */,
 				6F285DD6E8644AFE8CAF1B89 /* FirebaseAnalytics in Frameworks */,
+				B5C0FFEE0000000000000A03 /* WebRTC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -262,6 +264,7 @@
 				B5FAE0A10000000000000A22 /* FirebaseAuth */,
 				965D49BE67E748EB9AE57C8D /* FirebaseAnalytics */,
 				B5A63FC43038CE540086B36B /* RevenueCat */,
+				B5C0FFEE0000000000000A02 /* WebRTC */,
 			);
 			productName = Ziggy;
 			productReference = B51F069A2FAE888F009B8146 /* Ziggy.app */;
@@ -319,6 +322,7 @@
 			packageReferences = (
 				B54457A82FDEBC0800A6F47A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				B5A63FC33038CE540086B36B /* XCRemoteSwiftPackageReference "purchases-ios" */,
+				B5C0FFEE0000000000000A01 /* XCRemoteSwiftPackageReference "WebRTC" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B51F069B2FAE888F009B8146 /* Products */;
@@ -748,6 +752,13 @@
 				minimumVersion = 5.85.0;
 			};
 		};
+		B5C0FFEE0000000000000A01 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 156.0.0;
+			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
@@ -771,6 +782,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B5A63FC33038CE540086B36B /* XCRemoteSwiftPackageReference "purchases-ios" */;
 			productName = RevenueCat;
+		};
+		B5C0FFEE0000000000000A02 /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5C0FFEE0000000000000A01 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
 		};
 		B5FAE0A10000000000000A22 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -37,6 +37,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Ziggy needs camera access so you can snap a photo and send an Instant to your love.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Ziggy uses your microphone so you can talk to your partner while you walk together in the park.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Ziggy saves your doodles to your photo library so you can keep them.</string>
 	<key>UIApplicationSceneManifest</key>
@@ -51,6 +53,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>audio</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
