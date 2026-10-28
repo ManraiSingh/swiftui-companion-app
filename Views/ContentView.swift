@@ -779,6 +779,7 @@ struct ContentView: View {
     @State private var showStore = false
     @State private var paywall: PaywallReason?
     @State private var showLoveInfo = false
+    @State private var showPark = false
 
     /// Bouquets the two of you have exchanged, and the one waiting to be seen.
     @State private var bouquets: [Bouquet] = []
@@ -1235,6 +1236,9 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showInstantView)     { InstantView(petVM: petVM).swipeToDismiss() }
         .fullScreenCover(isPresented: $showDrawingGameView) { PlayCenterView(petVM: petVM).swipeToDismiss() }
         .fullScreenCover(isPresented: $showDoodleView)       { DoodleView().swipeToDismiss() }
+        .fullScreenCover(isPresented: $showPark) {
+            if #available(iOS 18.0, *) { ZiggyParkView() }
+        }
         .fullScreenCover(isPresented: $showWidgetOnboarding) {
             WidgetOnboardingView { showWidgetOnboarding = false }
         }
@@ -1313,6 +1317,7 @@ struct ContentView: View {
                     .lineLimit(1)
             }
             Spacer()
+            if #available(iOS 18.0, *) { parkButton }
             storeButton
             loveBadge
         }
@@ -1504,6 +1509,21 @@ struct ContentView: View {
                 paywall = .bouquets
             }
         }
+    }
+
+    // Opens the 3D walk with Ziggy.
+    private var parkButton: some View {
+        Button {
+            showPark = true
+        } label: {
+            Image(systemName: "pawprint.fill")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(themes.theme.surface(0.9)))
+                .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
     }
 
     private var storeButton: some View {
