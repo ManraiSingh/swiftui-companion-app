@@ -780,6 +780,7 @@ struct ContentView: View {
     @State private var paywall: PaywallReason?
     @State private var showLoveInfo = false
     @State private var showPark = false
+    @StateObject private var parkPresence = ParkPresence()
 
     /// Bouquets the two of you have exchanged, and the one waiting to be seen.
     @State private var bouquets: [Bouquet] = []
@@ -1065,6 +1066,10 @@ struct ContentView: View {
             return msg.text
         }
 
+        if let walking = parkPresence.partnerName {
+            return "\(walking)'s in the park! Come walk with us 🐾"
+        }
+
         if petVM.hasPendingInstant {
             return "Psst… \(petVM.instantSender) sent you an Instant 😳"
         }
@@ -1317,7 +1322,6 @@ struct ContentView: View {
                     .lineLimit(1)
             }
             Spacer()
-            if #available(iOS 18.0, *) { parkButton }
             storeButton
             loveBadge
         }
@@ -1511,21 +1515,6 @@ struct ContentView: View {
         }
     }
 
-    // Opens the 3D walk with Ziggy.
-    private var parkButton: some View {
-        Button {
-            showPark = true
-        } label: {
-            Image(systemName: "pawprint.fill")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.50))
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(themes.theme.surface(0.9)))
-                .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-        }
-        .buttonStyle(.plain)
-    }
-
     private var storeButton: some View {
         Button {
             openStore()
@@ -1564,7 +1553,7 @@ struct ContentView: View {
         let bottomPad: CGFloat = 2
         let fixedOverhead = shelfHeight + topPad + vstackSpacing + bottomPad
 
-        let mascotSize = min(width * 0.43, heroHeight - fixedOverhead)
+        let mascotSize = min(width * 0.42, heroHeight - fixedOverhead)
 
         return VStack(spacing: vstackSpacing) {
 
@@ -1591,10 +1580,10 @@ struct ContentView: View {
 
             // Feed and Ziggy share one row, side by side — Ziggy fills
             // whatever this device's `heroCap` leaves after the shelf.
-            HStack(alignment: .bottom, spacing: 34) {
-                feedBar
-                    .frame(width: 104)
-                    .padding(.bottom, 14)
+            HStack(alignment: .bottom, spacing: 0) {
+                // Holds Ziggy's place; the title and buttons sit over this
+                // side of the card in the overlay below.
+                Color.clear.frame(width: 174, height: 1)
 
                 // Ziggy plus whatever the two of you have dressed him in.
                 ZiggySprite(mood: currentEmotionImage, skin: skins.skin)
@@ -1617,11 +1606,20 @@ struct ContentView: View {
         // Sits at the card's true middle-left, independent of the shelf's
         // own (much smaller) height — so "Waiting for someone…" lands
         // roughly level with Feed/Ziggy instead of stuck up near the top.
-        .overlay(alignment: .leading) {
-            moodTitleText
-                .frame(maxWidth: 130, alignment: .leading)
-                .padding(.leading, 16)
-                .offset(y: -28)
+        // The title with Feed and Walk under it, as one column down the
+        // left — so the buttons always keep the same breathing room below
+        // the text, however many lines it runs to.
+        .overlay(alignment: .bottomLeading) {
+            VStack(alignment: .leading, spacing: 16) {
+                moodTitleText
+                    .frame(maxWidth: 130, alignment: .leading)
+                HStack(spacing: 8) {
+                    feedBar
+                    walkBar
+                }
+            }
+            .padding(.leading, 18)
+            .padding(.bottom, 20)
         }
         // heroHeight is the leftover space after every OTHER card is
         // measured — on devices where that leftover is more generous than
@@ -1701,44 +1699,90 @@ struct ContentView: View {
         )
     }
 
-    // Same cozy room, day and night — sleeping gets the night version,
-    // every other mood gets the sunny afternoon one, both replacing the
-    // plain gradient. scaledToFill + clipped inside a GeometryReader crops
-    // to whatever size the card renders at, so it looks right on every
-    // iPhone without needing a per-device fixed crop.
-    @ViewBuilder
+    /// Ziggy is out in the park — the same park you walk in. Sunny on a
+    /// light theme, golden evening with the lanterns lit on a dark one,
+    /// night on both while he sleeps, and raining when he is sad — as his
+    /// room used to. Your partner shows up on the
+    /// path when they are out walking, and tapping the park takes you there.
     private var heroBackground: some View {
-        GeometryReader { geo in
-            Image(heroBackgroundName)
-                .resizable()
-                .scaledToFill()
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 40))
+        HomeParkScene(time: parkTime, raining: petVM.pet.settledMoodImage == "ziggu_cry",
+                      partnerWalking: parkPresence.partnerName != nil)
+            .clipShape(RoundedRectangle(cornerRadius: 40))
+            .contentShape(RoundedRectangle(cornerRadius: 40))
+            .onTapGesture { openPark() }
+            .task { parkPresence.start() }
     }
 
-    /// The room follows `pet.moodImage`, not `currentEmotionImage`.
-    ///
-    /// The two differ whenever something transient is on screen — a one-tap
-    /// message, a doodle, a pending Instant. Those change the face Ziggy is
-    /// wearing, and they used to drag the room along with them, so a note
-    /// sent at midnight swapped the night room for the sunlit afternoon one.
-    /// Keying the room off the pet's own mood leaves it on the clock.
-    private var heroBackgroundName: String {
-        switch petVM.pet.settledMoodImage {
-        case "ziggy_sleep": return "nightbackground"
-        case "ziggu_cry":   return "cry"
-        // The sunlit afternoon room is the one thing on a dark theme that
-        // still blazes. Same room, lights low.
-        default:            return themes.theme.isDark ? "sceenery-bg-daerk" : "Afternoon"
+    private var isNightPark: Bool {
+        themes.theme.isDark
+    }
+
+    /// Keyed off the pet's settled mood, not whatever face he is pulling,
+    /// so a passing message doesn't flick the sky between evening and night.
+    /// Night while he sleeps, on either theme; otherwise a sunny day on a
+    /// light theme and golden evening on a dark one.
+    private var parkTime: ParkTime {
+        if petVM.pet.settledMoodImage == "ziggy_sleep" { return .night }
+        return isNightPark ? .evening : .day
+    }
+
+    private func openPark() {
+        guard #available(iOS 18.0, *) else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        showPark = true
+    }
+
+    /// Beside Feed: off for a walk — or, when your partner is already out
+    /// there, join them.
+    @ViewBuilder private var walkBar: some View {
+        if #available(iOS 18.0, *) {
+            let joining = parkPresence.partnerName != nil
+            Button { openPark() } label: {
+                parkPill(icon: "pawprint.fill", title: joining ? "Join" : "Walk", color: .pink)
+                    .overlay {
+                        if joining {
+                            Capsule()
+                                .stroke(Color.pink.opacity(0.9), lineWidth: 2)
+                                .phaseAnimator([1.0, 1.12]) { ring, scale in
+                                    ring.scaleEffect(scale).opacity(Double(1.12 - scale) * 8)
+                                } animation: { _ in .easeOut(duration: 1.2) }
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(joining ? "Join the walk in the park" : "Take Ziggy for a walk")
         }
     }
 
-    /// The rainy and night rooms are both dark enough that the black text
-    /// used over the sunlit afternoon room disappears into them.
+    /// The little capsule Feed and Walk share, so they read as a pair —
+    /// dressed like the Doodle, Play and Instant tiles below: the theme's
+    /// surface, a soft wash of the colour, and its outline.
+    private func parkPill(icon: String, title: String, color: Color) -> some View {
+        let theme = themes.theme
+        return HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(color)
+            Text(title)
+                .font(.subheadline).fontWeight(.black)
+                .foregroundStyle(theme.ink)
+                .lineLimit(1)
+        }
+        .fixedSize()
+        .padding(.horizontal, 12)
+        .frame(height: 38)
+        .background(
+            Capsule().fill(theme.surface(0.88))
+                .overlay(Capsule().fill(theme.tintedFill(color)))
+        )
+        .overlay(Capsule().stroke(theme.outline(color), lineWidth: 1.5))
+        .shadow(color: color.opacity(0.15), radius: 8, y: 4)
+    }
+
+    /// The night and rainy park are both dark enough that the black text
+    /// used over the sunny one disappears into them.
     private var isDarkHeroBackground: Bool {
-        heroBackgroundName != "Afternoon"
+        parkTime != .day || petVM.pet.settledMoodImage == "ziggu_cry"
     }
 
     /// The tinted tiles — Doodle, Play, Instant.
@@ -1746,46 +1790,36 @@ struct ContentView: View {
     /// Their outline carries the colour on a dark theme, where the pale fill
     /// that used to do it has gone.
 
+    /// Ziggy's words, in a soft glass over the park: warm cream
+    /// by day, deep night blue under the lanterns.
     private var speechBubble: some View {
-        Text(speechBubbleText)
-            .font(.system(size: 12.5, weight: .bold))
+        let fill = isNightPark
+            ? Color(red: 0.16, green: 0.15, blue: 0.34).opacity(0.82)
+            : Color(red: 1, green: 0.98, blue: 0.95).opacity(0.92)
+        return Text(speechBubbleText)
+            .font(.system(size: 12.5, weight: .bold, design: .rounded))
             .multilineTextAlignment(.center)
-            .foregroundStyle(themes.theme.ink)
+            .foregroundStyle(isNightPark ? .white : Color(red: 0.36, green: 0.22, blue: 0.27))
             .lineLimit(5).fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(themes.theme.surface(0.92))
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(fill, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(isNightPark ? 0.18 : 0.9), lineWidth: 1))
             .overlay(alignment: .bottom) {
                 Image(systemName: "triangle.fill")
-                    .font(.system(size: 13))
-                    // Must be the same surface as the bubble it hangs off.
-                    .foregroundStyle(themes.theme.surface(0.92))
+                    .font(.system(size: 11))
+                    // Must be the same glass as the bubble it hangs off.
+                    .foregroundStyle(fill)
                     .rotationEffect(.degrees(180))
-                    .offset(y: 9)
+                    .offset(y: 8)
             }
-            .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
+            .shadow(color: .black.opacity(isNightPark ? 0.3 : 0.08), radius: 8, y: 4)
     }
 
     private var feedBar: some View {
         Button {
             showFeedView = true
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "fork.knife")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.pink)
-                Text("Feed")
-                    .font(.subheadline)
-                    .fontWeight(.black)
-                    .foregroundStyle(.pink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
-            .background(themes.theme.surface(0.92))
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+            parkPill(icon: "fork.knife", title: "Feed", color: .orange)
         }
         .buttonStyle(.plain)
     }
