@@ -26,10 +26,13 @@
 //  for however long ago it was really sent. The screen then eases them there
 //  rather than jumping.
 //
-//  Ziggy is not sent at all. Each phone works him out from the two people,
-//  and since both phones see the same two people he ends up in the same
-//  place. Only his tricks travel, so when one of you asks for a roll-over,
-//  both of you see it — those, and the surprises you set off.
+//  There is one Ziggy for the two of you. The phone of whoever has given him
+//  the most love this week walks him and sends where he is with its own
+//  report; the other phone just shows him there. So the two phones can
+//  never disagree about who that is, one of them decides — the one with
+//  the smaller device ID — and says so in its report ("lead"). Tricks,
+//  emotes, playing with him and surprises travel on the shared game
+//  document, so both of you see them.
 //
 
 import FirebaseFirestore
@@ -54,6 +57,10 @@ final class ZiggyParkLink {
         var name: String
         /// Ziggy, if their phone is the one walking him.
         var ziggy: Motion?
+        /// Who walks Ziggy, if theirs is the phone that decides — and
+        /// whether it came down to a tie.
+        var lead: String?
+        var tied: Bool
     }
 
     /// One report from your partner's phone.
@@ -64,6 +71,8 @@ final class ZiggyParkLink {
         var look: ParkLook
         var name: String
         var ziggy: Motion?
+        var lead: String?
+        var tied: Bool
         /// Their clock when it was true, in seconds.
         var sentAt: Double
         /// This phone's clock when it arrived.
@@ -105,7 +114,7 @@ final class ZiggyParkLink {
     private var walkersListener: ListenerRegistration?
     private var trickListener: ListenerRegistration?
 
-    private var lastSent: (position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion?, at: Double)?
+    private var lastSent: (position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion?, lead: String?, at: Double)?
     private var lastTrickID: String?
     private var lastSurpriseID: String?
     private var notesListener: ListenerRegistration?
@@ -201,7 +210,8 @@ final class ZiggyParkLink {
 
     /// Sends where you are — and Ziggy, when this phone is the one walking
     /// him, so your partner sees the very same Ziggy.
-    func send(position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion? = nil) {
+    func send(position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion? = nil,
+              lead: String? = nil, tied: Bool = false) {
         guard let walkers else { return }
         let now = Self.clock
 
@@ -224,9 +234,9 @@ final class ZiggyParkLink {
                     || simd_distance(was.velocity, z.velocity) > 0.25
                     || abs(Self.wrap(was.heading - z.heading)) > 0.35
             }
-            if !drifted && !turned && !changedPace && !ziggyChanged && last.look == look && !due { return }
+            if !drifted && !turned && !changedPace && !ziggyChanged && last.look == look && last.lead == lead && !due { return }
         }
-        lastSent = (position, velocity, heading, look, ziggy, now)
+        lastSent = (position, velocity, heading, look, ziggy, lead, now)
 
         var fields: [String: Any] = [
             "x": position.x, "z": position.y,
@@ -243,6 +253,10 @@ final class ZiggyParkLink {
             fields["zvx"] = ziggy.velocity.x
             fields["zvz"] = ziggy.velocity.y
             fields["zh"] = ziggy.heading
+        }
+        if let lead {
+            fields["lead"] = lead
+            fields["tied"] = tied
         }
         walkers.document(myID).setData(fields)
     }
@@ -318,7 +332,9 @@ final class ZiggyParkLink {
             heading: report.heading,
             look: report.look,
             name: report.name,
-            ziggy: report.ziggy.map { Motion(position: $0.position + $0.velocity * ahead, velocity: $0.velocity, heading: $0.heading) }
+            ziggy: report.ziggy.map { Motion(position: $0.position + $0.velocity * ahead, velocity: $0.velocity, heading: $0.heading) },
+            lead: report.lead,
+            tied: report.tied
         )
     }
 
@@ -329,6 +345,9 @@ final class ZiggyParkLink {
         for (id, p) in documents where id != myID {
             guard p["here"] as? Bool == true else { continue }
             let sentAt = Self.double(p["t"])
+            // A phone that closed without saying goodbye leaves its last
+            // report behind; one that old is not someone in the park.
+            if Self.clock - sentAt > 20 { continue }
             // The same report again (a listener re-delivering it): nothing new.
             if let latest, id == partnerID, latest.sentAt == sentAt {
                 found = latest
@@ -344,6 +363,8 @@ final class ZiggyParkLink {
                 ziggy: p["zx"] == nil ? nil : Motion(position: [Self.number(p["zx"]), Self.number(p["zz"])],
                                                      velocity: [Self.number(p["zvx"]), Self.number(p["zvz"])],
                                                      heading: Self.number(p["zh"])),
+                lead: p["lead"] as? String,
+                tied: p["tied"] as? Bool ?? false,
                 sentAt: sentAt,
                 heardAt: heardAt
             )
@@ -395,6 +416,12 @@ final class ZiggyParkLink {
     }
 
     private func receiveNotes(_ documents: [(id: String, data: [String: Any])]) {
+        // One of yours gone from the unread ones: your partner found it.
+        // Checked across all of them, not just the newest shown.
+        let waiting = Set(documents.filter { $0.data["by"] as? String == myID }.map(\.id))
+        if let before = myWaitingNotes, !before.subtracting(waiting).isEmpty { onNoteFound?() }
+        myWaitingNotes = waiting
+
         let notes = documents.map { id, p in
             ParkNote(id: id, text: p["text"] as? String ?? "",
                      position: [Self.number(p["x"]), Self.number(p["z"])],
@@ -404,10 +431,6 @@ final class ZiggyParkLink {
         }
         .sorted { $0.at > $1.at }
         .prefix(24)
-        // One of yours gone from the unread ones: your partner found it.
-        let waiting = Set(notes.filter(\.mine).map(\.id))
-        if let before = myWaitingNotes, !before.subtracting(waiting).isEmpty { onNoteFound?() }
-        myWaitingNotes = waiting
         onNotes?(Array(notes))
     }
 

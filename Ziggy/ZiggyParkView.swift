@@ -845,16 +845,32 @@ final class ZiggyParkWorld {
         }
         partnerWasHere = there != nil
 
-        // Whose phone walks Ziggy: his favourite's. On a tie, the smaller
-        // device ID, so both phones always agree on just one.
-        let favourite = link.favourite()
-        var partnerLeads = false
+        // Whose phone walks Ziggy: his favourite's. One phone decides — the
+        // one with the smaller device ID — and tells the other, so the two
+        // can never both walk him, or both wait for the other to.
+        var leader = link.myID
+        var tied = false
+        var deciding = false
         if partnerWasHere, let theirID = link.partnerID {
-            partnerLeads = favourite.map { $0 == theirID } ?? (theirID < link.myID)
+            if link.myID < theirID {
+                deciding = true
+                let favourite = link.favourite()
+                leader = favourite ?? link.myID
+                tied = favourite == nil
+            } else {
+                leader = there?.lead ?? theirID
+                tied = there?.tied ?? false
+            }
         }
         // If their phone has not sent him yet, walk him here for now.
-        walkingZiggy = !(partnerLeads && there?.ziggy != nil)
-        tellWhoZiggyFollows(favourite: favourite, partnerName: there?.name)
+        walkingZiggy = leader == link.myID || there?.ziggy == nil
+        // Only once it is so: "sticking with them" while he is still here
+        // waiting for their phone to take him would be the wrong way round.
+        if leader == link.myID || !walkingZiggy {
+            tellWhoZiggyFollows(leader: leader, tied: tied, partnerName: there?.name)
+        } else if there == nil {
+            tellWhoZiggyFollows(leader: leader, tied: tied, partnerName: nil)
+        }
 
         link.send(
             position: [meMove.position.x, meMove.position.z],
@@ -865,7 +881,9 @@ final class ZiggyParkWorld {
                 ? .init(position: [ziggyMove.position.x, ziggyMove.position.z],
                         velocity: [ziggyMove.velocity.x, ziggyMove.velocity.z],
                         heading: ziggyMove.heading)
-                : nil
+                : nil,
+            lead: deciding ? leader : nil,
+            tied: tied
         )
 
         let nextCompany: Company
@@ -1118,7 +1136,7 @@ final class ZiggyParkWorld {
 
     // MARK: Who Ziggy follows
 
-    private func tellWhoZiggyFollows(favourite: String?, partnerName: String?) {
+    private func tellWhoZiggyFollows(leader: String, tied: Bool, partnerName: String?) {
         guard let partnerName else {
             if !ziggyFollows.isEmpty { ziggyFollows = ""; onZiggyFollows?(nil) }
             return
@@ -1126,12 +1144,12 @@ final class ZiggyParkWorld {
         let them = partnerName.isEmpty ? "your partner" : partnerName
         let Them = partnerName.isEmpty ? "Your partner" : partnerName
         let news: (title: String, detail: String)
-        if favourite == link.myID {
-            news = ("Ziggy's sticking with you", "You gave him the most love this week")
-        } else if favourite != nil {
-            news = ("Ziggy's sticking with \(them)", "\(Them) gave him the most love this week. Feed him more to win him over!")
-        } else {
+        if tied {
             news = ("Ziggy loves you both the same", "You've both looked after him just as much this week")
+        } else if leader == link.myID {
+            news = ("Ziggy's sticking with you", "You gave him the most love this week")
+        } else {
+            news = ("Ziggy's sticking with \(them)", "\(Them) gave him the most love this week. Feed him more to win him over!")
         }
         guard news.title != ziggyFollows else { return }
         ziggyFollows = news.title

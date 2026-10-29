@@ -28,6 +28,7 @@ import AVFoundation
 import FirebaseFirestore
 import Foundation
 import Observation
+import UIKit
 import WebRTC
 
 @available(iOS 18.0, *)
@@ -95,6 +96,13 @@ final class ZiggyParkVoice {
         let code = RelationshipManager.shared.relationshipCode
         guard !code.isEmpty else { return }
 
+        // Said no to the microphone before: iOS will not ask again, so
+        // take them to where they can turn it back on.
+        if AVAudioApplication.shared.recordPermission == .denied {
+            state = .noMic
+            if let settings = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(settings) }
+            return
+        }
         AVAudioApplication.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 guard granted else { self.state = .noMic; return }
@@ -108,6 +116,8 @@ final class ZiggyParkVoice {
         session = UUID().uuidString
         muted = false
         state = .waiting
+        // Onto the loudspeaker — unless headphones are in, which keep it.
+        keepOnSpeaker()
         voice = Firestore.firestore()
             .collection("relationships").document(code)
             .collection("games").document("ziggyPark")
@@ -202,7 +212,6 @@ final class ZiggyParkVoice {
         if on {
             try? audio.setCategory(.playAndRecord, mode: .videoChat, options: options)
             try? audio.setActive(true)
-            if speaker { try? audio.overrideOutputAudioPort(.speaker) }
             routeWatch = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.keepOnSpeaker() }
             }
