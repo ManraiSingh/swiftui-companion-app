@@ -8,8 +8,8 @@
 //  either thumb reaches it. Everywhere else is for looking around: drag to
 //  swing the camera, pinch to move it in and out. Both work at once.
 //
-//  Ziggy's tricks live behind his picture in the corner, and drop down when
-//  you tap him. Below him is voice chat; along the bottom, a present that
+//  Ziggy's tricks — and petting him, giving him a treat and playing catch —
+//  live behind his picture in the corner, and drop down when you tap him. Below him is voice chat; along the bottom, a present that
 //  does something fun when you open it.
 //
 
@@ -457,6 +457,8 @@ struct ParkEmoteIllustration: View {
                     .font(.system(size: s * 0.2, weight: .black))
                     .foregroundStyle(Color(red: 0.75, green: 0.6, blue: 0.95))
                     .offset(x: -s * 0.38, y: -s * 0.26)
+            case .pat, .offer, .toss:
+                ParkChibi(look: look, eyes: .happy, mouth: .smile, size: s * 0.8)
             case .bow:
                 ParkChibi(look: look, eyes: .closed, mouth: .smile, size: s * 0.8)
                     .rotationEffect(.degrees(10))
@@ -486,6 +488,20 @@ struct ParkEmoteIllustration: View {
             Capsule().fill(parkPink.opacity(0.7)).frame(width: s * 0.03, height: s * 0.09).rotationEffect(.degrees(30))
             Capsule().fill(parkPink.opacity(0.7)).frame(width: s * 0.03, height: s * 0.07).rotationEffect(.degrees(55))
         }
+    }
+}
+
+/// A little dog bone, drawn.
+struct ParkBoneShape: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let k = r.height * 0.32
+        for (x, y) in [(r.minX + k, r.minY + k), (r.minX + k, r.maxY - k), (r.maxX - k, r.minY + k), (r.maxX - k, r.maxY - k)] {
+            p.addEllipse(in: CGRect(x: x - k, y: y - k, width: 2 * k, height: 2 * k))
+        }
+        p.addRoundedRect(in: CGRect(x: r.minX + k, y: r.midY - r.height * 0.22, width: r.width - 2 * k, height: r.height * 0.44),
+                         cornerSize: CGSize(width: 2, height: 2))
+        return p
     }
 }
 
@@ -532,7 +548,7 @@ struct ParkEmoteMenu: View {
 
     private var row: some View {
         HStack(spacing: 4) {
-            ForEach(ParkEmote.allCases, id: \.self) { emote in
+            ForEach(ParkEmote.menu, id: \.self) { emote in
                 Button {
                     perform(emote)
                     withAnimation(.spring(duration: 0.3)) { open = false }
@@ -891,6 +907,7 @@ struct ParkSurpriseButton: View {
 struct ParkTrickMenu: View {
 
     let perform: (Ziggy3DTrick) -> Void
+    let play: (ZiggyPlay) -> Void
     @State private var open = false
 
     var body: some View {
@@ -956,6 +973,43 @@ struct ParkTrickMenu: View {
                     .padding(.horizontal, 8)
                     .frame(width: 136, height: 36)
                     .background(Color(red: 1, green: 0.95, blue: 0.96), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 4) {
+                Image(systemName: "heart.fill")
+                Text("Play with Ziggy")
+            }
+            .font(.system(size: 12, weight: .heavy, design: .rounded))
+            .foregroundStyle(parkPink)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+
+            ForEach(ZiggyPlay.allCases, id: \.self) { kind in
+                Button {
+                    play(kind)
+                    withAnimation(.spring(duration: 0.3)) { open = false }
+                } label: {
+                    HStack(spacing: 8) {
+                        Group {
+                            if kind == .treat {
+                                ParkBoneShape().fill(.white).frame(width: 16, height: 9).rotationEffect(.degrees(-25))
+                            } else {
+                                Image(systemName: kind == .pet ? "hand.raised.fill" : "tennisball.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                        }
+                        .frame(width: 26, height: 26)
+                        .background(.white.opacity(0.25), in: Circle())
+                        Text(kind.title)
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .frame(width: 136, height: 36)
+                    .background(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.72), parkPink], startPoint: .top, endPoint: .bottom), in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
