@@ -259,6 +259,8 @@ final class ParkAnimals {
         var dayOnly = false
         var phase = Float.random(in: 0...10)
         var swimAt: Float = 0
+        /// Which side of the pair a swan swims on, out from the loop.
+        var lane: Float = 0
         var size: Float = 1
         /// How close you have to be to say hello.
         var reach: Float = 1.9
@@ -303,7 +305,9 @@ final class ParkAnimals {
         add(fox(spirit: false), way: .roam, home: at(-24, 35), range: 4, speed: 0.6) { $0.dayOnly = true; $0.curious = true }
         add(fox(spirit: true), way: .roam, home: at(-24, 36), range: 3, speed: 0.4) { $0.nightOnly = true; $0.curious = true; $0.height = 0.08 }
         for _ in 0..<4 { add(frog(), way: .pads, home: at(0, 0), range: 0, speed: 0) { $0.reach = 3.2; $0.cull = 30 } }
-        for k in 0..<2 { add(swan(), way: .swim(ring: 0.82, speed: 0.012), home: at(0, 0), range: 0, speed: 0) { $0.swimAt = Float(k) * 0.012; $0.reach = 3.4 } }
+        for k in 0..<2 {
+            add(swan(), way: .swim(ring: 0.82, speed: 0.012), home: at(0, 0), range: 0, speed: 0) { $0.lane = k == 0 ? -0.38 : 0.38; $0.reach = 3.4 }
+        }
         for k in 0..<2 { add(squirrel(), way: .roam, home: at(45, 6) + [Float(k) * 4 - 2, 0], range: 8, speed: 1.1) { $0.shy = true; $0.hopHeight = 0.07; $0.cull = 30 } }
         for k in 0..<6 {
             add(sparrow(), way: .roam, home: k < 3 ? at(-20, -36) : at(-3, 21), range: 4, speed: 0.8) { $0.shy = true; $0.hopHeight = 0.05; $0.cull = 28 }
@@ -891,11 +895,12 @@ final class ParkAnimals {
         }
         let p = point(t)
         let ahead = point(t + (speed >= 0 ? 0.004 : -0.004))
-        // Swans swim side by side; ducklings in a line behind their mother.
+        // Swans swim side by side, each keeping to its own side of the
+        // pair; ducklings follow in a line behind their mother.
         var offset = SIMD2<Float>.zero
-        if a.kind == .swan {
+        if a.lane != 0, simd_length(ahead - p) > 0.0001 {
             let side = simd_normalize(SIMD2((ahead - p).y, -(ahead - p).x))
-            offset = side * (a.swimAt.truncatingRemainder(dividingBy: 0.024) > 0.006 ? 0.35 : -0.35)
+            offset = side * a.lane
         }
         a.position = p + offset
         a.heading = turn(a.heading, toward: atan2(ahead.x - p.x, ahead.y - p.y), rate: 4, dt: dt)
