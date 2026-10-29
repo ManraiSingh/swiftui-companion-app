@@ -39,12 +39,21 @@ import simd
 @available(iOS 18.0, *)
 final class ZiggyParkLink {
 
+    /// Where someone is and which way they are going: a person, or Ziggy.
+    struct Motion {
+        var position: SIMD2<Float>
+        var velocity: SIMD2<Float>
+        var heading: Float
+    }
+
     struct Walker {
         var position: SIMD2<Float>
         var velocity: SIMD2<Float>
         var heading: Float
         var look: ParkLook
         var name: String
+        /// Ziggy, if their phone is the one walking him.
+        var ziggy: Motion?
     }
 
     /// One report from your partner's phone.
@@ -54,6 +63,7 @@ final class ZiggyParkLink {
         var heading: Float
         var look: ParkLook
         var name: String
+        var ziggy: Motion?
         /// Their clock when it was true, in seconds.
         var sentAt: Double
         /// This phone's clock when it arrived.
@@ -75,6 +85,11 @@ final class ZiggyParkLink {
     /// way they were looking.
     var onSurprise: ((ParkSurprise, SIMD2<Float>, Float) -> Void)?
 
+    /// Your partner played with Ziggy: how, where they stood, which way
+    /// they faced.
+    var onPlay: ((ZiggyPlay, SIMD2<Float>, Float) -> Void)?
+    private var lastPlayID: String?
+
     /// An emote your partner just did, to play on them here.
     var onEmote: ((ParkEmote) -> Void)?
     private var lastEmoteID: String?
@@ -90,7 +105,7 @@ final class ZiggyParkLink {
     private var walkersListener: ListenerRegistration?
     private var trickListener: ListenerRegistration?
 
-    private var lastSent: (position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, at: Double)?
+    private var lastSent: (position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion?, at: Double)?
     private var lastTrickID: String?
     private var lastSurpriseID: String?
     private var notesListener: ListenerRegistration?
@@ -101,6 +116,47 @@ final class ZiggyParkLink {
     var isLinked: Bool { game != nil }
 
     private static var clock: Double { Date().timeIntervalSince1970 }
+
+    // MARK: Who Ziggy loves most
+
+    /// How much each of you has looked after Ziggy this past week, by device:
+    /// feeding counts most, then hugs and play, then everything else you do
+    /// for each other. Read from the "Our Memories" timeline you share.
+    private(set) var love: [String: Int] = [:]
+
+    /// Called once the week's love has been counted.
+    var onLove: (() -> Void)?
+
+    /// Whoever has given Ziggy the most love this week, between you and
+    /// your partner — or nil when it is a tie.
+    func favourite() -> String? {
+        guard let partnerID else { return nil }
+        let mine = love[myID] ?? 0, theirs = love[partnerID] ?? 0
+        if mine == theirs { return nil }
+        return mine > theirs ? myID : partnerID
+    }
+
+    private func countLove(code: String) {
+        let weekAgo = Date().addingTimeInterval(-7 * 24 * 3600)
+        Firestore.firestore()
+            .collection("relationships").document(code)
+            .collection("events")
+            .whereField("timestamp", isGreaterThan: Timestamp(date: weekAgo))
+            .getDocuments { [weak self] snapshot, _ in
+                var love: [String: Int] = [:]
+                for doc in snapshot?.documents ?? [] {
+                    let data = doc.data()
+                    guard let who = data["personDeviceID"] as? String else { continue }
+                    let title = (data["title"] as? String ?? "").lowercased()
+                    let points = title.hasPrefix("fed") ? 3 : (title.contains("hug") || title.hasPrefix("played") || title.contains("treat") ? 2 : 1)
+                    love[who, default: 0] += points
+                }
+                DispatchQueue.main.async {
+                    self?.love = love
+                    self?.onLove?()
+                }
+            }
+    }
 
     // MARK: Lifecycle
 
@@ -113,6 +169,7 @@ final class ZiggyParkLink {
             .collection("games").document("ziggyPark")
         self.game = game
         walkers = game.collection("walkers")
+        countLove(code: code)
 
         walkersListener = walkers?.addSnapshotListener { [weak self] snapshot, error in
             guard error == nil, let snapshot else { return }
@@ -142,7 +199,9 @@ final class ZiggyParkLink {
 
     // MARK: Sending
 
-    func send(position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook) {
+    /// Sends where you are — and Ziggy, when this phone is the one walking
+    /// him, so your partner sees the very same Ziggy.
+    func send(position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion? = nil) {
         guard let walkers else { return }
         let now = Self.clock
 
@@ -155,13 +214,21 @@ final class ZiggyParkLink {
             let drifted = simd_distance(guess, position) > 0.12
             let turned = abs(Self.wrap(last.heading - heading)) > 0.25
             let changedPace = simd_distance(last.velocity, velocity) > 0.2
-            let moving = simd_length(velocity) > 0.05
+            let moving = simd_length(velocity) > 0.05 || simd_length(ziggy?.velocity ?? .zero) > 0.05
             let due = since > (moving ? 1.0 : 2.0)
-            if !drifted && !turned && !changedPace && last.look == look && !due { return }
+            // Ziggy wanders off on his own course, so he gets the same test.
+            var ziggyChanged = (ziggy == nil) != (last.ziggy == nil)
+            if let z = ziggy, let was = last.ziggy {
+                let zGuess = was.position + was.velocity * Float(since)
+                ziggyChanged = simd_distance(zGuess, z.position) > 0.15
+                    || simd_distance(was.velocity, z.velocity) > 0.25
+                    || abs(Self.wrap(was.heading - z.heading)) > 0.35
+            }
+            if !drifted && !turned && !changedPace && !ziggyChanged && last.look == look && !due { return }
         }
-        lastSent = (position, velocity, heading, look, now)
+        lastSent = (position, velocity, heading, look, ziggy, now)
 
-        walkers.document(myID).setData([
+        var fields: [String: Any] = [
             "x": position.x, "z": position.y,
             "vx": velocity.x, "vz": velocity.y,
             "h": heading,
@@ -169,7 +236,15 @@ final class ZiggyParkLink {
             "name": UserManager.shared.username,
             "here": true,
             "t": now,
-        ])
+        ]
+        if let ziggy {
+            fields["zx"] = ziggy.position.x
+            fields["zz"] = ziggy.position.y
+            fields["zvx"] = ziggy.velocity.x
+            fields["zvz"] = ziggy.velocity.y
+            fields["zh"] = ziggy.heading
+        }
+        walkers.document(myID).setData(fields)
     }
 
     func send(trick: Ziggy3DTrick) {
@@ -188,6 +263,13 @@ final class ZiggyParkLink {
         game.setData([
             "surprise": ["name": surprise.rawValue, "id": id, "by": myID, "x": position.x, "z": position.y, "f": facing],
         ], merge: true)
+    }
+
+    func send(play: ZiggyPlay, at position: SIMD2<Float>, facing: Float) {
+        guard let game else { return }
+        let id = UUID().uuidString
+        lastPlayID = id
+        game.setData(["play": ["kind": play.rawValue, "id": id, "by": myID, "x": position.x, "z": position.y, "f": facing]], merge: true)
     }
 
     func send(emote: ParkEmote) {
@@ -235,7 +317,8 @@ final class ZiggyParkLink {
             velocity: report.velocity,
             heading: report.heading,
             look: report.look,
-            name: report.name
+            name: report.name,
+            ziggy: report.ziggy.map { Motion(position: $0.position + $0.velocity * ahead, velocity: $0.velocity, heading: $0.heading) }
         )
     }
 
@@ -258,6 +341,9 @@ final class ZiggyParkLink {
                 heading: Self.number(p["h"]),
                 look: ParkLook(rawValue: p["look"] as? Int ?? 1) ?? .sundress,
                 name: p["name"] as? String ?? "",
+                ziggy: p["zx"] == nil ? nil : Motion(position: [Self.number(p["zx"]), Self.number(p["zz"])],
+                                                     velocity: [Self.number(p["zvx"]), Self.number(p["zvz"])],
+                                                     heading: Self.number(p["zh"])),
                 sentAt: sentAt,
                 heardAt: heardAt
             )
@@ -282,6 +368,13 @@ final class ZiggyParkLink {
                let name = trick["name"] as? String,
                let wanted = Ziggy3DTrick.allCases.first(where: { $0.key == name }) {
                 onTrick?(wanted)
+            }
+        }
+        if let play = data["play"] as? [String: Any], let id = play["id"] as? String, id != lastPlayID {
+            lastPlayID = id
+            if primed, play["by"] as? String != myID,
+               let kind = (play["kind"] as? String).flatMap(ZiggyPlay.init(rawValue:)) {
+                onPlay?(kind, [Self.number(play["x"]), Self.number(play["z"])], Self.number(play["f"]))
             }
         }
         if let emote = data["emote"] as? [String: Any], let id = emote["id"] as? String, id != lastEmoteID {
