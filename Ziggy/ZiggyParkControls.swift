@@ -29,6 +29,8 @@ struct ParkTouchPad: View {
     /// The pinch so far, or nil when it ends.
     let onPinch: (CGFloat?) -> Void
     @Binding var autoWalk: Bool
+    /// Off while the first-walk tour is explaining the same things.
+    var showHints = true
 
     @State private var walked = false
     @State private var looked = false
@@ -56,7 +58,9 @@ struct ParkTouchPad: View {
                 )
 
             VStack(spacing: 12) {
-                if !walked {
+                if !showHints {
+                    EmptyView()
+                } else if !walked {
                     walkHint.transition(.opacity.combined(with: .scale(scale: 0.8))).allowsHitTesting(false)
                 } else if !looked {
                     lookHint.transition(.opacity).allowsHitTesting(false)
@@ -64,6 +68,7 @@ struct ParkTouchPad: View {
                 ParkStick(onChange: onStick, autoWalk: $autoWalk) {
                     if !walked { withAnimation(.easeOut(duration: 0.3)) { walked = true } }
                 }
+                .parkTip(.stick)
             }
             .padding(.bottom, 44)
         }

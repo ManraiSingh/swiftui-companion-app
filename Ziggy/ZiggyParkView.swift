@@ -1274,6 +1274,9 @@ struct ZiggyParkView: View {
     @State private var picked: ParkLook = .casual
     @State private var loadProgress: Float = 0
     @State private var loaded = false
+    /// Which step of the first-walk tour is showing, if any.
+    @State private var tourStep: Int?
+    @AppStorage("parkTourSeen") private var tourSeen = false
 
     private let pink = Color(red: 0.93, green: 0.36, blue: 0.53)
 
@@ -1338,7 +1341,8 @@ struct ZiggyParkView: View {
                     pinchStart = start
                     world.zoom(to: start / Float(pinch))
                 },
-                autoWalk: $autoWalk
+                autoWalk: $autoWalk,
+                showHints: tourStep == nil
             )
             .ignoresSafeArea()
             .opacity(choosing ? 0 : 1)
@@ -1353,11 +1357,14 @@ struct ZiggyParkView: View {
                     Spacer()
                     VStack(alignment: .trailing, spacing: 10) {
                         ParkEmoteMenu(look: picked) { world.emote($0) }
+                            .parkTip(.emotes)
                             .zIndex(2)
                         ParkTrickMenu { world.perform($0) } play: { world.playWithZiggy($0) }
+                            .parkTip(.tricks)
                             .zIndex(1)
                         if company != .solo {
                             ParkVoicePanel(voice: world.voice, partnerName: partnerName)
+                                .parkTip(.voice)
                         }
                     }
                 }
@@ -1371,9 +1378,11 @@ struct ZiggyParkView: View {
                             draft = ""
                             writing = true
                         }
+                        .parkTip(.note)
                     }
                     Spacer()
                     ParkSurpriseButton { world.surprise() }
+                        .parkTip(.surprise)
                 }
                 .padding(.bottom, 52)
             }
@@ -1389,6 +1398,13 @@ struct ZiggyParkView: View {
                 } go: {
                     world.startWalking()
                     withAnimation(.easeInOut(duration: 0.45)) { choosing = false }
+                    // The first walk, show them round once the park is in view.
+                    if !tourSeen {
+                        Task {
+                            try? await Task.sleep(for: .seconds(0.7))
+                            withAnimation(.easeOut(duration: 0.3)) { tourStep = 0 }
+                        }
+                    }
                 }
                 .transition(.opacity)
             }
@@ -1506,6 +1522,16 @@ struct ZiggyParkView: View {
                 ParkLoadingCover(progress: loadProgress)
                     .transition(.opacity)
                     .zIndex(1)
+            }
+        }
+        .overlayPreferenceValue(ParkTipAnchors.self) { anchors in
+            if tourStep != nil {
+                ParkTourOverlay(steps: ParkTourStep.steps(together: company != .solo, partner: partnerName),
+                                anchors: anchors, step: $tourStep) {
+                    tourSeen = true
+                    withAnimation(.easeIn(duration: 0.25)) { tourStep = nil }
+                }
+                .transition(.opacity)
             }
         }
         .alert("Leave a note here", isPresented: $writing) {
