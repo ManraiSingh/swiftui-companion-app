@@ -978,7 +978,7 @@ final class ParkHanami {
             var y: Float = 0.5
             while y < height {
                 s.with(0xB2C46A) { $0.tube(base: base + lean.act([0, y, 0]), height: 0.03, radius: radius * 1.12, lean: lean, segments: 6) }
-                y += rng.range(0.45, 0.6)
+                y += rng.range(0.9, 1.2)
             }
             for _ in 0..<6 {
                 let top = base + lean.act([0, rng.range(height * 0.6, height), 0])
@@ -1077,7 +1077,7 @@ final class ParkHanami {
                     let d = Float(k) / Float(puffs) * 2 * .pi + rng.range(0, 1)
                     let offset = k == 0 ? SIMD3<Float>(0, 0.3, 0) * size : SIMD3<Float>(cos(d) * 0.65, rng.range(-0.3, 0.15), sin(d) * 0.65) * size
                     let r = rng.range(0.6, 0.85) * size
-                    s.with(palette[k % 3]) { $0.blob(top + offset, [r, r * 0.88, r], rings: 6, segments: 10) }
+                    s.with(palette[k % 3]) { $0.blob(top + offset, [r, r * 0.88, r], rings: 5, segments: 8) }
                 }
                 if kind < 0.55 { blossomCrowns.append(top) } else if kind < 0.7 { mapleCrowns.append(top) }
                 obstacles.append([p.x, p.y, 0.3 * size])
@@ -1119,7 +1119,7 @@ final class ParkHanami {
                 s.with(colour) { $0.blob(q + [0, 0.07, 0], [0.045, 0.03, 0.045], rings: 2, segments: 4) }
             }
         }
-        place(s, centre: Self.centre, reach: 200)
+        place(s, centre: Self.centre, reach: 80)
     }
 
     // MARK: Fence, woods and hills round the outside
@@ -1203,7 +1203,8 @@ final class ParkHanami {
         if nextCull <= 0 {
             nextCull = 0.4
             for group in groups {
-                let show = simd_distance(here, group.centre) < group.reach + 70
+                // Far enough off that the trees between hide it anyway.
+                let show = simd_distance(here, group.centre) < group.reach + 40
                 if group.entity.isEnabled != show { group.entity.isEnabled = show }
             }
         }

@@ -578,13 +578,15 @@ enum JapaneseTree {
                spread: kind == .sakura ? (0.75, 1.15) : (0.4, 0.75), rise: kind == .sakura ? 0.02 : 0.18,
                rng: &rng, bark: &bark, tips: &tips)
 
-        // Blossom gathered at every branch end, in soft overlapping clumps.
+        // Blossom gathered at every branch end, in soft overlapping clumps:
+        // three fat ones rather than five small, which looks just as full
+        // from a few steps away and costs a third as much to draw.
         for tip in tips {
-            for _ in 0..<5 {
-                let offset = SIMD3<Float>(rng.range(-0.32, 0.32), rng.range(-0.18, 0.22), rng.range(-0.32, 0.32)) * size
-                let r = rng.range(0.2, 0.36) * size
+            for _ in 0..<3 {
+                let offset = SIMD3<Float>(rng.range(-0.3, 0.3), rng.range(-0.16, 0.2), rng.range(-0.3, 0.3)) * size
+                let r = rng.range(0.25, 0.42) * size
                 let shade = Int(rng.unit() * Float(crowns.count)) % crowns.count
-                crowns[shade].blob(tip + offset, [r, r * 0.78, r], turn: spin(rng.range(0, 3), [0, 1, 0]), rings: 5, segments: 8)
+                crowns[shade].blob(tip + offset, [r, r * 0.78, r], turn: spin(rng.range(0, 3), [0, 1, 0]), rings: 4, segments: 7)
             }
         }
         return tips.reduce(.zero, +) / Float(max(1, tips.count))

@@ -111,6 +111,9 @@ final class ParkScenery {
     private let city = ParkCity()
     /// The big stroll garden off the canal.
     let hanami = ParkHanami()
+    /// The first garden, as one group.
+    private let garden = Entity()
+    private var nextRegionCheck: Float = 0
 
     // Landmarks, placed by hand so the scatter can steer round them.
     static let pond = SIMD2<Float>(0, -12)
@@ -150,6 +153,11 @@ final class ParkScenery {
         buildSky(&rng); await step()
         buildGround(); await step()
         buildHills(&rng); await step()
+        // Sky, ground and hills are seen from everywhere. Everything built
+        // from here to the fireflies is the first garden, gathered into one
+        // group so it can be put away while you are off in the town or the
+        // big park.
+        let everywhere = root.children.count
         buildPaths(&rng); await step()
         buildPond(&rng); await step()
         buildBridge(); await step()
@@ -169,6 +177,8 @@ final class ParkScenery {
         buildMoss(&rng); await step()
         buildButterflies(&rng)
         buildFireflies(&rng); await step()
+        for part in Array(root.children.dropFirst(everywhere)) { garden.addChild(part) }
+        root.addChild(garden)
         await city.build(step: step)
         root.addChild(city.root)
         obstacles += city.obstacles
@@ -1131,7 +1141,7 @@ final class ParkScenery {
         shape.blade([-0.045, 0, 0], [0, 0, 0.065], [0.045, 0, 0])
         shape.blade([-0.045, 0, 0], [0.045, 0, 0], [0, 0, -0.04])
         guard let template = shape.entity(ParkPaint.soft(UIColor(0xFFC3D6), sheen: 0.5)), !blossomCrowns.isEmpty else { return }
-        for i in 0..<150 {
+        for i in 0..<100 {
             let entity = template.clone(recursive: false)
             root.addChild(entity)
             var petal = Petal(entity: entity, position: .zero, spin: rng.range(0, 6), resting: 0, sway: rng.range(0, 6))
@@ -1216,7 +1226,7 @@ final class ParkScenery {
             nextCull = 0.3
             let lit = night > 0.03
             for g in glows {
-                let show = lit && simd_distance_squared(g.entity.position, viewer) < 45 * 45
+                let show = lit && simd_distance_squared(g.entity.position, viewer) < 32 * 32
                 if g.entity.isEnabled != show { g.entity.isEnabled = show }
             }
         }
@@ -1320,8 +1330,24 @@ final class ParkScenery {
             leaves[i] = leaf
         }
 
+        // Whole areas you are nowhere near are not drawn at all: the first
+        // garden from deep in Hanami Park, the town from the far side of it.
+        // Each comes back long before you could see it over the trees.
+        nextRegionCheck -= dt
+        if nextRegionCheck <= 0 {
+            nextRegionCheck = 0.5
+            let here = SIMD2(viewer.x, viewer.z)
+            let showGarden = simd_length(here) < 62
+            if garden.isEnabled != showGarden { garden.isEnabled = showGarden }
+            // The canal and town run along z = 0 from x = 16 out to the
+            // Ferris wheel.
+            let along = SIMD2<Float>(min(max(here.x, 16), 192), 0)
+            let showTown = simd_distance(here, along) < 72
+            if city.root.isEnabled != showTown { city.root.isEnabled = showTown }
+        }
+
         bell?.orientation = spin(sin(clock * 1.3) * 0.05, [1, 0, 0])
-        city.update(deltaTime: dt)
+        if city.root.isEnabled { city.update(deltaTime: dt) }
         hanami.update(deltaTime: dt, viewer: viewer, night: max(0, night))
         clouds.orientation = spin(clock * 0.004, [0, 1, 0])
     }
