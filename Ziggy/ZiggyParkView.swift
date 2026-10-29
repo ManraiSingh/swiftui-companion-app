@@ -17,6 +17,28 @@
 import RealityKit
 import SwiftUI
 
+/// Things to do with Ziggy himself, from his menu.
+enum ZiggyPlay: String, CaseIterable {
+    case pet, treat, fetch
+
+    var title: String {
+        switch self {
+        case .pet: return "Pet him"
+        case .treat: return "Give a treat"
+        case .fetch: return "Play catch"
+        }
+    }
+
+    /// What you do while you play.
+    var emote: ParkEmote {
+        switch self {
+        case .pet: return .pat
+        case .treat: return .offer
+        case .fetch: return .toss
+        }
+    }
+}
+
 // MARK: - The world
 
 /// Owns the scene and the per-frame loop. SwiftUI only writes `input`, turns
@@ -80,6 +102,38 @@ final class ZiggyParkWorld {
     private var nearbyNote: ParkNote?
     private var lastCompass: (metres: Int, bearing: Int, count: Int)?
     private var lastSurprise: ParkSurprise?
+
+    /// There is one Ziggy for the two of you. The phone of whoever has given
+    /// him the most love this week walks him, and tells the other phone
+    /// where he is; the other phone just shows him there.
+    private var walkingZiggy = true
+
+    /// Who Ziggy is sticking with and why, whenever that changes: a title
+    /// and a line underneath. Nil when you are on your own.
+    var onZiggyFollows: (((title: String, detail: String)?) -> Void)?
+    private var ziggyFollows = ""
+
+    /// Playing with Ziggy, while it lasts: who started it, where they
+    /// stood and which way they faced, and how far along it is. For catch,
+    /// `phase` goes 0 thrown, 1 on the ground, 2 in his mouth, 3 dropped at
+    /// your feet; for a pat or a treat, 0 coming over, 1 enjoying it.
+    private struct Play {
+        let kind: ZiggyPlay
+        let mine: Bool
+        let origin: SIMD3<Float>
+        let facing: Float
+        var land: SIMD3<Float> = .zero
+        var age: Float = 0
+        var phase = 0
+        var phaseAge: Float = 0
+        var nextHeart: Float = 0
+        var dropped: SIMD3<Float> = .zero
+    }
+    private var play: Play?
+    private let ball = Entity()
+    private let bone = Entity()
+    /// A treat on a walk goes in "Our Memories" once, not every time.
+    private var loggedTreat = false
 
     /// How long Ziggy has been failing to catch you up, and how far off he
     /// was a moment ago.
@@ -192,6 +246,7 @@ final class ZiggyParkWorld {
         partner.root.isEnabled = false
         scene.addChild(fun.root)
         scene.addChild(notes.root)
+        buildToys(scene)
         apply(meMove, to: me.root)
         apply(ziggyMove, to: ziggy.root)
         buildChoosing(scene)
@@ -213,6 +268,11 @@ final class ZiggyParkWorld {
         }
 
         link.onTrick = { [weak self] trick in self?.ziggy.perform(trick) }
+        link.onPlay = { [weak self] kind, spot, facing in
+            guard let self, self.partnerWasHere else { return }
+            self.partner.play(kind.emote)
+            self.startPlay(kind, mine: false, at: [spot.x, 0, spot.y], facing: facing)
+        }
         link.onEmote = { [weak self] e in
             guard let self, self.partnerWasHere else { return }
             self.partner.play(e)
@@ -508,6 +568,178 @@ final class ZiggyParkWorld {
         placeCamera(dt: dt)
     }
 
+    // MARK: Playing with Ziggy
+
+    private func buildToys(_ scene: Entity) {
+        // A tennis ball.
+        ball.attach(ParkMesh.sphere(0.065), ParkPaint.soft(UIColor(0xD9F04A), sheen: 0.8))
+        ball.attach(ParkMesh.sphere(0.066), ParkPaint.flat(.white), scale: [1, 0.12, 1], turn: spin(0.5, [1, 0, 0]))
+        ball.isEnabled = false
+        scene.addChild(ball)
+        // A little bone.
+        var shape = MeshBatch()
+        shape.tube(base: [-0.06, 0, 0], height: 0.12, radius: 0.016, lean: spin(-.pi / 2, [0, 0, 1]), segments: 8)
+        for x: Float in [-0.065, 0.065] {
+            for z: Float in [-0.016, 0.016] { shape.blob([x, z, 0], [0.022, 0.022, 0.022], rings: 5, segments: 8) }
+        }
+        if let e = shape.entity(ParkPaint.soft(UIColor(0xF6EBD6), sheen: 0.5)) { bone.addChild(e) }
+        bone.isEnabled = false
+        scene.addChild(bone)
+    }
+
+    /// Pet Ziggy, give him a treat, or throw the ball for him. Your partner
+    /// sees it all too.
+    func playWithZiggy(_ kind: ZiggyPlay) {
+        guard !choosing, play == nil else { return }
+        let facing: Float
+        if kind == .fetch {
+            // Thrown the way the camera is looking.
+            facing = orbitYaw + .pi
+        } else {
+            // Turned to Ziggy, to reach him.
+            let toZiggy = ziggyMove.position - meMove.position
+            facing = atan2(toZiggy.x, toZiggy.z)
+        }
+        emoteFacing = facing
+        me.play(kind.emote)
+        link.send(play: kind, at: [meMove.position.x, meMove.position.z], facing: facing)
+        startPlay(kind, mine: true, at: meMove.position, facing: facing)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if kind == .treat && !loggedTreat {
+            loggedTreat = true
+            FirestoreManager.shared.addEvent(title: "Gave Ziggy a treat on our walk 🦴", person: UserManager.shared.username)
+        }
+    }
+
+    private func startPlay(_ kind: ZiggyPlay, mine: Bool, at origin: SIMD3<Float>, facing: Float) {
+        var next = Play(kind: kind, mine: mine, origin: origin, facing: facing)
+        if kind == .fetch {
+            let ahead = SIMD3<Float>(sin(facing), 0, cos(facing))
+            next.land = scenery.constrain(origin + ahead * 7, radius: 0.2)
+        }
+        play = next
+        ball.isEnabled = false
+        bone.isEnabled = kind == .treat
+    }
+
+    /// Where Ziggy should be heading while you play, and how fast.
+    private func playGoal() -> (at: SIMD3<Float>, speed: Float)? {
+        guard let p = play else { return nil }
+        let who = p.mine ? meMove.position : partnerMove.position
+        let heading = p.mine ? meMove.heading : partnerMove.heading
+        let front = who + SIMD3<Float>(sin(heading), 0, cos(heading)) * 0.55
+        switch p.kind {
+        case .fetch:
+            if p.phase <= 1 && p.age > 0.35 { return (p.land, 3.6) }
+            if p.phase == 2 { return (front, 3.0) }
+            return nil
+        case .pet, .treat:
+            return p.phase == 0 ? (front, walkSpeed * 1.6) : nil
+        }
+    }
+
+    /// The ball's flight, Ziggy picking it up and bringing it back; the
+    /// treat in your hand; the hearts. Worked out the same way on both
+    /// phones from where Ziggy is, so you both see the same thing.
+    private func updatePlay(_ dt: Float) {
+        guard var p = play else { return }
+        p.age += dt
+        p.phaseAge += dt
+        let who = p.mine ? meMove.position : partnerMove.position
+        let heading = p.mine ? meMove.heading : partnerMove.heading
+        let ahead = SIMD3<Float>(sin(heading), 0, cos(heading))
+        let ziggyFacing = SIMD3<Float>(sin(ziggyMove.heading), 0, cos(ziggyMove.heading))
+        let mouth = ziggyMove.position + ziggyFacing * 0.17 + [0, 0.18, 0]
+        var done = false
+
+        func reward(_ count: Int) {
+            fun.hearts(at: ziggyMove.position + [0, 0.45, 0], count: count)
+        }
+        func sitHappily() {
+            guard walkingZiggy, !ziggy.isDoingTrick else { return }
+            ziggy.perform(.sit)
+            if partnerWasHere { link.send(trick: .sit) }
+        }
+
+        switch p.kind {
+        case .fetch:
+            let release: Float = 0.45, flight: Float = 1.0
+            switch p.phase {
+            case 0:
+                guard p.age > release else { break }
+                ball.isEnabled = true
+                let throwDir = SIMD3<Float>(sin(p.facing), 0, cos(p.facing))
+                let start = p.origin + throwDir * 0.2 + [0, 1.1, 0]
+                let t = min(1, (p.age - release) / flight)
+                ball.position = start + (p.land + [0, 0.065, 0] - start) * t + [0, sin(t * .pi) * 1.8, 0]
+                if t >= 1 { p.phase = 1; p.phaseAge = 0 }
+            case 1:
+                // A couple of little bounces, then it waits for him.
+                let bounce = p.phaseAge < 0.6 ? abs(sin(p.phaseAge / 0.6 * 2 * .pi)) * 0.22 * (1 - p.phaseAge / 0.6) : 0
+                ball.position = p.land + [0, 0.065 + bounce, 0]
+                if simd_distance(SIMD2(ziggyMove.position.x, ziggyMove.position.z), SIMD2(p.land.x, p.land.z)) < 0.35 {
+                    p.phase = 2
+                    p.phaseAge = 0
+                }
+            case 2:
+                ball.position = mouth
+                if simd_distance(ziggyMove.position, who) < 0.95 && p.phaseAge > 0.5 {
+                    p.phase = 3
+                    p.phaseAge = 0
+                    // Dropped right at his nose, at your feet.
+                    p.dropped = scenery.constrain(mouth, radius: 0.05) + [0, 0.065, 0]
+                    reward(5)
+                    sitHappily()
+                }
+            default:
+                ball.position = p.dropped
+                if p.phaseAge > 3 { done = true }
+            }
+            if p.age > 18 { done = true }
+        case .treat:
+            if p.phase == 0 {
+                bone.position = who + ahead * 0.38 + [0, 0.46, 0]
+                bone.orientation = spin(heading + .pi / 2, [0, 1, 0])
+                if p.age > 0.6 && simd_distance(ziggyMove.position, who) < 0.75 {
+                    // Nom.
+                    p.phase = 1
+                    p.phaseAge = 0
+                    bone.isEnabled = false
+                    reward(6)
+                    fun.sprinkle(at: ziggyMove.position + [0, 0.5, 0])
+                    sitHappily()
+                }
+                if p.age > 6 { done = true }
+            } else if p.phaseAge > 1.8 {
+                done = true
+            }
+        case .pet:
+            if p.phase == 0 {
+                if p.age > 0.3 && simd_distance(ziggyMove.position, who) < 0.8 {
+                    p.phase = 1
+                    p.phaseAge = 0
+                    sitHappily()
+                }
+                if p.age > 5 { done = true }
+            } else {
+                p.nextHeart -= dt
+                if p.nextHeart <= 0 && p.phaseAge < 1.8 {
+                    p.nextHeart = 0.4
+                    reward(2)
+                }
+                if p.phaseAge > 2.2 { done = true }
+            }
+        }
+
+        if done {
+            play = nil
+            ball.isEnabled = false
+            bone.isEnabled = false
+        } else {
+            play = p
+        }
+    }
+
     // MARK: Emotes
 
     /// Does an emote, and your partner sees you do it.
@@ -540,7 +772,7 @@ final class ZiggyParkWorld {
         case .dance:
             fun.hearts(at: head, count: 3)
             if !ziggy.isDoingTrick { ziggy.perform(.spin) }
-        case .wave, .bow:
+        case .wave, .bow, .pat, .offer, .toss:
             break
         }
     }
@@ -613,11 +845,27 @@ final class ZiggyParkWorld {
         }
         partnerWasHere = there != nil
 
+        // Whose phone walks Ziggy: his favourite's. On a tie, the smaller
+        // device ID, so both phones always agree on just one.
+        let favourite = link.favourite()
+        var partnerLeads = false
+        if partnerWasHere, let theirID = link.partnerID {
+            partnerLeads = favourite.map { $0 == theirID } ?? (theirID < link.myID)
+        }
+        // If their phone has not sent him yet, walk him here for now.
+        walkingZiggy = !(partnerLeads && there?.ziggy != nil)
+        tellWhoZiggyFollows(favourite: favourite, partnerName: there?.name)
+
         link.send(
             position: [meMove.position.x, meMove.position.z],
             velocity: [meMove.velocity.x, meMove.velocity.z],
             heading: meMove.heading,
-            look: myLook
+            look: myLook,
+            ziggy: walkingZiggy && partnerWasHere
+                ? .init(position: [ziggyMove.position.x, ziggyMove.position.z],
+                        velocity: [ziggyMove.velocity.x, ziggyMove.velocity.z],
+                        heading: ziggyMove.heading)
+                : nil
         )
 
         let nextCompany: Company
@@ -631,22 +879,37 @@ final class ZiggyParkWorld {
             onCompanyChange?(company)
         }
 
-        // Ziggy walks with you, at your side and half a step ahead, the way a
-        // dog on a walk does. When your partner is close he walks between
-        // the two of you instead. He walks at your pace; he only breaks into
-        // a trot when he has fallen properly behind. When you stop he stops
-        // beside you and turns to look up.
+        // Ziggy walks with his favourite — on this phone, that is you — at
+        // your side and half a step ahead, the way a dog on a walk does. He
+        // walks at your pace; he only breaks into a trot when he has fallen
+        // properly behind. When you stop he stops beside you and turns to
+        // look up, at the two of you if your partner is close.
         let partnerClose = partnerWasHere && simd_distance(partnerMove.position, meMove.position) < 3.5
         let middle = partnerClose ? (meMove.position + partnerMove.position) / 2 : meMove.position
         let facing = SIMD3<Float>(sin(meMove.heading), 0, cos(meMove.heading))
         let myLeft = SIMD3<Float>(facing.z, 0, -facing.x)
-        let spot = partnerClose
-            ? middle + facing * 0.55
-            : meMove.position + myLeft * 0.45 + facing * 0.2
+        let spot = meMove.position + myLeft * 0.45 + facing * 0.2
+
+        if !walkingZiggy, let theirs = there?.ziggy {
+            // Your partner's phone is walking him: he is wherever it says.
+            let target = SIMD3<Float>(theirs.position.x, 0, theirs.position.y)
+            if simd_distance(target, ziggyMove.position) > 4 {
+                ziggyMove.position = target
+                ziggyMove.heading = theirs.heading
+            }
+            ziggyMove.position += (target - ziggyMove.position) * min(1, dt * 9)
+            ziggyMove.velocity = SIMD3(theirs.velocity.x, 0, theirs.velocity.y)
+            if !ziggyMove.faceTravel(dt: dt) {
+                ziggyMove.turn(toward: theirs.heading, rate: 8, dt: dt)
+            }
+        } else {
 
         var ziggyWants: SIMD3<Float> = .zero
         zoomies = max(0, zoomies - dt)
-        if zoomies > 0 && !ziggy.isDoingTrick {
+        if let goal = playGoal(), !ziggy.isDoingTrick {
+            // Off after the ball, or over to be petted or fed.
+            ziggyWants = arrive(ziggyMove.position, at: goal.at, top: goal.speed, slack: 0.08)
+        } else if zoomies > 0 && !ziggy.isDoingTrick {
             // Round and round you, as fast as his legs will go.
             zoomAngle += dt * 2.4
             let lap = meMove.position + [sin(zoomAngle) * 1.8, 0, cos(zoomAngle) * 1.8]
@@ -671,7 +934,7 @@ final class ZiggyParkWorld {
         let ziggyAway = simd_distance(ziggyMove.position, meMove.position)
         ziggyStuck = ziggyAway > 3 && ziggyAway > ziggyWasAway - dt * 0.4 ? ziggyStuck + dt : 0
         ziggyWasAway = ziggyAway
-        if ziggyAway > 10 || ziggyStuck > 1.6 {
+        if play == nil && (ziggyAway > 10 || ziggyStuck > 1.6) {
             ziggyMove.position = scenery.constrain(meMove.position - facing * 0.9 + myLeft * 0.5, radius: 0.16)
             ziggyMove.velocity = .zero
             ziggyMove.heading = meMove.heading
@@ -685,6 +948,7 @@ final class ZiggyParkWorld {
         }
         separate(&ziggyMove, from: meMove.position, by: 0.3)
         if partnerWasHere { separate(&ziggyMove, from: partnerMove.position, by: 0.3) }
+        }
 
         // Side by side, you hold hands: each of you reaches for the other
         // with the hand on their side. Both phones work this out the same
@@ -718,16 +982,19 @@ final class ZiggyParkWorld {
         // His legs are scaled down with him, so they need more steps to
         // cover the same ground.
         ziggy.update(deltaTime: dt, speed: ziggyMove.speed / ziggySize)
+        updatePlay(dt)
 
         // Stand still for a little while and Ziggy entertains himself: a
-        // spin, a sit, a roll in the grass. Only on this phone, just for fun.
-        // Not on the bridge, where a roll would look like he had fallen
-        // through the planks.
+        // spin, a sit, a roll in the grass. Decided by the phone walking him,
+        // and shown on both. Not on the bridge, where a roll would look like
+        // he had fallen through the planks.
         let onBridge = ParkScenery.height(atX: ziggyMove.position.x, z: ziggyMove.position.z) > 0.02
-        if meMove.speed < 0.05 && ziggyMove.speed < 0.05 && !onBridge {
+        if walkingZiggy && meMove.speed < 0.05 && ziggyMove.speed < 0.05 && !onBridge {
             idleTime += dt
             if idleTime > nextIdleTrick && !ziggy.isDoingTrick {
-                ziggy.perform([Ziggy3DTrick.spin, .sit, .sit, .flip].randomElement() ?? .sit)
+                let trick = [Ziggy3DTrick.spin, .sit, .sit, .flip].randomElement() ?? .sit
+                ziggy.perform(trick)
+                if partnerWasHere { link.send(trick: trick) }
                 nextIdleTrick = idleTime + Float.random(in: 6...10)
             }
         } else {
@@ -849,6 +1116,28 @@ final class ZiggyParkWorld {
         }
     }
 
+    // MARK: Who Ziggy follows
+
+    private func tellWhoZiggyFollows(favourite: String?, partnerName: String?) {
+        guard let partnerName else {
+            if !ziggyFollows.isEmpty { ziggyFollows = ""; onZiggyFollows?(nil) }
+            return
+        }
+        let them = partnerName.isEmpty ? "your partner" : partnerName
+        let Them = partnerName.isEmpty ? "Your partner" : partnerName
+        let news: (title: String, detail: String)
+        if favourite == link.myID {
+            news = ("Ziggy's sticking with you", "You gave him the most love this week")
+        } else if favourite != nil {
+            news = ("Ziggy's sticking with \(them)", "\(Them) gave him the most love this week. Feed him more to win him over!")
+        } else {
+            news = ("Ziggy loves you both the same", "You've both looked after him just as much this week")
+        }
+        guard news.title != ziggyFollows else { return }
+        ziggyFollows = news.title
+        onZiggyFollows?(news)
+    }
+
     // MARK: Love notes
 
     private func updateNotes() {
@@ -955,6 +1244,7 @@ struct ZiggyParkView: View {
     @State private var areaBanner: String?
     @State private var surpriseToast: ParkSurprise?
     @State private var toast: String?
+    @State private var ziggyNews: (title: String, detail: String)?
     @State private var nearbyFriend: ParkFriend?
     @State private var nearbyNote: ParkNote?
     @State private var openNote: ParkNote?
@@ -995,6 +1285,14 @@ struct ZiggyParkView: View {
                     withAnimation(.spring(duration: 0.35, bounce: 0.35)) { nearbyFriend = friend }
                 }
                 world.onGreet = { friend in show(friend.fact) }
+                world.onZiggyFollows = { news in
+                    withAnimation(.spring(duration: 0.45, bounce: 0.35)) { ziggyNews = news }
+                    guard let news else { return }
+                    Task {
+                        try? await Task.sleep(for: .seconds(6))
+                        if ziggyNews?.title == news.title { withAnimation(.easeIn(duration: 0.4)) { ziggyNews = nil } }
+                    }
+                }
                 world.onNearbyNote = { note in
                     withAnimation(.spring(duration: 0.35, bounce: 0.35)) { nearbyNote = note }
                 }
@@ -1038,7 +1336,7 @@ struct ZiggyParkView: View {
                     VStack(alignment: .trailing, spacing: 10) {
                         ParkEmoteMenu(look: picked) { world.emote($0) }
                             .zIndex(2)
-                        ParkTrickMenu { world.perform($0) }
+                        ParkTrickMenu { world.perform($0) } play: { world.playWithZiggy($0) }
                             .zIndex(1)
                         if company != .solo {
                             ParkVoicePanel(voice: world.voice, partnerName: partnerName)
@@ -1096,6 +1394,31 @@ struct ZiggyParkView: View {
                     ParkNoteCompass(name: compass.name.isEmpty ? (partnerName ?? "your love") : compass.name,
                                     metres: compass.metres, bearing: compass.bearing, count: compass.count)
                         .transition(.scale(scale: 0.7).combined(with: .opacity))
+                }
+                if let ziggyNews {
+                    HStack(spacing: 8) {
+                        Image("ziggy_happie")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color(red: 1, green: 0.93, blue: 0.95)))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(ziggyNews.title)
+                                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                                .foregroundStyle(pink)
+                            Text(ziggyNews.detail)
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.leading, 5)
+                    .padding(.trailing, 14)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(.white.opacity(0.95)))
+                    .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                    .padding(.horizontal, 64)
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
                 }
                 if let areaBanner {
                     Text(areaBanner)
