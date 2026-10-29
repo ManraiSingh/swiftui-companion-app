@@ -44,6 +44,11 @@ enum ParkLook: Int, CaseIterable {
 /// stretches out of shape; they ease in and out of whatever you were doing.
 enum ParkEmote: String, CaseIterable {
     case wave, love, yay, dance, bow
+    /// Playing with Ziggy: a pat on the head, a treat held out, a ball thrown.
+    case pat, offer, toss
+
+    /// The ones in the emote menu; the rest belong to playing with Ziggy.
+    static let menu: [ParkEmote] = [.wave, .love, .yay, .dance, .bow]
 
     var title: String {
         switch self {
@@ -52,6 +57,9 @@ enum ParkEmote: String, CaseIterable {
         case .yay: return "Yay!"
         case .dance: return "Dance"
         case .bow: return "Bow"
+        case .pat: return "Pet"
+        case .offer: return "Treat"
+        case .toss: return "Catch"
         }
     }
 
@@ -62,6 +70,9 @@ enum ParkEmote: String, CaseIterable {
         case .yay: return "🎉"
         case .dance: return "💃"
         case .bow: return "🙇"
+        case .pat: return "🐶"
+        case .offer: return "🦴"
+        case .toss: return "🎾"
         }
     }
 
@@ -72,6 +83,9 @@ enum ParkEmote: String, CaseIterable {
         case .yay: return 1.6
         case .dance: return 2.6
         case .bow: return 2.0
+        case .pat: return 2.4
+        case .offer: return 2.6
+        case .toss: return 1.1
         }
     }
 }
@@ -722,6 +736,28 @@ final class ParkPerson3D {
                 pose(shoulders[side], spin(-0.35, [1, 0, 0]) * spin(-o * 0.18, [0, 0, 1]))
                 pose(elbows[side], spin(-0.5, [1, 0, 0]))
             }
+        case .pat:
+            // Leaning down, a hand on Ziggy's head, patting gently.
+            let k = size
+            pose(torso, spin(0.35, [1, 0, 0]))
+            pose(head, spin(0.3, [1, 0, 0]))
+            reach(0, to: [-0.06 * k, (0.02 + abs(sin(t * 9)) * 0.05) * k, 0.3 * k], pole: [-1, -0.2, -0.4], f)
+        case .offer:
+            // Leaning forward a little, holding a treat out low.
+            let k = size
+            pose(torso, spin(0.22, [1, 0, 0]))
+            pose(head, spin(0.25, [1, 0, 0]))
+            reach(0, to: [-0.08 * k, 0.02 * k, 0.3 * k], pole: [-1, -0.4, -0.3], f)
+        case .toss:
+            // Arm back over the shoulder, then flung forward and up, and
+            // down again on the follow-through.
+            let k = size
+            let target: SIMD3<Float>
+            if t < 0.35 { target = [-0.22, 0.42, -0.14] }
+            else if t < 0.55 { target = [-0.16, 0.46, 0.24] }
+            else { target = [-0.1, 0.12, 0.26] }
+            reach(0, to: target * k, pole: [-1, -0.3, -0.2], f)
+            pose(torso, spin(t < 0.35 ? 0.25 : -0.2, [0, 1, 0]) * spin(t < 0.35 ? -0.08 : 0.12, [1, 0, 0]))
         }
         body.position = [0, lift * f, 0]
         body.orientation = spin(turn, [0, 1, 0])
