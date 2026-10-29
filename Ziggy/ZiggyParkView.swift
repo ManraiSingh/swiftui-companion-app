@@ -1594,53 +1594,382 @@ struct ZiggyParkView: View {
 
 // MARK: - Loading
 
-/// Shown while the world is built: Ziggy bouncing on a sunset background,
-/// and a bar that fills as each part of the garden and town is finished.
+/// Shown while the world is built: a cherry blossom opening a petal at a
+/// time under drifting petals and hearts, a line saying which bit of the
+/// park is being made, and a trail of paw prints lighting up to a heart.
+///
+/// The world is built on the main thread, in pieces, so anything SwiftUI
+/// animates here stutters every time a piece is made. Everything that moves
+/// all the time — the blossom, the sparkles, the clouds, the falling
+/// petals — is Core Animation instead, which carries on smoothly on its
+/// own however busy the main thread is.
 private struct ParkLoadingCover: View {
 
     let progress: Float
-    @State private var hop = false
     private let pink = Color(red: 0.93, green: 0.36, blue: 0.53)
+    private let ink = Color(red: 0.45, green: 0.22, blue: 0.36)
+    private let steps = 9
+
+    /// What is being made, roughly in the order the world is built.
+    private var stage: (index: Int, text: String) {
+        let lines = ["Planting the cherry trees…", "Filling the heart pond…", "Lighting the lanterns…",
+                     "Hiding love notes…", "Ziggy's waiting by the gate…"]
+        let i = min(lines.count - 1, Int(progress * Float(lines.count)))
+        return (i, lines[i])
+    }
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.55, green: 0.56, blue: 0.86), Color(red: 0.98, green: 0.72, blue: 0.78),
-                                    Color(red: 1.0, green: 0.86, blue: 0.70)],
+            LinearGradient(colors: [Color(red: 0.72, green: 0.70, blue: 0.96), Color(red: 1.0, green: 0.78, blue: 0.86),
+                                    Color(red: 1.0, green: 0.89, blue: 0.78)],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
-            VStack(spacing: 22) {
+            ParkLoadingSky()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
                 Spacer()
-                Image("ziggy_happie")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 170, height: 170)
-                    .offset(y: hop ? -18 : 0)
-                    .shadow(color: .black.opacity(0.12), radius: 10, y: hop ? 24 : 10)
-                    .animation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true), value: hop)
+                ParkLoadingBlossom(progress: progress)
+                    .frame(width: 260, height: 260)
+                Spacer().frame(height: 20)
 
-                Text("Getting the garden ready…")
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                Text(stage.text)
+                    .font(.system(size: 21, weight: .heavy, design: .rounded))
+                    .foregroundStyle(ink)
+                    .id(stage.index)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: stage.index)
+                    .frame(height: 30)
 
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.45))
-                    Capsule()
-                        .fill(pink)
-                        .frame(width: 220 * CGFloat(max(0.04, progress)))
-                        .animation(.easeOut(duration: 0.25), value: progress)
-                }
-                .frame(width: 220, height: 10)
-
+                Spacer().frame(height: 26)
+                pawTrail
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(pink.opacity(0.8))
+                    .monospacedDigit()
+                    .padding(.top, 12)
                 Spacer()
                 Text("Lanterns, cherry blossom and a very excited puppy")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(ink.opacity(0.55))
                     .padding(.bottom, 36)
             }
         }
-        .onAppear { hop = true }
+    }
+
+    /// Paw prints walking left to right, lighting up as the park is built,
+    /// to a heart at the end.
+    private var pawTrail: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<steps, id: \.self) { i in
+                let lit = progress >= Float(i + 1) / Float(steps)
+                Image(systemName: "pawprint.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .rotationEffect(.degrees(90))
+                    .foregroundStyle(lit ? pink : .white.opacity(0.6))
+                    .offset(y: i % 2 == 0 ? -6 : 6)
+            }
+            Image(systemName: "heart.fill")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(progress >= 0.99 ? pink : pink.opacity(0.45))
+                .padding(.leading, 4)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(.white.opacity(0.45), in: Capsule())
+        .overlay(Capsule().stroke(.white.opacity(0.8), lineWidth: 1.5))
+    }
+}
+
+/// Clouds sailing by, and petals and little hearts falling.
+private struct ParkLoadingSky: UIViewRepresentable {
+    func makeUIView(context: Context) -> ParkLoadingSkyView { ParkLoadingSkyView() }
+    func updateUIView(_ view: ParkLoadingSkyView, context: Context) {}
+}
+
+private final class ParkLoadingSkyView: UIView {
+
+    private let emitter = CAEmitterLayer()
+    private var built = false
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.width > 0 else { return }
+        if !built { build() }
+        emitter.frame = bounds
+        emitter.emitterPosition = CGPoint(x: bounds.midX, y: -20)
+        emitter.emitterSize = CGSize(width: bounds.width * 1.2, height: 1)
+    }
+
+    private func build() {
+        built = true
+        let w = bounds.width, h = bounds.height
+
+        for (i, (y, duration)) in [(0.1, 55.0), (0.19, 70.0), (0.29, 85.0)].enumerated() {
+            let cloud = CALayer()
+            cloud.contents = Self.cloudImage
+            cloud.bounds = CGRect(x: 0, y: 0, width: 130 - Double(i) * 20, height: 66 - Double(i) * 10)
+            cloud.position = CGPoint(x: -100, y: h * y)
+            let sail = CABasicAnimation(keyPath: "position.x")
+            sail.fromValue = -100
+            sail.toValue = w + 100
+            sail.duration = duration
+            sail.repeatCount = .infinity
+            // Already part way across, so the sky isn't empty to begin with.
+            sail.timeOffset = duration * [0.55, 0.15, 0.8][i]
+            cloud.add(sail, forKey: "sail")
+            layer.addSublayer(cloud)
+        }
+
+        let petal = CAEmitterCell()
+        petal.contents = Self.petalImage
+        petal.birthRate = 2.6
+        petal.lifetime = 16
+        petal.velocity = 55
+        petal.velocityRange = 20
+        petal.yAcceleration = 5
+        petal.xAcceleration = 3
+        petal.emissionLongitude = .pi
+        petal.emissionRange = .pi / 7
+        petal.spin = 1.2
+        petal.spinRange = 2.5
+        petal.scaleRange = 0.35
+        petal.alphaRange = 0.3
+        // The pictures are drawn at the screen's scale, not 1×.
+        petal.contentsScale = UIScreen.main.scale
+
+        let heart = CAEmitterCell()
+        heart.contents = Self.symbol("heart.fill", size: 12, colour: UIColor(red: 1, green: 0.45, blue: 0.6, alpha: 0.6))
+        heart.birthRate = 0.6
+        heart.lifetime = 16
+        heart.velocity = 45
+        heart.velocityRange = 15
+        heart.yAcceleration = 4
+        heart.emissionLongitude = .pi
+        heart.emissionRange = .pi / 8
+        heart.spin = 0.2
+        heart.spinRange = 0.8
+        heart.scaleRange = 0.3
+        heart.contentsScale = UIScreen.main.scale
+
+        emitter.emitterShape = .line
+        emitter.emitterCells = [petal, heart]
+        // Fast-forwarded, so the petals are already falling all the way
+        // down when the screen first shows.
+        emitter.beginTime = CACurrentMediaTime()
+        emitter.timeOffset = 14
+        layer.addSublayer(emitter)
+    }
+
+    private static let petalImage: CGImage? = UIGraphicsImageRenderer(size: CGSize(width: 10, height: 6)).image { _ in
+        UIColor(red: 1, green: 0.74, blue: 0.83, alpha: 0.95).setFill()
+        UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: 10, height: 6)).fill()
+    }.cgImage
+
+    private static let cloudImage: CGImage? = UIGraphicsImageRenderer(size: CGSize(width: 130, height: 66)).image { _ in
+        UIColor.white.withAlphaComponent(0.72).setFill()
+        let path = UIBezierPath()
+        for (x, y, r) in [(30.0, 40.0, 24.0), (58.0, 28.0, 28.0), (88.0, 32.0, 26.0), (108.0, 44.0, 20.0), (64.0, 46.0, 22.0)] {
+            path.append(UIBezierPath(ovalIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 1.6)))
+        }
+        path.fill()
+    }.cgImage
+
+    /// An SF Symbol, coloured in, as a picture a layer can show.
+    static func symbol(_ name: String, size: CGFloat, colour: UIColor) -> CGImage? {
+        guard let symbol = UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(pointSize: size, weight: .bold))?
+            .withTintColor(colour, renderingMode: .alwaysOriginal) else { return nil }
+        return UIGraphicsImageRenderer(size: symbol.size).image { _ in symbol.draw(at: .zero) }.cgImage
+    }
+}
+
+/// A big cherry blossom that opens a petal at a time as the park is built,
+/// bobbing and turning slowly, sparkles twinkling round it.
+private struct ParkLoadingBlossom: UIViewRepresentable {
+    let progress: Float
+    func makeUIView(context: Context) -> ParkBlossomView { ParkBlossomView() }
+    func updateUIView(_ view: ParkBlossomView, context: Context) { view.show(progress) }
+}
+
+private final class ParkBlossomView: UIView {
+
+    private let count = 5
+    private let bob = CALayer()
+    private let flower = CALayer()
+    private let shadowLayer = CAShapeLayer()
+    private var petals: [CALayer] = []
+    private var open: [Bool] = []
+    private var sparkles: [CALayer] = []
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        build()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private func build() {
+        shadowLayer.path = UIBezierPath(ovalIn: CGRect(x: -55, y: -7, width: 110, height: 14)).cgPath
+        shadowLayer.fillColor = UIColor(red: 0.6, green: 0.3, blue: 0.45, alpha: 0.14).cgColor
+        layer.addSublayer(shadowLayer)
+
+        bob.bounds = CGRect(x: 0, y: 0, width: 180, height: 180)
+        layer.addSublayer(bob)
+        flower.bounds = bob.bounds
+        flower.position = CGPoint(x: 90, y: 90)
+        bob.addSublayer(flower)
+
+        let petalSize = CGRect(x: 0, y: 0, width: 74, height: 86)
+        let outline = Self.petalPath(in: petalSize)
+        for i in 0..<count {
+            let petal = CAGradientLayer()
+            petal.colors = [UIColor(red: 1, green: 0.95, blue: 0.97, alpha: 1).cgColor, UIColor(red: 1, green: 0.64, blue: 0.77, alpha: 1).cgColor]
+            petal.bounds = petalSize
+            petal.anchorPoint = CGPoint(x: 0.5, y: 1)
+            petal.position = CGPoint(x: 90, y: 90)
+            let mask = CAShapeLayer()
+            mask.path = outline
+            petal.mask = mask
+            let edge = CAShapeLayer()
+            edge.path = outline
+            edge.fillColor = nil
+            edge.strokeColor = UIColor.white.withAlphaComponent(0.9).cgColor
+            edge.lineWidth = 3.5
+            petal.addSublayer(edge)
+            petal.transform = transform(petal: i, open: false)
+            petal.opacity = 0.55
+            flower.addSublayer(petal)
+            petals.append(petal)
+            open.append(false)
+        }
+
+        let middle = CAGradientLayer()
+        middle.type = .radial
+        middle.colors = [UIColor(red: 1, green: 0.9, blue: 0.5, alpha: 1).cgColor, UIColor(red: 1, green: 0.6, blue: 0.38, alpha: 1).cgColor]
+        middle.startPoint = CGPoint(x: 0.5, y: 0.5)
+        middle.endPoint = CGPoint(x: 1, y: 1)
+        middle.bounds = CGRect(x: 0, y: 0, width: 40, height: 40)
+        middle.cornerRadius = 20
+        middle.position = CGPoint(x: 90, y: 90)
+        flower.addSublayer(middle)
+
+        let dots = CAShapeLayer()
+        let dotPath = UIBezierPath()
+        for k in 0..<6 {
+            let a = Double(k) / 6 * 2 * .pi
+            dotPath.append(UIBezierPath(ovalIn: CGRect(x: 90 + cos(a) * 13 - 3, y: 90 + sin(a) * 13 - 3, width: 6, height: 6)))
+        }
+        dots.path = dotPath.cgPath
+        dots.fillColor = UIColor(red: 0.93, green: 0.36, blue: 0.53, alpha: 1).cgColor
+        flower.addSublayer(dots)
+
+        // Turning slowly, round and round.
+        let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+        turn.fromValue = 0
+        turn.toValue = 2 * Double.pi
+        turn.duration = 28
+        turn.repeatCount = .infinity
+        flower.add(turn, forKey: "turn")
+
+        // Bobbing up and down, the shadow under it breathing in time.
+        let lift = CABasicAnimation(keyPath: "transform.translation.y")
+        lift.fromValue = 6
+        lift.toValue = -10
+        lift.duration = 1.4
+        lift.autoreverses = true
+        lift.repeatCount = .infinity
+        lift.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        bob.add(lift, forKey: "bob")
+        let breathe = CABasicAnimation(keyPath: "transform.scale.x")
+        breathe.fromValue = 1.05
+        breathe.toValue = 0.8
+        breathe.duration = 1.4
+        breathe.autoreverses = true
+        breathe.repeatCount = .infinity
+        breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        shadowLayer.add(breathe, forKey: "breathe")
+
+        let gold = UIColor(red: 1, green: 0.8, blue: 0.3, alpha: 1)
+        for (i, size) in [18.0, 13.0, 15.0].enumerated() {
+            let sparkle = CALayer()
+            sparkle.contents = ParkLoadingSkyView.symbol("sparkle", size: size, colour: gold)
+            sparkle.bounds = CGRect(x: 0, y: 0, width: size * 1.2, height: size * 1.2)
+            sparkle.contentsGravity = .resizeAspect
+            let twinkle = CABasicAnimation(keyPath: "transform.scale")
+            twinkle.fromValue = 0.5
+            twinkle.toValue = 1.2
+            twinkle.duration = 0.9 + Double(i) * 0.25
+            twinkle.autoreverses = true
+            twinkle.repeatCount = .infinity
+            twinkle.timeOffset = Double(i) * 0.5
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0.35
+            fade.toValue = 1
+            fade.duration = twinkle.duration
+            fade.autoreverses = true
+            fade.repeatCount = .infinity
+            fade.timeOffset = twinkle.timeOffset
+            sparkle.add(twinkle, forKey: "twinkle")
+            sparkle.add(fade, forKey: "fade")
+            layer.addSublayer(sparkle)
+            sparkles.append(sparkle)
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let mid = CGPoint(x: bounds.midX, y: bounds.midY - 10)
+        bob.position = mid
+        shadowLayer.position = CGPoint(x: bounds.midX, y: bounds.maxY - 12)
+        for (sparkle, (dx, dy)) in zip(sparkles, [(-108.0, -80.0), (108.0, -96.0), (92.0, 56.0)]) {
+            sparkle.position = CGPoint(x: mid.x + dx, y: mid.y + dy)
+        }
+        CATransaction.commit()
+    }
+
+    /// Opens the petals the park has got far enough for, each with a spring.
+    func show(_ progress: Float) {
+        for i in 0..<count {
+            let now = progress >= Float(i) / Float(count) + 0.02
+            guard now != open[i] else { continue }
+            open[i] = now
+            let petal = petals[i]
+            let spring = CASpringAnimation(keyPath: "transform")
+            spring.fromValue = petal.presentation()?.transform ?? petal.transform
+            spring.toValue = transform(petal: i, open: now)
+            spring.damping = 9
+            spring.stiffness = 160
+            spring.duration = spring.settlingDuration
+            petal.transform = transform(petal: i, open: now)
+            petal.add(spring, forKey: "open")
+            petal.opacity = now ? 1 : 0.55
+        }
+    }
+
+    private func transform(petal i: Int, open: Bool) -> CATransform3D {
+        let s: CGFloat = open ? 1 : 0.45
+        return CATransform3DConcat(CATransform3DMakeScale(s, s, 1),
+                                   CATransform3DMakeRotation(CGFloat(i) * 2 * .pi / CGFloat(count), 0, 0, 1))
+    }
+
+    /// One petal, pointing up from its base, with the little notch at its tip.
+    private static func petalPath(in r: CGRect) -> CGPath {
+        let p = UIBezierPath()
+        p.move(to: CGPoint(x: r.midX, y: r.maxY))
+        p.addCurve(to: CGPoint(x: r.minX + r.width * 0.12, y: r.minY + r.height * 0.22),
+                   controlPoint1: CGPoint(x: r.minX - r.width * 0.1, y: r.maxY - r.height * 0.3),
+                   controlPoint2: CGPoint(x: r.minX - r.width * 0.02, y: r.minY + r.height * 0.4))
+        p.addQuadCurve(to: CGPoint(x: r.midX, y: r.minY + r.height * 0.12), controlPoint: CGPoint(x: r.minX + r.width * 0.3, y: r.minY - r.height * 0.06))
+        p.addQuadCurve(to: CGPoint(x: r.maxX - r.width * 0.12, y: r.minY + r.height * 0.22), controlPoint: CGPoint(x: r.maxX - r.width * 0.3, y: r.minY - r.height * 0.06))
+        p.addCurve(to: CGPoint(x: r.midX, y: r.maxY),
+                   controlPoint1: CGPoint(x: r.maxX + r.width * 0.02, y: r.minY + r.height * 0.4),
+                   controlPoint2: CGPoint(x: r.maxX + r.width * 0.1, y: r.maxY - r.height * 0.3))
+        p.close()
+        return p.cgPath
     }
 }
 
