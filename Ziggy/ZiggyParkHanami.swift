@@ -111,14 +111,14 @@ final class ParkHanami {
     static func at(_ u: Float, _ v: Float) -> SIMD2<Float> { centre + [u, v] }
 
     static let zones: [Zone] = [
-        Zone(name: "Koinobori Field", centre: at(-40, -27), radius: 9),
-        Zone(name: "Sakura Grove", centre: at(28, -30), radius: 13),
+        Zone(name: "Fish Kite Meadow", centre: at(-40, -27), radius: 9),
+        Zone(name: "Cherry Grove", centre: at(28, -30), radius: 13),
         Zone(name: "Maple Valley", centre: at(45, 6), radius: 11),
         Zone(name: "Tea Pavilion", centre: at(30, 33), radius: 7),
         Zone(name: "Wisteria Tunnel", centre: at(0, 34), radius: 9),
-        Zone(name: "Fox Shrine", centre: at(-24, 40), radius: 6),
+        Zone(name: "Fox Hollow", centre: at(-24, 40), radius: 6),
         Zone(name: "Bamboo Path", centre: at(-36, 20), radius: 9),
-        Zone(name: "Monkey Onsen", centre: at(-44, -4), radius: 6),
+        Zone(name: "Monkey Hot Spring", centre: at(-44, -4), radius: 6),
     ]
 
     static let onsen = at(-45, -4)
@@ -235,11 +235,11 @@ final class ParkHanami {
 
     /// The name of the part of the park you are in, if you are in it.
     static func area(at p: SIMD2<Float>) -> String? {
-        if inTunnel(p) { return "Senbon Torii" }
+        if inTunnel(p) { return "Red Gate Tunnel" }
         guard simd_length((p - centre) / size) < 1 else { return nil }
         for zone in zones where simd_distance(p, zone.centre) < zone.radius { return zone.name }
         if simd_length((p - lakeCentre) / SIMD2(26, 25)) < 1 { return "Heart Lake" }
-        return "Hanami Park"
+        return "Ziggy's Blossom Park"
     }
 
     /// For `ParkCity.keepOnFoot` to choose between: the torii tunnel, and

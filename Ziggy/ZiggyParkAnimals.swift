@@ -55,7 +55,7 @@ enum ParkFriend: String, CaseIterable, Identifiable {
 
     var species: String {
         switch self {
-        case .deer: return "Nara deer"
+        case .deer: return "Spotted deer"
         case .bunny: return "Bunny"
         case .cat: return "Calico cat"
         case .tanuki: return "Tanuki"
@@ -122,7 +122,7 @@ enum ParkFriend: String, CaseIterable, Identifiable {
 
     var fact: String {
         switch self {
-        case .deer: return "Nara deer bow politely when they'd like a treat."
+        case .deer: return "Spotted deer bow politely when they'd like a treat."
         case .bunny: return "Mochi's nose never, ever stops wiggling."
         case .cat: return "Tama has napped in every sunny spot in the park."
         case .tanuki: return "Pon drums on his round tummy when he's happy."

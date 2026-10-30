@@ -82,7 +82,7 @@ final class ParkCity {
         if let name = ParkHanami.area(at: p) { return name }
         if simd_distance(p, plaza) < plazaRadius + 1 { return "Fountain Plaza" }
         if p.x > avenueEnd { return "Ziggy Town" }
-        if p.x > 21 { return "Sakura Canal" }
+        if p.x > 21 { return "Cherry Canal" }
         return "Ziggy's Garden"
     }
 
