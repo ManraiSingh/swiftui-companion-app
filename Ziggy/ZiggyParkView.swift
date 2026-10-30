@@ -306,6 +306,7 @@ final class ZiggyParkWorld {
             self.ziggy.perform(.flip)
         }
         link.start()
+        voice.watch()
         company = link.isLinked ? .waiting : .solo
         onCompanyChange?(company)
 
@@ -316,7 +317,7 @@ final class ZiggyParkWorld {
     }
 
     func leave() {
-        voice.leave()
+        voice.stop()
         link.stop()
         subscription?.cancel()
         subscription = nil
@@ -1600,6 +1601,10 @@ struct ZiggyParkView: View {
                     .transition(.opacity)
                     .zIndex(1)
             }
+        }
+        .onChange(of: world.voice.partnerCalling) { _, calling in
+            guard calling else { return }
+            show("\(world.voice.partnerName.isEmpty ? (partnerName ?? "Your love") : world.voice.partnerName) wants to talk")
         }
         .overlayPreferenceValue(ParkTipAnchors.self) { anchors in
             if tourStep != nil {

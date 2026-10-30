@@ -838,6 +838,16 @@ struct ParkVoicePanel: View {
                     .foregroundStyle(parkPink)
                     .frame(width: 48, height: 48)
                     .background(Circle().fill(.white.opacity(0.94)))
+                    .overlay {
+                        // Your partner is on and waiting for you.
+                        if voice.partnerCalling {
+                            Circle()
+                                .stroke(parkPink, lineWidth: 2.5)
+                                .phaseAnimator([1.0, 1.3]) { ring, scale in
+                                    ring.scaleEffect(scale).opacity(Double(1.3 - scale) * 3.3)
+                                } animation: { _ in .easeOut(duration: 1.1) }
+                        }
+                    }
                     .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
                     .overlay(alignment: .bottomTrailing) {
                         Image(systemName: "heart.fill")
@@ -847,14 +857,15 @@ struct ParkVoicePanel: View {
                             .background(parkPink, in: Circle())
                             .offset(x: 2, y: 2)
                     }
-                Text(voice.state == .noMic ? "Mic is off" : "Talk")
+                Text(voice.state == .noMic ? "Mic is off" : voice.partnerCalling ? "Join" : "Talk")
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Start voice chat")
+        .accessibilityLabel(voice.state == .noMic ? "Microphone is off. Open Settings"
+                            : voice.partnerCalling ? "Join your partner in voice chat" : "Start voice chat")
     }
 
     /// In a call: one round button, the same size as the others. Your
@@ -866,7 +877,7 @@ struct ParkVoicePanel: View {
         } label: {
             VStack(spacing: 3) {
                 face(letter: initial(of: voice.partnerName.isEmpty ? (partnerName ?? "") : voice.partnerName, fallback: "♥"),
-                     colour: rose, level: max(voice.partnerLevel, voice.myLevel * 0.6), here: voice.state == .live, muted: false)
+                     colour: rose, level: max(voice.partnerLevel, voice.myLevel * 0.6), here: voice.state == .live, muted: voice.partnerMuted)
                     .frame(width: 48, height: 48)
                     .background(Circle().fill(.white.opacity(0.94)))
                     .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
@@ -878,14 +889,14 @@ struct ParkVoicePanel: View {
                             .background(voice.muted ? coral : parkPink, in: Circle())
                             .offset(x: 2, y: 2)
                     }
-                Text(voice.state == .live ? "Live" : voice.state == .cantConnect ? "Can't connect" : "Waiting…")
+                Text(status)
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(voice.state == .live ? "Voice chat on. Show controls" : "Waiting for your partner to join voice chat")
+        .accessibilityLabel("Voice chat: \(status). Show controls")
         .overlay(alignment: .topTrailing) {
             if open {
                 controls
@@ -896,6 +907,15 @@ struct ParkVoicePanel: View {
         }
     }
 
+    private var status: String {
+        switch voice.state {
+        case .live: return voice.partnerMuted ? "Muted" : "Live"
+        case .connecting: return "Connecting…"
+        case .cantConnect: return "Can't connect"
+        default: return "Waiting…"
+        }
+    }
+
     /// Mute, speaker and hang up, in a little frosted row.
     private var controls: some View {
         HStack(spacing: 8) {
@@ -903,8 +923,9 @@ struct ParkVoicePanel: View {
                  colour: sky, level: voice.myLevel, here: true, muted: voice.muted)
             control(voice.muted ? "mic.slash.fill" : "mic.fill", on: voice.muted) { voice.toggleMute() }
                 .accessibilityLabel(voice.muted ? "Unmute" : "Mute")
-            control(voice.speaker ? "speaker.wave.2.fill" : "ear.fill", on: false) { voice.toggleSpeaker() }
-                .accessibilityLabel(voice.speaker ? "Use earpiece" : "Use speaker")
+            control(voice.onHeadphones ? "headphones" : voice.speaker ? "speaker.wave.2.fill" : "ear.fill", on: false) { voice.toggleSpeaker() }
+                .disabled(voice.onHeadphones)
+                .accessibilityLabel(voice.onHeadphones ? "Using headphones" : voice.speaker ? "Use earpiece" : "Use speaker")
             Button { voice.leave() } label: {
                 Image(systemName: "phone.down.fill")
                     .font(.system(size: 12, weight: .bold))

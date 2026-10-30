@@ -15,8 +15,13 @@
 //  a heartbeat every few seconds and whether you are muted.
 //
 //  If either of you leaves and comes back, the new session ID tells the other
-//  phone to start again from the top. If the connection drops, the offering
-//  phone sends a new offer.
+//  phone to start again from the top. If the connection drops, or an offer
+//  goes unanswered, the offering phone sends a new one, waiting a little
+//  longer each time. A phone call or Siri takes the audio away; when they
+//  finish it is taken back.
+//
+//  While you are in the park the voice documents are watched even before you
+//  join, so your partner turning their mic on can invite you.
 //
 //  How loudly each of you is speaking is read from the connection a few
 //  times a second, for the rings that light up on screen. Your partner's
@@ -60,6 +65,11 @@ final class ZiggyParkVoice {
     private(set) var partnerMuted = false
     /// Your partner's name, once they have joined.
     private(set) var partnerName = ""
+    /// Your partner has their mic on and you haven't joined yet.
+    private(set) var partnerCalling = false
+    /// Headphones or the car have the sound, so the speaker button can't
+    /// change where it goes.
+    private(set) var onHeadphones = false
 
     var isOn: Bool { state != .off && state != .noMic }
 
@@ -86,6 +96,11 @@ final class ZiggyParkVoice {
     @ObservationIgnored private var partnerVolume: Double = 1
     @ObservationIgnored private var lastHeard: [String: Double] = [:]
     @ObservationIgnored private var routeWatch: NSObjectProtocol?
+    @ObservationIgnored private var interruptionWatch: NSObjectProtocol?
+    @ObservationIgnored private var retry: Timer?
+    @ObservationIgnored private var failedTries = 0
+    /// What the voice documents last said, for joining partway through.
+    @ObservationIgnored private var lastDocuments: [(id: String, data: [String: Any])] = []
     /// How much your partner's voice is turned up: the call would otherwise
     /// be at phone-call loudness, too quiet over the speaker outdoors.
     private static let boost: Double = 3
@@ -93,6 +108,30 @@ final class ZiggyParkVoice {
     private static var clock: Double { Date().timeIntervalSince1970 }
 
     // MARK: Joining and leaving
+
+    /// Starts listening for your partner, for as long as you are in the park.
+    func watch() {
+        let code = RelationshipManager.shared.relationshipCode
+        guard listener == nil, !code.isEmpty else { return }
+        voice = Firestore.firestore()
+            .collection("relationships").document(code)
+            .collection("games").document("ziggyPark")
+            .collection("voice")
+        listener = voice?.addSnapshotListener { [weak self] snapshot, error in
+            guard error == nil, let snapshot else { return }
+            self?.lastDocuments = snapshot.documents.map { ($0.documentID, $0.data()) }
+            self?.receive(self?.lastDocuments ?? [])
+        }
+    }
+
+    /// Leaving the park: hangs up and stops listening.
+    func stop() {
+        leave()
+        listener?.remove()
+        listener = nil
+        lastDocuments = []
+        partnerCalling = false
+    }
 
     func join() {
         guard state == .off || state == .noMic else { return }
@@ -115,23 +154,24 @@ final class ZiggyParkVoice {
     }
 
     private func start(code: String) {
+        watch()
         configureAudio(on: true)
         session = UUID().uuidString
         muted = false
+        speaker = true
+        failedTries = 0
+        partnerCalling = false
         state = .waiting
+        // You are talking, not looking: don't let the screen lock on you.
+        UIApplication.shared.isIdleTimerDisabled = true
         // Onto the loudspeaker — unless headphones are in, which keep it.
         keepOnSpeaker()
-        voice = Firestore.firestore()
-            .collection("relationships").document(code)
-            .collection("games").document("ziggyPark")
-            .collection("voice")
+        noticeRoute()
         writeMine(["here": true, "session": session, "muted": false, "at": Self.clock, "name": UserManager.shared.username,
                    "offer": FieldValue.delete(), "answer": FieldValue.delete()])
+        // They may already be here, in which case nothing new will arrive.
+        receive(lastDocuments)
 
-        listener = voice?.addSnapshotListener { [weak self] snapshot, error in
-            guard error == nil, let snapshot else { return }
-            self?.receive(snapshot.documents.map { ($0.documentID, $0.data()) })
-        }
         // A heartbeat, so a phone that vanished without saying goodbye is
         // noticed, and the meters for the rings.
         heartbeat = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
@@ -150,14 +190,14 @@ final class ZiggyParkVoice {
     func leave() {
         guard isOn else { if state == .noMic { state = .off }; return }
         writeMine(["here": false, "offer": FieldValue.delete(), "answer": FieldValue.delete()])
-        listener?.remove()
-        listener = nil
         heartbeat?.invalidate()
         meter?.invalidate()
         heartbeat = nil
         meter = nil
         closePeer()
+        peerSession = nil
         configureAudio(on: false)
+        UIApplication.shared.isIdleTimerDisabled = false
         state = .off
         myLevel = 0
         partnerLevel = 0
@@ -172,6 +212,7 @@ final class ZiggyParkVoice {
     }
 
     func toggleSpeaker() {
+        guard !onHeadphones else { return }
         speaker.toggle()
         let audio = RTCAudioSession.sharedInstance()
         audio.lockForConfiguration()
@@ -201,8 +242,8 @@ final class ZiggyParkVoice {
     /// "Video chat" keeps the echo cancelling of a call but plays from the
     /// loudspeaker.
     private func configureAudio(on: Bool) {
-        var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
-        if #available(iOS 26.0, *) { options.insert(.allowBluetoothHFP) }
+        // HFP is what lets the mic in AirPods be used.
+        let options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP]
         let defaults = RTCAudioSessionConfiguration.webRTC()
         defaults.category = AVAudioSession.Category.playAndRecord.rawValue
         defaults.mode = AVAudioSession.Mode.videoChat.rawValue
@@ -216,13 +257,40 @@ final class ZiggyParkVoice {
             try? audio.setCategory(.playAndRecord, mode: .videoChat, options: options)
             try? audio.setActive(true)
             routeWatch = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.keepOnSpeaker() }
+                MainActor.assumeIsolated {
+                    self?.keepOnSpeaker()
+                    self?.noticeRoute()
+                }
+            }
+            interruptionWatch = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+                let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+                MainActor.assumeIsolated {
+                    if raw == AVAudioSession.InterruptionType.ended.rawValue { self?.takeAudioBack() }
+                }
             }
         } else {
-            if let routeWatch { NotificationCenter.default.removeObserver(routeWatch) }
+            for watch in [routeWatch, interruptionWatch].compactMap({ $0 }) { NotificationCenter.default.removeObserver(watch) }
             routeWatch = nil
+            interruptionWatch = nil
             try? audio.setActive(false)
+            // So music that was playing before the call carries on.
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
+    }
+
+    /// A phone call or Siri has finished: back to the walk.
+    private func takeAudioBack() {
+        guard isOn else { return }
+        let audio = RTCAudioSession.sharedInstance()
+        audio.lockForConfiguration()
+        try? audio.setActive(true)
+        audio.unlockForConfiguration()
+        keepOnSpeaker()
+    }
+
+    private func noticeRoute() {
+        let wearing: Set<AVAudioSession.Port> = [.headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .carAudio]
+        onHeadphones = AVAudioSession.sharedInstance().currentRoute.outputs.contains { wearing.contains($0.portType) }
     }
 
     /// If the sound has slipped back to the earpiece (WebRTC starting up,
@@ -244,10 +312,14 @@ final class ZiggyParkVoice {
     // MARK: Signalling
 
     private func receive(_ documents: [(id: String, data: [String: Any])]) {
-        guard isOn else { return }
         let now = Self.clock
         let partner = documents.first { id, data in
             id != myID && data["here"] as? Bool == true && now - Self.double(data["at"]) < 40
+        }
+        guard isOn else {
+            partnerCalling = partner != nil
+            partnerName = partner?.data["name"] as? String ?? partnerName
+            return
         }
         guard let (id, data) = partner, let theirSession = data["session"] as? String else {
             partnerLeft()
@@ -262,6 +334,7 @@ final class ZiggyParkVoice {
         if theirSession != peerSession {
             closePeer()
             peerSession = theirSession
+            failedTries = 0
             state = .connecting
             if myID < id { makeOffer() }
         }
@@ -299,6 +372,7 @@ final class ZiggyParkVoice {
         closePeer()
         peerSession = nil
         partnerLevel = 0
+        partnerMuted = false
         if isOn { state = .waiting }
     }
 
@@ -314,8 +388,12 @@ final class ZiggyParkVoice {
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: ["DtlsSrtpKeyAgreement": kRTCMediaConstraintsValueTrue])
 
         let delegate = PeerDelegate()
-        delegate.onState = { [weak self] state in
-            DispatchQueue.main.async { self?.connectionChanged(state) }
+        delegate.onState = { [weak self, weak delegate] state in
+            DispatchQueue.main.async {
+                // News from a connection already replaced means nothing.
+                guard let self, self.peerDelegate === delegate else { return }
+                self.connectionChanged(state)
+            }
         }
         guard let peer = Self.factory.peerConnection(with: config, constraints: constraints, delegate: delegate) else { return nil }
 
@@ -334,6 +412,9 @@ final class ZiggyParkVoice {
         let id = UUID().uuidString
         offerID = id
         answered = false
+        // An offer that goes unanswered raises no error at all, so without
+        // this it would sit on "Connecting…" for ever.
+        retryUnlessConnected(after: min(60, 15 * pow(2, Double(failedTries))))
         let constraints = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": kRTCMediaConstraintsValueTrue], optionalConstraints: nil)
         peer.offer(for: constraints) { [weak self] sdp, _ in
             guard let sdp else { return }
@@ -348,7 +429,7 @@ final class ZiggyParkVoice {
 
     private func answer(_ offer: String, offerID id: String) {
         guard let peer = makePeer() else { return }
-        state = .connecting
+        state = stillTrying
         peer.setRemoteDescription(RTCSessionDescription(type: .offer, sdp: offer)) { [weak self] error in
             guard error == nil else { return }
             let constraints = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": kRTCMediaConstraintsValueTrue], optionalConstraints: nil)
@@ -377,7 +458,28 @@ final class ZiggyParkVoice {
         check()
     }
 
-    private var failedTries = 0
+    /// "Connecting", until it has failed a few times: some networks can't be
+    /// crossed without a relay, so say so rather than promise.
+    private var stillTrying: State { failedTries >= 3 ? .cantConnect : .connecting }
+
+    /// Only the offering phone starts again; the answering one follows.
+    private func tryAgain() {
+        guard let partnerID, myID < partnerID, peerSession != nil else { return }
+        failedTries += 1
+        state = stillTrying
+        closePeer(keepingSession: true)
+        makeOffer()
+    }
+
+    private func retryUnlessConnected(after delay: Double) {
+        retry?.invalidate()
+        retry = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isOn, self.state != .live else { return }
+                self.tryAgain()
+            }
+        }
+    }
 
     private func connectionChanged(_ connection: RTCIceConnectionState) {
         guard isOn, peerSession != nil else { return }
@@ -386,26 +488,29 @@ final class ZiggyParkVoice {
             if state != .live { UINotificationFeedbackGenerator().notificationOccurred(.success) }
             state = .live
             failedTries = 0
+            retry?.invalidate()
             remoteTrack?.source.volume = partnerVolume * Self.boost
             keepOnSpeaker()
         case .failed:
-            // Try again from a fresh offer; the answering phone follows. Some
-            // networks can't be crossed without a relay, so after a few goes
-            // say so rather than sitting on "Waiting…" for ever.
-            failedTries += 1
-            state = failedTries >= 3 ? .cantConnect : .connecting
             if let partnerID, myID < partnerID {
-                closePeer(keepingSession: true)
-                makeOffer()
+                tryAgain()
+            } else {
+                failedTries += 1
+                state = stillTrying
             }
         case .disconnected:
-            state = .connecting
+            // Often just a moment of bad signal, and WebRTC recovers by
+            // itself. If not — off Wi-Fi onto mobile data, say — don't wait
+            // the half a minute it takes to give up.
+            state = stillTrying
+            retryUnlessConnected(after: 5)
         default:
             break
         }
     }
 
     private func closePeer(keepingSession: Bool = false) {
+        retry?.invalidate()
         peer?.close()
         peer = nil
         peerDelegate = nil
