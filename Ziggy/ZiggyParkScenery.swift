@@ -241,7 +241,7 @@ final class ParkScenery {
     /// round anything in the way rather than stopping them dead.
     func constrain(_ p: SIMD3<Float>, radius: Float) -> SIMD3<Float> {
         // The garden, the gate path, the canal, the town or the plaza.
-        var flat = ParkCity.keepOnFoot(SIMD2(p.x, p.z), radius: radius, gardenRadius: Self.walkRadius)
+        var flat = ParkCity.keepOnFoot(SIMD2(p.x, p.z), radius: radius, gardenRadius: Self.walkRadius + 0.85)
 
         flat = ParkHanami.keepOutOfWater(flat, radius: radius)
         if Self.onBridge(flat) {

@@ -102,6 +102,8 @@ final class ParkHanami {
 
     static let centre = SIMD2<Float>(75, 80)
     static let size = SIMD2<Float>(60, 52)
+    /// The fence all the way round.
+    static let fence = size + 0.6
     static let gateX: Float = 48.5
     /// Where the torii tunnel comes out into the park.
     static let gateZ: Float = centre.y - size.y * (1 - pow((gateX - centre.x) / size.x, 2)).squareRoot()
@@ -226,7 +228,7 @@ final class ParkHanami {
     // MARK: Where you can walk
 
     static func contains(_ p: SIMD2<Float>) -> Bool {
-        simd_length((p - centre) / size) < 1 || inTunnel(p)
+        simd_length((p - centre) / fence) < 1 || inTunnel(p)
     }
 
     static func inTunnel(_ p: SIMD2<Float>) -> Bool {
@@ -236,7 +238,7 @@ final class ParkHanami {
     /// The name of the part of the park you are in, if you are in it.
     static func area(at p: SIMD2<Float>) -> String? {
         if inTunnel(p) { return "Red Gate Tunnel" }
-        guard simd_length((p - centre) / size) < 1 else { return nil }
+        guard simd_length((p - centre) / fence) < 1 else { return nil }
         for zone in zones where simd_distance(p, zone.centre) < zone.radius { return zone.name }
         if simd_length((p - lakeCentre) / SIMD2(26, 25)) < 1 { return "Heart Lake" }
         return "Ziggy's Blossom Park"
@@ -245,9 +247,12 @@ final class ParkHanami {
     /// For `ParkCity.keepOnFoot` to choose between: the torii tunnel, and
     /// the whole park inside its fence.
     static func walkable(_ p: SIMD2<Float>, radius: Float) -> [SIMD2<Float>] {
-        let tunnel = SIMD2<Float>(min(max(p.x, gateX - 1.0 + radius), gateX + 1.0 - radius),
+        // Right up to the posts down each side of the tunnel, and right up
+        // to the fence round the park: stopping short of something you can
+        // see feels like walking into an invisible wall.
+        let tunnel = SIMD2<Float>(min(max(p.x, gateX - 1.11 + radius), gateX + 1.11 - radius),
                                   min(max(p.y, 3.5), gateZ + 2))
-        let inside = size - 1.4 - radius
+        let inside = fence - 0.25 - radius
         let q = (p - centre) / inside
         let length = simd_length(q)
         let park = length <= 1 || length < 0.0001 ? p : centre + q / length * inside
@@ -1126,16 +1131,18 @@ final class ParkHanami {
 
     private func buildEdges(_ rng: inout ParkRandom) {
         var s = Sculpture()
-        let fence = Self.size + 0.6
+        let fence = Self.fence
         let count = 520
         for i in 0..<count {
             let a = Float(i) / Float(count) * 2 * .pi
             let p = Self.centre + SIMD2(cos(a), sin(a)) * fence
-            if abs(p.x - Self.gateX) < 2.2 && p.y < Self.centre.y { continue }
+            // The opening is exactly as wide as the tunnel, so the fence
+            // meets its posts and leaves nothing to walk into unseen.
+            if abs(p.x - Self.gateX) < 1.3 && p.y < Self.centre.y { continue }
             s.with(0xC4B37A) { $0.tube(base: [p.x, 0, p.y], height: i % 6 == 0 ? 1.2 : 1.0, radius: i % 6 == 0 ? 0.05 : 0.03, segments: 5) }
         }
         let gateAngle = atan2((Self.gateZ - Self.centre.y) / fence.y, (Self.gateX - Self.centre.x) / fence.x)
-        let gap: Float = 0.045
+        let gap: Float = 0.024
         for height: Float in [0.3, 0.65, 0.92] {
             var ring: [(centre: SIMD3<Float>, rx: Float, rz: Float)] = []
             for k in 0...140 {
