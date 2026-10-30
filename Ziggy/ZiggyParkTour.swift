@@ -11,7 +11,7 @@
 //  on; Skip ends it. Once it has been seen it never comes back.
 //
 //  Each control marks itself with `.parkTip(_:)`, so the spotlight finds it
-//  wherever it ends up on screen.
+//  wherever it ends up on screen. The spotlight itself is `TourOverlay`.
 //
 
 import SwiftUI
@@ -21,206 +21,34 @@ enum ParkTip: Hashable {
     case stick, moods, moves, tricks, voice, note, surprise
 }
 
-struct ParkTipAnchors: PreferenceKey {
-    static let defaultValue: [ParkTip: Anchor<CGRect>] = [:]
-    static func reduce(value: inout [ParkTip: Anchor<CGRect>], nextValue: () -> [ParkTip: Anchor<CGRect>]) {
-        value.merge(nextValue()) { $1 }
-    }
-}
-
 extension View {
     /// Marks this control for the tour to point at.
-    func parkTip(_ tip: ParkTip) -> some View {
-        anchorPreference(key: ParkTipAnchors.self, value: .bounds) { [tip: $0] }
-    }
+    func parkTip(_ tip: ParkTip) -> some View { tourSpot(tip) }
 }
 
 @available(iOS 18.0, *)
-struct ParkTourStep {
-    /// What it points at; nil sits the bubble in the middle of the screen.
-    let tip: ParkTip?
-    let art: ParkTourArt.Scene
-    let title: String
-    let text: String
+enum ParkTourStep {
 
     /// The tour for this walk. Talking and notes only when there is someone
     /// to talk to or leave them for.
-    static func steps(together: Bool, partner: String?) -> [ParkTourStep] {
+    static func steps(together: Bool, partner: String?, look: ParkLook) -> [TourStep<ParkTip>] {
         let them = partner.flatMap { $0.isEmpty ? nil : $0 } ?? "your love"
+        func step(_ tip: ParkTip?, _ art: ParkTourArt.Scene, _ title: String, _ text: String) -> TourStep<ParkTip> {
+            TourStep(tip: tip, round: tip == .stick, title: title, text: text, picture: ParkTourArt(scene: art, look: look))
+        }
         var steps = [
-            ParkTourStep(tip: .stick, art: .walk, title: "Off for a walk!",
-                         text: "Push this pad to walk and Ziggy trots along beside you. Push it right up and hold to keep walking on your own."),
-            ParkTourStep(tip: nil, art: .look, title: "Look around",
-                         text: "Drag anywhere on the park to turn and look, and pinch to zoom in close."),
-            ParkTourStep(tip: .moods, art: .moods, title: "How are you feeling?",
-                         text: "Tap your face to show if you're happy, in love, sad or angry. It stays on your face, and your partner sees it."),
-            ParkTourStep(tip: .moves, art: .moves, title: "Say it with a move",
-                         text: "Tap the hand to wave, dance, bow or blow a kiss."),
-            ParkTourStep(tip: .tricks, art: .play, title: "Play with Ziggy",
-                         text: "Tap Ziggy to pet him, give him a treat, play catch, or ask for a trick."),
+            step(.stick, .walk, "Off for a walk!", "Push this pad to walk and Ziggy trots along beside you. Push it right up and hold to keep walking on your own."),
+            step(nil, .look, "Look around", "Drag anywhere on the park to turn and look, and pinch to zoom in close."),
+            step(.moods, .moods, "How are you feeling?", "Tap your face to show how you feel. It stays on your face, and your partner sees it."),
+            step(.moves, .moves, "Say it with a move", "Tap the hand to wave or blow a kiss."),
+            step(.tricks, .play, "Play with Ziggy", "Tap Ziggy to ask for a trick. With Ziggy Forever you can pet him, give him a treat and play catch."),
         ]
         if together {
-            steps.append(ParkTourStep(tip: .voice, art: .talk, title: "Talk while you walk",
-                                      text: "Turn your mic on to chat with \(them) as you stroll together."))
-            steps.append(ParkTourStep(tip: .note, art: .note, title: "Hide a love note",
-                                      text: "Leave a note anywhere in the park, and \(them) will find it on their walk."))
+            steps.append(step(.voice, .talk, "Talk while you walk", "Turn your mic on to chat with \(them) as you stroll together."))
+            steps.append(step(.note, .note, "Hide a love note", "Leave a note anywhere in the park, and \(them) will find it on their walk."))
         }
-        steps.append(ParkTourStep(tip: .surprise, art: .surprise, title: "Surprise me",
-                                  text: "Tap for a little surprise: fireworks, bubbles, a rainbow… or Ziggy gets the zoomies!"))
+        steps.append(step(.surprise, .surprise, "Surprise me", "Tap for a little surprise: fireworks, bubbles, a rainbow… or Ziggy gets the zoomies!"))
         return steps
-    }
-}
-
-/// The dimmed park with the current control spotlit and its bubble beside it.
-@available(iOS 18.0, *)
-struct ParkTourOverlay: View {
-
-    let steps: [ParkTourStep]
-    /// Who you picked: the little guide showing you round is you.
-    let look: ParkLook
-    let anchors: [ParkTip: Anchor<CGRect>]
-    @Binding var step: Int?
-    let finish: () -> Void
-
-    private let pink = Color(red: 0.93, green: 0.36, blue: 0.53)
-    private let ink = Color(red: 0.36, green: 0.22, blue: 0.29)
-    private let bubbleWidth: CGFloat = 290
-
-    var body: some View {
-        GeometryReader { proxy in
-            if let index = step, index < steps.count {
-                let current = steps[index]
-                let hole = current.tip.flatMap { anchors[$0] }.map { proxy[$0].insetBy(dx: -8, dy: -8) }
-                // The walk pad is round; the rest carry labels a circle clips.
-                let corner = hole.map { min($0.width, $0.height) / 2 }.map { current.tip == .stick ? $0 : min($0, 24) } ?? 0
-                ZStack(alignment: .topLeading) {
-                    Path { p in
-                        p.addRect(CGRect(origin: .zero, size: proxy.size))
-                        if let hole {
-                            p.addRoundedRect(in: hole, cornerSize: CGSize(width: corner, height: corner))
-                        }
-                    }
-                    .fill(.black.opacity(0.5), style: FillStyle(eoFill: true))
-                    .contentShape(Rectangle())
-                    .onTapGesture { next() }
-
-                    if let hole {
-                        RoundedRectangle(cornerRadius: corner)
-                            .stroke(.white, lineWidth: 2.5)
-                            .frame(width: hole.width, height: hole.height)
-                            .phaseAnimator([1.0, 1.08]) { ring, scale in
-                                ring.scaleEffect(scale).opacity(2.2 - scale * 1.5)
-                            } animation: { _ in .easeInOut(duration: 0.8) }
-                            .position(x: hole.midX, y: hole.midY)
-                            .allowsHitTesting(false)
-                    }
-
-                    bubble(current, index: index)
-                        .id(index)
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                        .frame(width: bubbleWidth)
-                        .modifier(Placement(hole: hole, size: proxy.size, width: bubbleWidth))
-                }
-            }
-        }
-        .ignoresSafeArea()
-    }
-
-    private func bubble(_ current: ParkTourStep, index: Int) -> some View {
-        let last = index == steps.count - 1
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                ParkTourArt(scene: current.art, look: look)
-                Text(current.title)
-                    .font(.system(size: 18, weight: .heavy, design: .rounded))
-                    .foregroundStyle(pink)
-            }
-            Text(current.text)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(ink)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 5) {
-                ForEach(0..<steps.count, id: \.self) { i in
-                    Capsule()
-                        .fill(i == index ? pink : pink.opacity(0.22))
-                        .frame(width: i == index ? 16 : 6, height: 6)
-                }
-                Spacer()
-                if !last {
-                    Button("Skip") { finish() }
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(ink.opacity(0.5))
-                        .padding(.trailing, 4)
-                }
-                Button { next() } label: {
-                    Text(last ? "Let's go!" : "Next")
-                        .font(.system(size: 14, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(pink, in: Capsule())
-                }
-            }
-            .padding(.top, 2)
-        }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 22).fill(.white))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(pink.opacity(0.25), lineWidth: 1.5))
-        .shadow(color: .black.opacity(0.2), radius: 14, y: 6)
-    }
-
-    private func next() {
-        guard let index = step else { return }
-        if index + 1 < steps.count {
-            withAnimation(.spring(duration: 0.4, bounce: 0.3)) { step = index + 1 }
-        } else {
-            finish()
-        }
-    }
-
-    /// Puts the bubble below a control near the top of the screen, above one
-    /// near the bottom, and in the middle when there is nothing to point at
-    /// — kept on screen, with a little tail pointing at the control.
-    private struct Placement: ViewModifier {
-        let hole: CGRect?
-        let size: CGSize
-        let width: CGFloat
-
-        func body(content: Content) -> some View {
-            if let hole {
-                let x = min(max(hole.midX, width / 2 + 16), size.width - width / 2 - 16)
-                let below = hole.midY < size.height / 2
-                let tail = Triangle()
-                    .fill(.white)
-                    .frame(width: 22, height: 12)
-                    .rotationEffect(.degrees(below ? 0 : 180))
-                    .offset(x: hole.midX - x)
-                VStack(spacing: -1) {
-                    if below { tail }
-                    content
-                    if !below { tail }
-                }
-                .frame(width: width)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: below ? .top : .bottom)
-                .offset(x: x - size.width / 2)
-                .padding(.top, below ? hole.maxY + 6 : 0)
-                .padding(.bottom, below ? 0 : size.height - hole.minY + 6)
-            } else {
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-    }
-
-    private struct Triangle: Shape {
-        func path(in r: CGRect) -> Path {
-            Path { p in
-                p.move(to: CGPoint(x: r.midX, y: r.minY))
-                p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
-                p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
-                p.closeSubpath()
-            }
-        }
     }
 }
 

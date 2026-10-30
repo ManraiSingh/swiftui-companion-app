@@ -35,6 +35,10 @@ struct ContentView: View {
     private var hasAskedForReview = false
 
     @State private var showRatingPrompt = false
+    /// Which step of the first look round home is showing, if any.
+    @State private var homeTourStep: Int?
+    @State private var homeTourSpots: [HomeTip: CGRect] = [:]
+    @AppStorage("ziggy_home_tour_seen") private var homeTourSeen = false
 
     @AppStorage("ziggy_connected_popup_shown_for_code")
     private var connectedPopupShownForCode = ""
@@ -166,6 +170,7 @@ struct ContentView: View {
             } else {
                 TabView {
                     homeView
+                        .onPreferenceChange(TourSpots<HomeTip>.self) { homeTourSpots = $0 }
                         .tabItem { Label("Home", systemImage: "house.fill") }
                     ScrapbookShelfView()
                         .tabItem { Label("Scrapbook", systemImage: "books.vertical.fill") }
@@ -184,7 +189,20 @@ struct ContentView: View {
                 }
                 // The selected tab was the one thing still tinted system blue.
                 .tint(themes.theme.accent)
+                .overlay {
+                    if homeTourStep != nil {
+                        TourOverlay(steps: HomeTourStep.steps(petName: petVM.pet.name, wide: shape.isWide),
+                                    spots: homeTourSpots, step: $homeTourStep) {
+                            homeTourSeen = true
+                            withAnimation(.easeIn(duration: 0.25)) { homeTourStep = nil }
+                        }
+                        .transition(.opacity)
+                    }
+                }
+                .onChange(of: showConnectedPopup) { _, _ in startHomeTourWhenClear() }
+                .onChange(of: showWidgetOnboarding) { _, _ in startHomeTourWhenClear() }
                 .onAppear {
+                    startHomeTourWhenClear()
                     loadUsage()
                     loadCustomQuickMessages()
                     dailyQ.startListening()
@@ -225,6 +243,16 @@ struct ContentView: View {
             if newPhase == .active {
                 petVM.refreshFeedReminder()
             }
+        }
+    }
+
+    /// The first time home appears, once nothing else wants the screen: the
+    /// "you're connected" popup and the widget walkthrough both come first.
+    private func startHomeTourWhenClear() {
+        guard !homeTourSeen, homeTourStep == nil else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            guard !homeTourSeen, homeTourStep == nil, !showConnectedPopup, !showWidgetOnboarding, !showRatingPrompt else { return }
+            withAnimation(.easeOut(duration: 0.3)) { homeTourStep = 0 }
         }
     }
 
@@ -410,11 +438,14 @@ struct ContentView: View {
                     compactHeader
                         .reportHeight()
                     ziggyHero(width: geo.size.width, heroHeight: heroHeight)
+                        .tourSpot(HomeTip.ziggy)
                     dailyQuestionCard
+                        .tourSpot(HomeTip.question)
                         .reportHeight()
                     actionDock(containerWidth: geo.size.width)
                         .reportHeight()
                     messagePanel
+                        .tourSpot(HomeTip.messages)
                         .reportHeight()
                     Spacer(minLength: 0)
                 }
@@ -568,6 +599,7 @@ struct ContentView: View {
             VStack(spacing: 13) {
                 compactHeader
                 ziggyHero(width: column, heroHeight: max(geo.size.height - 90, 220))
+                    .tourSpot(HomeTip.ziggy)
                 Spacer(minLength: 0)
             }
             .frame(width: column)
@@ -575,8 +607,10 @@ struct ContentView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 13) {
                     dailyQuestionCard
+                        .tourSpot(HomeTip.question)
                     actionDock(containerWidth: column)
                     messagePanel
+                        .tourSpot(HomeTip.messages)
                 }
                 .padding(.bottom, 8)
             }
@@ -615,7 +649,9 @@ struct ContentView: View {
             }
             Spacer()
             storeButton
+                .tourSpot(HomeTip.bouquet)
             loveBadge
+                .tourSpot(HomeTip.love)
         }
         .padding(.horizontal, 4)
         // Sits the title, the store and the love score down off the status
@@ -909,7 +945,9 @@ struct ContentView: View {
                     .frame(maxWidth: 130, alignment: .leading)
                 HStack(spacing: 8) {
                     feedBar
+                        .tourSpot(HomeTip.feed)
                     walkBar
+                        .tourSpot(HomeTip.walk)
                 }
             }
             .padding(.leading, 18)
@@ -1241,10 +1279,12 @@ struct ContentView: View {
                 systemImage: "paintbrush.pointed.fill", title: "Doodle", subtitle: "Draw",
                 color: .purple, iconSize: iconSize, cardMinHeight: cardHeight
             ) { showDoodleView = true }
+            .tourSpot(HomeTip.doodle)
             actionCard(
                 systemImage: "gamecontroller.fill", title: "Play", subtitle: "Games",
                 color: .green, iconSize: iconSize, cardMinHeight: cardHeight
             ) { showDrawingGameView = true }
+            .tourSpot(HomeTip.play)
             actionCard(
                 systemImage: "camera.fill",
                 title: "Instant",
@@ -1257,6 +1297,7 @@ struct ContentView: View {
                 petVM.markInstantSeen()
                 showInstantView = true
             }
+            .tourSpot(HomeTip.instant)
         }
     }
 
@@ -1660,7 +1701,8 @@ struct ContentView: View {
     /// native review sheet, which decides on its own whether to actually
     /// display it.
     private func checkForRatingPrompt() {
-        guard !hasAskedForReview else { return }
+        // Never in someone's first look round: a later visit will ask.
+        guard !hasAskedForReview, homeTourSeen else { return }
         guard
             petVM.pet.loveScore >= 80,
             petVM.pet.relationshipDays >= 3

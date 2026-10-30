@@ -1048,9 +1048,9 @@ final class ZiggyParkWorld {
         updatePlay(dt)
 
         // Stand still for a little while and Ziggy entertains himself: a
-        // spin, a sit, a roll in the grass. Decided by the phone walking him,
-        // and shown on both. Not on the bridge, where a roll would look like
-        // he had fallen through the planks.
+        // spin, a sit, a flip. Decided by the phone walking him, and shown on
+        // both. Not on the bridge, where he would look as if he had fallen
+        // through the planks.
         let onBridge = ParkScenery.height(atX: ziggyMove.position.x, z: ziggyMove.position.z) > 0.02
         if walkingZiggy && meMove.speed < 0.05 && ziggyMove.speed < 0.05 && !onBridge {
             idleTime += dt
@@ -1321,9 +1321,13 @@ struct ZiggyParkView: View {
     @State private var loaded = false
     /// Which step of the first-walk tour is showing, if any.
     @State private var tourStep: Int?
+    @State private var tourSpots: [ParkTip: CGRect] = [:]
+    @ObservedObject private var subscription = ZiggySubscription.shared
+    @State private var paywall: PaywallReason?
     @State private var mood: ParkMood = .normal
     @State private var moodMenuOpen = false
     @State private var moveMenuOpen = false
+    @State private var trickMenuOpen = false
     /// Your partner's mood and look, once they've shown one.
     @State private var partnerFace: (mood: ParkMood, look: ParkLook)?
     @AppStorage("parkTourSeen") private var tourSeen = false
@@ -1415,7 +1419,8 @@ struct ZiggyParkView: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         roundButton("xmark") { dismiss() }
-                        ParkMoveMenu(look: picked, perform: { world.emote($0) }, open: $moveMenuOpen)
+                        ParkMoveMenu(look: picked, perform: { world.emote($0) }, unlocked: subscription.isSubscribed,
+                                     locked: { paywall = .parkMoves }, open: $moveMenuOpen)
                             .parkTip(.moves)
                     }
                     Spacer()
@@ -1426,10 +1431,12 @@ struct ZiggyParkView: View {
                         ParkMoodMenu(look: picked, mood: mood, feel: { next in
                             mood = next
                             world.feel(next)
-                        }, open: $moodMenuOpen)
+                        }, unlocked: subscription.isSubscribed, locked: { paywall = .parkMoods }, open: $moodMenuOpen)
                         .parkTip(.moods)
                         .zIndex(2)
-                        ParkTrickMenu { world.perform($0) } play: { world.playWithZiggy($0) }
+                        ParkTrickMenu(perform: { world.perform($0) }, play: { world.playWithZiggy($0) },
+                                      unlocked: subscription.isSubscribed, locked: { paywall = .playWithZiggy },
+                                      open: $trickMenuOpen)
                             .parkTip(.tricks)
                             .zIndex(1)
                         if company != .solo {
@@ -1461,12 +1468,15 @@ struct ZiggyParkView: View {
             .opacity(choosing ? 0 : 1)
             .allowsHitTesting(!choosing)
             // Over the banners below while a menu is open, and one at a time.
-            .zIndex(moodMenuOpen || moveMenuOpen ? 1 : 0)
+            .zIndex(moodMenuOpen || moveMenuOpen || trickMenuOpen ? 1 : 0)
             .onChange(of: moodMenuOpen) { _, open in
-                if open { withAnimation(.spring(duration: 0.3)) { moveMenuOpen = false } }
+                if open { closeMenus(moves: true, tricks: true) }
             }
             .onChange(of: moveMenuOpen) { _, open in
-                if open { withAnimation(.spring(duration: 0.3)) { moodMenuOpen = false } }
+                if open { closeMenus(moods: true, tricks: true) }
+            }
+            .onChange(of: trickMenuOpen) { _, open in
+                if open { closeMenus(moods: true, moves: true) }
             }
 
             if choosing && loaded {
@@ -1606,16 +1616,18 @@ struct ZiggyParkView: View {
             guard calling else { return }
             show("\(world.voice.partnerName.isEmpty ? (partnerName ?? "Your love") : world.voice.partnerName) wants to talk")
         }
-        .overlayPreferenceValue(ParkTipAnchors.self) { anchors in
+        .onPreferenceChange(TourSpots<ParkTip>.self) { tourSpots = $0 }
+        .overlay {
             if tourStep != nil {
-                ParkTourOverlay(steps: ParkTourStep.steps(together: company != .solo, partner: partnerName),
-                                look: picked, anchors: anchors, step: $tourStep) {
+                TourOverlay(steps: ParkTourStep.steps(together: company != .solo, partner: partnerName, look: picked),
+                            spots: tourSpots, step: $tourStep) {
                     tourSeen = true
                     withAnimation(.easeIn(duration: 0.25)) { tourStep = nil }
                 }
                 .transition(.opacity)
             }
         }
+        .paywall($paywall)
         .alert("Leave a note here", isPresented: $writing) {
             TextField("Something sweet…", text: $draft)
             Button("Leave it") {
@@ -1627,6 +1639,14 @@ struct ZiggyParkView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("It will float right here until \(partnerName ?? "your partner") walks by and finds it.")
+        }
+    }
+
+    private func closeMenus(moods: Bool = false, moves: Bool = false, tricks: Bool = false) {
+        withAnimation(.spring(duration: 0.3)) {
+            if moods { moodMenuOpen = false }
+            if moves { moveMenuOpen = false }
+            if tricks { trickMenuOpen = false }
         }
     }
 
