@@ -31,10 +31,6 @@
 		B57A3A432FDE21FB00332034 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A422FDE21FB00332034 /* ActivityView.swift */; };
 		B57A3A452FDE281100332034 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B57A3A442FDE281100332034 /* NotificationManager.swift */; };
 		B5A63FC53038CE540086B36B /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = B5A63FC43038CE540086B36B /* RevenueCat */; };
-		B5AA10112FE70011AA000011 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
-		B5AA10122FE70012AA000012 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
-		B5AA10212FE70021AA000021 /* ZiggySkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10012FE70001AA000001 /* ZiggySkin.swift */; };
-		B5AA10222FE70022AA000022 /* ZiggySprite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AA10022FE70002AA000002 /* ZiggySprite.swift */; };
 		B5AD651E2FE0A3C5007BFF84 /* RelationshipManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */; };
 		B5AD65202FE15315007BFF84 /* RelationshipSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */; };
 		B5AD65222FE17C0D007BFF84 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AD65212FE17C0D007BFF84 /* FeedView.swift */; };
@@ -88,8 +84,6 @@
 		B57A3A412FDE1CE300332034 /* ZiggyWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZiggyWidgetExtension.entitlements; sourceTree = "<group>"; };
 		B57A3A422FDE21FB00332034 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
 		B57A3A442FDE281100332034 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
-		B5AA10012FE70001AA000001 /* ZiggySkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySkin.swift; sourceTree = "<group>"; };
-		B5AA10022FE70002AA000002 /* ZiggySprite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZiggySprite.swift; sourceTree = "<group>"; };
 		B5AD651D2FE0A3C5007BFF84 /* RelationshipManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipManager.swift; sourceTree = "<group>"; };
 		B5AD651F2FE15315007BFF84 /* RelationshipSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelationshipSetupView.swift; sourceTree = "<group>"; };
 		B5AD65212FE17C0D007BFF84 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
@@ -189,8 +183,6 @@
 			isa = PBXGroup;
 			children = (
 				B57A3A332FDC1A4C00332034 /* Pet.swift */,
-				B5AA10022FE70002AA000002 /* ZiggySprite.swift */,
-				B5AA10012FE70001AA000001 /* ZiggySkin.swift */,
 				B57A3A392FDDF50600332034 /* Event.swift */,
 				B54457AF2FDF0BF000A6F47A /* UserManager.swift */,
 			);
@@ -358,8 +350,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				B57A3A342FDC1A4C00332034 /* Pet.swift in Sources */,
-				B5AA10122FE70012AA000012 /* ZiggySprite.swift in Sources */,
-				B5AA10112FE70011AA000011 /* ZiggySkin.swift in Sources */,
 				B54457AE2FDEEF7300A6F47A /* FirestoreManager.swift in Sources */,
 				B57A3A3D2FDE156700332034 /* WidgetDataManager.swift in Sources */,
 				B57A3A382FDDE8A500332034 /* PersistenceManager.swift in Sources */,
@@ -387,8 +377,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				B57A3A3E2FDE160800332034 /* Pet.swift in Sources */,
-				B5AA10222FE70022AA000022 /* ZiggySprite.swift in Sources */,
-				B5AA10212FE70021AA000021 /* ZiggySkin.swift in Sources */,
 				B54457B12FDF0BF000A6F47A /* UserManager.swift in Sources */,
 				B57A3A402FDE1A3800332034 /* WidgetDataManager.swift in Sources */,
 				B57A3A3F2FDE161100332034 /* Event.swift in Sources */,

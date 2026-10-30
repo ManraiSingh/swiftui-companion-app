@@ -55,7 +55,7 @@ enum HomeTourStep {
             step(nil, tab: 2, "ziggy_happie", sky, "Your activity",
                  "All your moments together, in one place."),
             step(nil, tab: 3, "ziggy_happie", lilac, "Settings",
-                 "Change your theme, dress \(name) up, and more. That's everything. Have fun!"),
+                 "Change your theme, your name and more. That's everything. Have fun!"),
         ]
     }
 

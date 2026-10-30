@@ -30,9 +30,7 @@ struct SettingsView: View {
     @State private var savedFlash = false
     @State private var copiedFlash = false
     @State private var paywall: PaywallReason?
-    @State private var showSkinStore = false
 
-    @ObservedObject private var skins = SkinManager.shared
 
     @ObservedObject private var themes = ThemeManager.shared
 
@@ -73,48 +71,6 @@ struct SettingsView: View {
                             .padding(.top, 4)
 
                         themeCard
-
-                        // What he's wearing
-                        settingsCard(
-                            symbol: "tshirt.fill",
-                            tint: Color(red: 0.62, green: 0.45, blue: 0.92),
-                            title: "\(petVM.pet.name)'s look"
-                        ) {
-
-                            Button {
-                                showSkinStore = true
-                            } label: {
-
-                                HStack(spacing: 12) {
-
-                                    ZiggySprite(
-                                        mood: "ziggy_happie",
-                                        skin: skins.skin
-                                    )
-                                    .frame(width: 52, height: 52)
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(skins.skin.name)
-                                            .font(.subheadline)
-                                            .fontWeight(.bold)
-                                            .foregroundStyle(themes.theme.ink)
-                                        Text("\(ZiggySkin.all.count) to choose from")
-                                            .font(.caption)
-                                            .foregroundStyle(themes.theme.inkSoft)
-                                    }
-
-                                    Spacer(minLength: 0)
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundStyle(themes.theme.inkSoft)
-                                }
-                                .padding(12)
-                                .background(themes.theme.surface(0.7))
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                            }
-                            .buttonStyle(.plain)
-                        }
 
                         // Profile
                         settingsCard(
@@ -380,9 +336,6 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Some of your data is still there. Check your connection and try again.")
-            }
-            .fullScreenCover(isPresented: $showSkinStore) {
-                SkinStoreView(petName: petVM.pet.name)
             }
             .onAppear {
 

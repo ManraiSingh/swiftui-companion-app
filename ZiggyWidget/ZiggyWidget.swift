@@ -358,13 +358,6 @@ struct SimpleEntry: TimelineEntry {
     /// changes Ziggy without swapping the night room for the afternoon one.
     var roomMoodImage: String = "ziggy_happie"
 
-    /// What Ziggy is wearing. The app mirrors the choice into the App Group
-    /// whenever it changes, because the widget cannot reach Firestore — the
-    /// same arrangement the theme uses. Read as the entry is built, so a new
-    /// hat is picked up on the next refresh.
-    var skinID: String = UserDefaults(suiteName: "group.com.manrai.ziggy")?
-        .string(forKey: "ziggy_skin_id") ?? ZiggySkin.none.id
-
     var doodleImageData: Data? = nil
     var doodleSender: String = "Your partner"
 }
@@ -513,10 +506,9 @@ struct ZiggyWidgetEntryView: View {
                 .padding(.top, 12)
                 .padding(.horizontal, 10)
 
-            ZiggySprite(
-                mood: entry.imageName,
-                skin: ZiggySkin.named(entry.skinID)
-            )
+            Image(entry.imageName)
+                .resizable()
+                .scaledToFit()
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
                 .padding(.bottom, 6)
@@ -529,10 +521,9 @@ struct ZiggyWidgetEntryView: View {
 
         HStack(spacing: 14) {
 
-            ZiggySprite(
-                mood: entry.imageName,
-                skin: ZiggySkin.named(entry.skinID)
-            )
+            Image(entry.imageName)
+                .resizable()
+                .scaledToFit()
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .shadow(color: .black.opacity(0.28), radius: 7, y: 4)
                 // Starts his box lower and lets it run to the very bottom

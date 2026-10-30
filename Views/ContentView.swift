@@ -73,7 +73,6 @@ struct ContentView: View {
     @State private var showDrawingGameView = false
 
     @ObservedObject private var themes = ThemeManager.shared
-    @ObservedObject private var skins  = SkinManager.shared
     @State private var showDoodleView      = false
     @State private var showAnswerSheet     = false
 
@@ -212,7 +211,6 @@ struct ContentView: View {
                     watchForBothConnected()
                     watchForBouquets()
                     ZiggySubscription.shared.start()
-                    SkinManager.shared.start()
                 }
             }
         }
@@ -915,8 +913,9 @@ struct ContentView: View {
                 // side of the card in the overlay below.
                 Color.clear.frame(width: 174, height: 1)
 
-                // Ziggy plus whatever the two of you have dressed him in.
-                ZiggySprite(mood: heroEmotionImage, skin: skins.skin)
+                Image(heroEmotionImage)
+                    .resizable()
+                    .scaledToFit()
                     .frame(width: mascotSize, alignment: .bottom)
                     .frame(maxHeight: mascotSize, alignment: .bottom)
                     .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
