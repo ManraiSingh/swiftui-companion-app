@@ -482,7 +482,6 @@ extension Ziggy3DTrick {
         case .spin:     return "spin"
         case .flip:     return "flip"
         case .sit:      return "sit"
-        case .rollOver: return "rollOver"
         }
     }
 }

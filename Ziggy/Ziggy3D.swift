@@ -21,14 +21,13 @@ import UIKit
 // MARK: - Tricks
 
 enum Ziggy3DTrick: CaseIterable {
-    case spin, flip, sit, rollOver
+    case spin, flip, sit
 
     var title: String {
         switch self {
         case .spin:     return "Spin"
         case .flip:     return "Flip"
         case .sit:      return "Sit"
-        case .rollOver: return "Roll over"
         }
     }
 
@@ -37,7 +36,6 @@ enum Ziggy3DTrick: CaseIterable {
         case .spin:     return "arrow.trianglehead.2.clockwise.rotate.90"
         case .flip:     return "arrow.up.and.down.and.sparkles"
         case .sit:      return "pawprint.fill"
-        case .rollOver: return "arrow.clockwise"
         }
     }
 
@@ -47,7 +45,6 @@ enum Ziggy3DTrick: CaseIterable {
         case .spin:     return 1.0
         case .flip:     return 1.1
         case .sit:      return 2.2
-        case .rollOver: return 1.8
         }
     }
 }
@@ -284,7 +281,6 @@ final class Ziggy3D {
         var lift: Float = 0
         var yaw: Float = 0
         var pitch: Float = 0
-        var roll: Float = 0
         var squash: Float = 1
         var sit: Float = 0
         var excitement: Float = 0
@@ -317,13 +313,6 @@ final class Ziggy3D {
                 sit = envelope(t, in: 0.15, out: 0.85)
                 excitement = sit
 
-            case .rollOver:
-                // Lie down, go all the way round, get back up.
-                let down = envelope(t, in: 0.15, out: 0.85)
-                lift = -0.1 * down
-                let turn = max(0, min(1, (t - 0.15) / 0.7))
-                roll = 2 * .pi * ease(turn)
-                excitement = down
             }
 
             if t >= 1 { trick = nil }
@@ -337,7 +326,6 @@ final class Ziggy3D {
         body.orientation =
             simd_quatf(angle: yaw, axis: [0, 1, 0])
             * simd_quatf(angle: pitch - 0.45 * sit, axis: [1, 0, 0])
-            * simd_quatf(angle: roll, axis: [0, 0, 1])
         body.scale = [1 / squash.squareRoot(), squash * breath, 1 / squash.squareRoot()]
 
         // Diagonal pairs move together, the way a dog trots. Sitting folds the
