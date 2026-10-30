@@ -887,13 +887,6 @@ struct ParkSurpriseButton: View {
                     )
                     .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
                     .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-                    .overlay(alignment: .topTrailing) {
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 12, weight: .black))
-                            .foregroundStyle(.yellow)
-                            .phaseAnimator([0.7, 1.2]) { s, k in s.scaleEffect(k) } animation: { _ in .easeInOut(duration: 0.7) }
-                            .offset(x: 3, y: -3)
-                    }
                 Text("Surprise me")
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)

@@ -1528,7 +1528,7 @@ struct ZiggyParkView: View {
         .overlayPreferenceValue(ParkTipAnchors.self) { anchors in
             if tourStep != nil {
                 ParkTourOverlay(steps: ParkTourStep.steps(together: company != .solo, partner: partnerName),
-                                anchors: anchors, step: $tourStep) {
+                                look: picked, anchors: anchors, step: $tourStep) {
                     tourSeen = true
                     withAnimation(.easeIn(duration: 0.25)) { tourStep = nil }
                 }
@@ -1652,7 +1652,7 @@ private struct ParkLoadingCover: View {
                     .monospacedDigit()
                     .padding(.top, 12)
                 Spacer()
-                Text("Lanterns, cherry blossom and a very excited puppy")
+                Text("Ziggy can't wait to see you")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(ink.opacity(0.55))
                     .padding(.bottom, 36)
