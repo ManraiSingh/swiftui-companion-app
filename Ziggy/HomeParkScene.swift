@@ -4,7 +4,7 @@
 //
 //  Ziggy's card on the home screen, out in the park.
 //
-//  Behind Ziggy is Hanami Park — the same park you walk in — drawn as a
+//  Behind Ziggy is his Blossom Park — the same park you walk in — drawn as a
 //  little scene: Fuji far off, a lily pond with a torii standing in it,
 //  cherry trees, a path winding off into it, and a string of paper lanterns
 //  overhead. On a light theme it is a sunny afternoon, petals drifting
@@ -490,7 +490,7 @@ final class ParkPresence: ObservableObject {
         // Someone whose note stops being renewed has left, even without
         // saying so.
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.evaluate() }
+            Task { @MainActor [weak self] in self?.evaluate() }
         }
     }
 

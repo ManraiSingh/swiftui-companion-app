@@ -42,6 +42,9 @@ final class ZiggyParkVoice {
         case waiting
         /// Both in, the phones finding each other.
         case connecting
+        /// Tried a few times and no route between the phones was found.
+        /// Still trying, quietly.
+        case cantConnect
         /// Talking.
         case live
         /// The microphone is not allowed.
@@ -374,17 +377,23 @@ final class ZiggyParkVoice {
         check()
     }
 
+    private var failedTries = 0
+
     private func connectionChanged(_ connection: RTCIceConnectionState) {
         guard isOn, peerSession != nil else { return }
         switch connection {
         case .connected, .completed:
             if state != .live { UINotificationFeedbackGenerator().notificationOccurred(.success) }
             state = .live
+            failedTries = 0
             remoteTrack?.source.volume = partnerVolume * Self.boost
             keepOnSpeaker()
         case .failed:
-            // Try again from a fresh offer; the answering phone follows.
-            state = .connecting
+            // Try again from a fresh offer; the answering phone follows. Some
+            // networks can't be crossed without a relay, so after a few goes
+            // say so rather than sitting on "Waiting…" for ever.
+            failedTries += 1
+            state = failedTries >= 3 ? .cantConnect : .connecting
             if let partnerID, myID < partnerID {
                 closePeer(keepingSession: true)
                 makeOffer()

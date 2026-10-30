@@ -23,8 +23,8 @@
 //  this phone's clock when it arrives gives the gap between the two (clock
 //  difference plus the network's quickest delivery), and from that, where
 //  your partner is *now* — their last report, carried on along their velocity
-//  for however long ago it was really sent. The screen then eases them there
-//  rather than jumping.
+//  for however long ago it was really sent. The screen then walks them along
+//  at that speed and eases out what's left, rather than jumping.
 //
 //  There is one Ziggy for the two of you. The phone of whoever has given him
 //  the most love this week walks him and sends where he is with its own
@@ -54,6 +54,7 @@ final class ZiggyParkLink {
         var velocity: SIMD2<Float>
         var heading: Float
         var look: ParkLook
+        var mood: ParkMood
         var name: String
         /// Ziggy, if their phone is the one walking him.
         var ziggy: Motion?
@@ -69,6 +70,7 @@ final class ZiggyParkLink {
         var velocity: SIMD2<Float>
         var heading: Float
         var look: ParkLook
+        var mood: ParkMood
         var name: String
         var ziggy: Motion?
         var lead: String?
@@ -82,6 +84,9 @@ final class ZiggyParkLink {
     let myID = FirestoreManager.shared.currentDeviceID
     private(set) var partnerID: String?
     private var latest: Report?
+
+    /// Roughly how long Firestore takes at its quickest, phone to phone.
+    private static let quickestDelivery: Double = 0.12
 
     /// The smallest (arrival time − send time) seen lately: the clock
     /// difference between the phones plus the quickest the network has been.
@@ -114,7 +119,7 @@ final class ZiggyParkLink {
     private var walkersListener: ListenerRegistration?
     private var trickListener: ListenerRegistration?
 
-    private var lastSent: (position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion?, lead: String?, at: Double)?
+    private var lastSent: (position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, mood: ParkMood, ziggy: Motion?, lead: String?, at: Double)?
     private var lastTrickID: String?
     private var lastSurpriseID: String?
     private var notesListener: ListenerRegistration?
@@ -223,7 +228,7 @@ final class ZiggyParkLink {
 
     /// Sends where you are — and Ziggy, when this phone is the one walking
     /// him, so your partner sees the very same Ziggy.
-    func send(position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, ziggy: Motion? = nil,
+    func send(position: SIMD2<Float>, velocity: SIMD2<Float>, heading: Float, look: ParkLook, mood: ParkMood, ziggy: Motion? = nil,
               lead: String? = nil, tied: Bool = false) {
         guard let walkers else { return }
         let now = Self.clock
@@ -247,9 +252,9 @@ final class ZiggyParkLink {
                     || simd_distance(was.velocity, z.velocity) > 0.25
                     || abs(Self.wrap(was.heading - z.heading)) > 0.35
             }
-            if !drifted && !turned && !changedPace && !ziggyChanged && last.look == look && last.lead == lead && !due { return }
+            if !drifted && !turned && !changedPace && !ziggyChanged && last.look == look && last.mood == mood && last.lead == lead && !due { return }
         }
-        lastSent = (position, velocity, heading, look, ziggy, lead, now)
+        lastSent = (position, velocity, heading, look, mood, ziggy, lead, now)
         if now - lastPresence > 15 { sayPresence(here: true) }
 
         var fields: [String: Any] = [
@@ -257,6 +262,7 @@ final class ZiggyParkLink {
             "vx": velocity.x, "vz": velocity.y,
             "h": heading,
             "look": look.rawValue,
+            "mood": mood.rawValue,
             "name": UserManager.shared.username,
             "here": true,
             "t": now,
@@ -334,17 +340,21 @@ final class ZiggyParkLink {
         // Their clock, now, minus the quickest the network ever delivers.
         let gap = clockGaps.min() ?? (report.heardAt - report.sentAt)
         let theirNow = now - gap
-        // Carried on along their velocity, but not forever: they report at
-        // least once a second while moving, so anything older is stale.
-        // Capped well short of a full second: carried on further than that,
-        // anyone who has just slowed down shoots on ahead before snapping
-        // back, and looks quicker than they are.
-        let ahead = Float(min(0.5, max(0, theirNow - report.sentAt)))
+        // Carried on along their velocity, but not forever. While walking
+        // straight they report only once a second, so this has to last past
+        // that: stopping any sooner freezes them for the rest of each second,
+        // then they jump to catch up. It can't overshoot by much, because
+        // slowing or stopping sends a report straight away.
+        //
+        // `gap` still has the network's quickest delivery in it, which can't
+        // be told apart from the clock difference, so that much is added back.
+        let ahead = Float(min(1.25, max(0, theirNow - report.sentAt) + Self.quickestDelivery))
         return Walker(
             position: report.position + report.velocity * ahead,
             velocity: report.velocity,
             heading: report.heading,
             look: report.look,
+            mood: report.mood,
             name: report.name,
             ziggy: report.ziggy.map { Motion(position: $0.position + $0.velocity * ahead, velocity: $0.velocity, heading: $0.heading) },
             lead: report.lead,
@@ -373,6 +383,7 @@ final class ZiggyParkLink {
                 velocity: [Self.number(p["vx"]), Self.number(p["vz"])],
                 heading: Self.number(p["h"]),
                 look: ParkLook(rawValue: p["look"] as? Int ?? 1) ?? .sundress,
+                mood: ParkMood(rawValue: p["mood"] as? String ?? "") ?? .normal,
                 name: p["name"] as? String ?? "",
                 ziggy: p["zx"] == nil ? nil : Motion(position: [Self.number(p["zx"]), Self.number(p["zz"])],
                                                      velocity: [Self.number(p["zvx"]), Self.number(p["zvz"])],

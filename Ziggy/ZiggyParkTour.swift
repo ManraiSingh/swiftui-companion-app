@@ -18,7 +18,7 @@ import SwiftUI
 
 /// A control the tour points at.
 enum ParkTip: Hashable {
-    case stick, emotes, tricks, voice, note, surprise
+    case stick, moods, moves, tricks, voice, note, surprise
 }
 
 struct ParkTipAnchors: PreferenceKey {
@@ -52,8 +52,10 @@ struct ParkTourStep {
                          text: "Push this pad to walk and Ziggy trots along beside you. Push it right up and hold to keep walking on your own."),
             ParkTourStep(tip: nil, art: .look, title: "Look around",
                          text: "Drag anywhere on the park to turn and look, and pinch to zoom in close."),
-            ParkTourStep(tip: .emotes, art: .moves, title: "Say it with a move",
-                         text: "Tap yourself to wave, dance, bow or send some love."),
+            ParkTourStep(tip: .moods, art: .moods, title: "How are you feeling?",
+                         text: "Tap your face to show if you're happy, in love, sad or angry. It stays on your face, and your partner sees it."),
+            ParkTourStep(tip: .moves, art: .moves, title: "Say it with a move",
+                         text: "Tap the hand to wave, dance, bow or blow a kiss."),
             ParkTourStep(tip: .tricks, art: .play, title: "Play with Ziggy",
                          text: "Tap Ziggy to pet him, give him a treat, play catch, or ask for a trick."),
         ]
@@ -229,7 +231,7 @@ struct ParkTourOverlay: View {
 @available(iOS 18.0, *)
 struct ParkTourArt: View {
 
-    enum Scene { case walk, look, moves, play, talk, note, surprise }
+    enum Scene { case walk, look, moods, moves, play, talk, note, surprise }
 
     let scene: Scene
     let look: ParkLook
@@ -257,6 +259,8 @@ struct ParkTourArt: View {
                 tree.offset(x: s * 0.24, y: -s * 0.02)
                 ParkChibi(look: look, eyes: .open, mouth: .smile, size: s * 0.5)
                     .offset(x: -s * 0.2, y: s * 0.16)
+            case .moods:
+                ParkChibi(look: look, mood: .love, size: s * 0.8)
             case .moves:
                 ParkEmoteIllustration(emote: .wave, look: look, size: s * 0.86)
             case .play:
@@ -292,7 +296,7 @@ struct ParkTourArt: View {
         switch scene {
         case .walk, .surprise: return Color(red: 1, green: 0.9, blue: 0.82)
         case .look: return Color(red: 0.8, green: 0.91, blue: 0.98)
-        case .moves, .note: return Color(red: 1, green: 0.88, blue: 0.92)
+        case .moods, .moves, .note: return Color(red: 1, green: 0.88, blue: 0.92)
         case .play: return Color(red: 0.87, green: 0.94, blue: 0.8)
         case .talk: return Color(red: 0.91, green: 0.87, blue: 0.99)
         }

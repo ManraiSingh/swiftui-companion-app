@@ -744,6 +744,12 @@ final class ZiggyParkWorld {
     // MARK: Emotes
 
     /// Does an emote, and your partner sees you do it.
+    /// How you are feeling: on your face, and on your partner's screen.
+    func feel(_ next: ParkMood) {
+        mood = next
+        me.feel(next)
+    }
+
     func emote(_ e: ParkEmote) {
         guard !choosing else { return }
         me.play(e)
@@ -820,16 +826,23 @@ final class ZiggyParkWorld {
                 partnerMove.heading = there.heading
             }
             partner.root.isEnabled = true
-            // Eased onto where they are, closely: their own phone has already
+            // Walked along at their own speed, and eased onto where they
+            // are only to take out what's left. Easing alone always trails
+            // behind someone who is moving. Their own phone has already
             // walked them round every tree and lamp post, so there is nothing
             // to steer round here, only network jitter to smooth out.
-            let pull = min(1, dt * 9)
-            partnerMove.position += (target - partnerMove.position) * pull
             partnerMove.velocity = SIMD3(there.velocity.x, 0, there.velocity.y)
+            partnerMove.position += partnerMove.velocity * dt
+            partnerMove.position += (target - partnerMove.position) * min(1, dt * 7)
             if !partnerMove.faceTravel(dt: dt) {
                 partnerMove.turn(toward: there.heading, rate: 8, dt: dt)
             }
             partner.wear(there.look)
+            partner.feel(there.mood)
+            if there.mood != partnerMood {
+                partnerMood = there.mood
+                onPartnerMood?(there.mood, there.look)
+            }
 
             // Two people in the same outfit: one of you swaps, decided by
             // device ID so both phones agree on who.
@@ -878,6 +891,7 @@ final class ZiggyParkWorld {
             velocity: [meMove.velocity.x, meMove.velocity.z],
             heading: meMove.heading,
             look: myLook,
+            mood: mood,
             ziggy: walkingZiggy && partnerWasHere
                 ? .init(position: [ziggyMove.position.x, ziggyMove.position.z],
                         velocity: [ziggyMove.velocity.x, ziggyMove.velocity.z],
@@ -916,8 +930,9 @@ final class ZiggyParkWorld {
                 ziggyMove.position = target
                 ziggyMove.heading = theirs.heading
             }
-            ziggyMove.position += (target - ziggyMove.position) * min(1, dt * 9)
             ziggyMove.velocity = SIMD3(theirs.velocity.x, 0, theirs.velocity.y)
+            ziggyMove.position += ziggyMove.velocity * dt
+            ziggyMove.position += (target - ziggyMove.position) * min(1, dt * 7)
             if !ziggyMove.faceTravel(dt: dt) {
                 ziggyMove.turn(toward: theirs.heading, rate: 8, dt: dt)
             }
@@ -1351,15 +1366,22 @@ struct ZiggyParkView: View {
 
             VStack(spacing: 10) {
                 HStack(alignment: .top) {
-                    roundButton("xmark") { dismiss() }
+                    VStack(alignment: .leading, spacing: 10) {
+                        roundButton("xmark") { dismiss() }
+                        ParkMoveMenu(look: picked, perform: { world.emote($0) }, open: $moveMenuOpen)
+                            .parkTip(.moves)
+                    }
                     Spacer()
                     companyChip
                         .padding(.top, 8)
                     Spacer()
                     VStack(alignment: .trailing, spacing: 10) {
-                        ParkEmoteMenu(look: picked) { world.emote($0) }
-                            .parkTip(.emotes)
-                            .zIndex(2)
+                        ParkMoodMenu(look: picked, mood: mood, feel: { next in
+                            mood = next
+                            world.feel(next)
+                        }, open: $moodMenuOpen)
+                        .parkTip(.moods)
+                        .zIndex(2)
                         ParkTrickMenu { world.perform($0) } play: { world.playWithZiggy($0) }
                             .parkTip(.tricks)
                             .zIndex(1)
@@ -1391,6 +1413,14 @@ struct ZiggyParkView: View {
             .padding(.top, 4)
             .opacity(choosing ? 0 : 1)
             .allowsHitTesting(!choosing)
+            // Over the banners below while a menu is open, and one at a time.
+            .zIndex(moodMenuOpen || moveMenuOpen ? 1 : 0)
+            .onChange(of: moodMenuOpen) { _, open in
+                if open { withAnimation(.spring(duration: 0.3)) { moveMenuOpen = false } }
+            }
+            .onChange(of: moveMenuOpen) { _, open in
+                if open { withAnimation(.spring(duration: 0.3)) { moodMenuOpen = false } }
+            }
 
             if choosing && loaded {
                 ParkChooseCard(picked: picked) { look in
@@ -1571,10 +1601,15 @@ struct ZiggyParkView: View {
             case .together(let name): return ("heart.fill", name.isEmpty ? "Walking together" : "\(name) is here")
             }
         }()
-        return Label(text, systemImage: symbol)
-            .font(.system(size: 12, weight: .bold, design: .rounded))
-            .foregroundStyle(Color(red: 0.93, green: 0.36, blue: 0.53))
-            .lineLimit(1)
+        return HStack(spacing: 5) {
+            Label(text, systemImage: symbol)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.93, green: 0.36, blue: 0.53))
+                .lineLimit(1)
+            if case .together = company, let partnerFace, partnerFace.mood != .normal {
+                ParkChibi(look: partnerFace.look, mood: partnerFace.mood, size: 20)
+            }
+        }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(.white.opacity(0.85), in: Capsule())

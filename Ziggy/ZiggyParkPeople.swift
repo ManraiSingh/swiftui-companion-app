@@ -42,6 +42,33 @@ enum ParkLook: Int, CaseIterable {
 /// Little things to do with yourself while you stand about. Each is made
 /// only of joints turning — arms, elbows, waist, head — so nothing ever
 /// stretches out of shape; they ease in and out of whatever you were doing.
+/// How someone is feeling. Stays on their face until they change it, and
+/// their partner sees it too.
+enum ParkMood: String, CaseIterable {
+    case normal, happy, love, sad, angry
+
+    var title: String {
+        switch self {
+        case .normal: return "Normal"
+        case .happy: return "Happy"
+        case .love: return "Love"
+        case .sad: return "Sad"
+        case .angry: return "Angry"
+        }
+    }
+
+    /// Finishes "… is feeling".
+    var word: String {
+        switch self {
+        case .normal: return "okay"
+        case .happy: return "happy"
+        case .love: return "the love"
+        case .sad: return "sad"
+        case .angry: return "angry"
+        }
+    }
+}
+
 enum ParkEmote: String, CaseIterable {
     case wave, love, yay, dance, bow
     /// Playing with Ziggy: a pat on the head, a treat held out, a ball thrown.
@@ -53,7 +80,7 @@ enum ParkEmote: String, CaseIterable {
     var title: String {
         switch self {
         case .wave: return "Wave"
-        case .love: return "Love"
+        case .love: return "Kiss"
         case .yay: return "Yay!"
         case .dance: return "Dance"
         case .bow: return "Bow"
@@ -139,6 +166,10 @@ final class ParkPerson3D {
     private var eyes: [Entity] = []
     private var skirt: Entity?
     private var longHair: Entity?
+    /// Each mood's brows and mouth, with only the current one showing.
+    private var moodFaces: [ParkMood: Entity] = [:]
+    private var tear: Entity?
+    private var mood: ParkMood = .normal
 
     private var clock: Float = .random(in: 0...10)
     private var phase: Float = 0
@@ -171,6 +202,19 @@ final class ParkPerson3D {
         emoteTime = max(emoteTime, emote.duration - 0.3)
     }
 
+    /// Changes the expression. Stays until changed, outfit swaps included.
+    func feel(_ next: ParkMood) {
+        guard next != mood else { return }
+        mood = next
+        showMood()
+    }
+
+    private func showMood() {
+        for (face, parts) in moodFaces { parts.isEnabled = face == mood }
+        // Happy and loved-up faces have their own eyes.
+        for eye in eyes { eye.isEnabled = mood != .happy && mood != .love }
+    }
+
     init(look: ParkLook) {
         self.look = look
         root.addChild(body)
@@ -183,7 +227,7 @@ final class ParkPerson3D {
         look = next
         body.children.removeAll()
         thighs = []; knees = []; ankles = []; shoulders = []; elbows = []; eyes = []
-        skirt = nil; longHair = nil
+        skirt = nil; longHair = nil; moodFaces = [:]; tear = nil
         build()
         onRebuild?(root)
     }
@@ -448,21 +492,89 @@ final class ParkPerson3D {
             }
             eyes.append(eye)
 
-            face.attach(ParkMesh.sphere(0.02 * k), ParkPaint.soft(p.hair, sheen: 0.2), at: [0.068 * k * side, 0.058 * k, 0.152 * k],
-                        scale: [1.2, 0.22, 0.4], turn: spin(-0.12 * side, [0, 0, 1]))
             face.attach(ParkMesh.sphere(0.03 * k), ParkPaint.soft(p.blush, sheen: 0), at: [0.112 * k * side, -0.048 * k, 0.126 * k],
                         scale: [1.2, 0.6, 0.35], turn: spin(0.6 * side, [0, 1, 0]))
         }
 
-        // A small smile, turned up at the corners.
+        buildMoods(on: face, p, k)
+        buildHair(on: face, p, k)
+    }
+
+    /// Everything on the face that changes with the mood, one group for each.
+    private func buildMoods(on face: Entity, _ p: Palette, _ k: Float) {
         let lips = ParkPaint.soft(p.mouth, sheen: 0)
-        for step in -3...3 {
-            let x = Float(step) * 0.0075
-            let dip = (1 - (x / 0.024) * (x / 0.024)) * 0.008
-            face.attach(ParkMesh.sphere(0.0045 * k), lips, at: [x * k, (-0.072 - dip) * k, (0.158 - abs(x) * 0.3) * k])
+        let ink = ParkPaint.flat(p.eye)
+        let browPaint = ParkPaint.soft(p.hair, sheen: 0.2)
+
+        func brows(_ on: Entity, tilt: Float, height: Float = 0.058, thick: Float = 0.22) {
+            for side: Float in [-1, 1] {
+                on.attach(ParkMesh.sphere(0.02 * k), browPaint, at: [0.068 * k * side, height * k, 0.152 * k],
+                          scale: [1.2, thick, 0.4], turn: spin(tilt * side, [0, 0, 1]))
+            }
         }
 
-        buildHair(on: face, p, k)
+        /// A mouth drawn as a line of beads; `curve` above zero smiles, below frowns.
+        func mouth(_ on: Entity, curve: Float, y: Float = -0.072, half: Int = 3) {
+            let width = Float(half + 1) * 0.0075
+            for step in -half...half {
+                let x = Float(step) * 0.0075
+                let dip = (1 - (x / width) * (x / width)) * curve
+                on.attach(ParkMesh.sphere(0.0045 * k), lips, at: [x * k, (y - dip) * k, (0.158 - abs(x) * 0.3) * k])
+            }
+        }
+
+        // As they have always looked: a small smile, turned up at the corners.
+        let normal = face.joint(at: .zero)
+        brows(normal, tilt: -0.12)
+        mouth(normal, curve: 0.008)
+        moodFaces[.normal] = normal
+
+        // Eyes squeezed shut into two arches, and a big open smile.
+        let happy = face.joint(at: .zero)
+        brows(happy, tilt: -0.12, height: 0.07)
+        for side: Float in [-1, 1] {
+            for step in -4...4 {
+                let u = Float(step) / 4
+                happy.attach(ParkMesh.sphere(0.0062 * k), ink,
+                             at: [(0.068 * side + u * 0.03) * k, (0.002 + (1 - u * u) * 0.024) * k, 0.156 * k])
+            }
+        }
+        happy.attach(ParkMesh.sphere(0.03 * k), ParkPaint.soft(UIColor(0x8E2F42), sheen: 0), at: [0, -0.08 * k, 0.15 * k], scale: [0.9, 0.62, 0.25])
+        happy.attach(ParkMesh.sphere(0.017 * k), ParkPaint.soft(UIColor(0xF58B9A), sheen: 0), at: [0, -0.09 * k, 0.155 * k], scale: [0.9, 0.5, 0.2])
+        moodFaces[.happy] = happy
+
+        // Heart eyes, a wider smile, rosier cheeks.
+        let love = face.joint(at: .zero)
+        brows(love, tilt: -0.12, height: 0.068)
+        let heartPaint = ParkPaint.glossy(UIColor(0xFF4F7E), roughness: 0.2)
+        for side: Float in [-1, 1] {
+            let middle: SIMD3<Float> = [0.068 * side * k, -0.004 * k, 0.156 * k]
+            for lobe: Float in [-1, 1] {
+                love.attach(ParkMesh.sphere(0.021 * k), heartPaint, at: middle + [lobe * 0.019 * k, 0.012 * k, 0], scale: [1, 1, 0.4])
+            }
+            love.attach(ParkMesh.box([0.037 * k, 0.037 * k, 0.01 * k]), heartPaint, at: middle + [0, -0.006 * k, 0], turn: spin(.pi / 4, [0, 0, 1]))
+            love.attach(ParkMesh.sphere(0.03 * k), ParkPaint.soft(UIColor(0xF2708A), sheen: 0), at: [0.112 * k * side, -0.048 * k, 0.129 * k],
+                        scale: [1.25, 0.65, 0.35], turn: spin(0.6 * side, [0, 1, 0]))
+        }
+        mouth(love, curve: 0.012, half: 4)
+        moodFaces[.love] = love
+
+        // Brows rising in the middle, a frown, and a tear on its way down.
+        let sad = face.joint(at: .zero)
+        brows(sad, tilt: -0.45, height: 0.064)
+        mouth(sad, curve: -0.01, y: -0.086)
+        let drop = sad.joint(at: [0.082 * k, -0.04 * k, 0.158 * k])
+        drop.attach(ParkMesh.sphere(0.014 * k), ParkPaint.glossy(UIColor(0x9FDBFF), roughness: 0.05), scale: [0.75, 1.1, 0.5])
+        tear = drop
+        moodFaces[.sad] = sad
+
+        // Thick brows pulled down in the middle, and a tight frown.
+        let angry = face.joint(at: .zero)
+        brows(angry, tilt: 0.5, height: 0.046, thick: 0.34)
+        mouth(angry, curve: -0.012, y: -0.086, half: 2)
+        moodFaces[.angry] = angry
+
+        showMood()
     }
 
     private func buildHair(on face: Entity, _ p: Palette, _ k: Float) {
@@ -657,7 +769,7 @@ final class ParkPerson3D {
         let towards: Float = holding * (holdingArm == 1 ? -0.35 : 0.35)
         head.orientation =
             spin(sin(clock * 0.37) * 0.25 * (1 - w) * (1 - holding) + 0.05 * sin(phase) * w + towards, [0, 1, 0])
-            * spin(sin(clock * 0.53) * 0.05 * (1 - w) + sin(2 * phase) * 0.02 * w, [1, 0, 0])
+            * spin(sin(clock * 0.53) * 0.05 * (1 - w) + sin(2 * phase) * 0.02 * w + (mood == .sad ? 0.16 : 0), [1, 0, 0])
 
         skirt?.orientation = spin(0.06 * sin(2 * phase) * w, [1, 0, 0]) * spin(-0.05 * sin(phase) * w, [0, 0, 1])
         longHair?.orientation = spin(0.1 * w + 0.04 * sin(2 * phase + 0.6) * w + 0.015 * sin(clock), [1, 0, 0])
@@ -665,6 +777,13 @@ final class ParkPerson3D {
         if clock > nextBlink + 0.13 { nextBlink = clock + .random(in: 2.5...5.5) }
         let blinking = clock > nextBlink
         for eye in eyes { eye.scale = [1, blinking ? 0.1 : 1, 1] }
+
+        // The tear rolls down the cheek and starts again.
+        if let tear {
+            let fall = (clock * 0.45).truncatingRemainder(dividingBy: 1)
+            tear.position.y = (-0.04 - fall * 0.075) * size
+            tear.scale = .init(repeating: 1 - fall * fall)
+        }
 
         applyEmote(dt)
     }

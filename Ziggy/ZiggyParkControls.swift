@@ -302,12 +302,15 @@ struct ParkHeartShape: Shape {
 @available(iOS 18.0, *)
 struct ParkChibi: View {
 
-    enum Eyes { case open, happy, closed }
-    enum Mouth { case smile, open }
+    enum Eyes { case open, happy, closed, hearts }
+    enum Mouth { case smile, open, frown }
+    enum Brows { case none, sad, angry }
 
     let look: ParkLook
     var eyes: Eyes = .open
     var mouth: Mouth = .smile
+    var brows: Brows = .none
+    var tear = false
     var shoulders = false
     var size: CGFloat = 40
 
@@ -371,6 +374,21 @@ struct ParkChibi: View {
             }
             .offset(y: s * 0.22)
             mouthShape(s).offset(y: s * 0.27)
+            if brows != .none {
+                HStack(spacing: s * 0.22) {
+                    ForEach([-1.0, 1.0], id: \.self) { side in
+                        Capsule().fill(hair)
+                            .frame(width: s * 0.14, height: s * (brows == .angry ? 0.045 : 0.03))
+                            .rotationEffect(.degrees(side * (brows == .angry ? 24 : -22)))
+                    }
+                }
+                .offset(y: s * -0.005)
+            }
+            if tear {
+                Ellipse().fill(Color(red: 0.5, green: 0.8, blue: 1))
+                    .frame(width: s * 0.08, height: s * 0.13)
+                    .offset(x: s * 0.2, y: s * 0.24)
+            }
         }
         .frame(width: s, height: s)
     }
@@ -395,6 +413,8 @@ struct ParkChibi: View {
             }
             .stroke(ink, style: StrokeStyle(lineWidth: max(1.5, s * 0.035), lineCap: .round))
             .frame(width: s * 0.13, height: s * 0.08)
+        case .hearts:
+            ParkHeartShape().fill(parkPink).frame(width: s * 0.17, height: s * 0.16)
         }
     }
 
@@ -411,6 +431,27 @@ struct ParkChibi: View {
             Ellipse().fill(Color(red: 0.77, green: 0.32, blue: 0.37))
                 .frame(width: s * 0.13, height: s * 0.1)
                 .overlay(alignment: .bottom) { Ellipse().fill(Color(red: 1, green: 0.6, blue: 0.65)).frame(width: s * 0.08, height: s * 0.04) }
+        case .frown:
+            Path { p in
+                p.move(to: CGPoint(x: 0, y: s * 0.05))
+                p.addQuadCurve(to: CGPoint(x: s * 0.12, y: s * 0.05), control: CGPoint(x: s * 0.06, y: -s * 0.02))
+            }
+            .stroke(Color(red: 0.77, green: 0.32, blue: 0.37), style: StrokeStyle(lineWidth: max(1.2, s * 0.03), lineCap: .round))
+            .frame(width: s * 0.12, height: s * 0.05)
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+extension ParkChibi {
+    /// The face that goes with a mood.
+    init(look: ParkLook, mood: ParkMood, size: CGFloat) {
+        switch mood {
+        case .normal: self.init(look: look, size: size)
+        case .happy: self.init(look: look, eyes: .happy, mouth: .open, size: size)
+        case .love: self.init(look: look, eyes: .hearts, mouth: .smile, size: size)
+        case .sad: self.init(look: look, mouth: .frown, brows: .sad, tear: true, size: size)
+        case .angry: self.init(look: look, mouth: .frown, brows: .angry, size: size)
         }
     }
 }
@@ -512,75 +553,157 @@ struct ParkBoneShape: Shape {
 
 // MARK: - Emotes
 
-/// A smiley in the corner. Tap it and a row of emotes slides out beside
-/// it; pick one and you do it, and the row tucks itself away again.
+/// You, in the corner, wearing your mood. Tap for a row of moods; the one
+/// you pick stays on your face, and your partner sees it.
 @available(iOS 18.0, *)
-struct ParkEmoteMenu: View {
+struct ParkMoodMenu: View {
 
     let look: ParkLook
-    let perform: (ParkEmote) -> Void
-    @State private var open = false
+    let mood: ParkMood
+    let feel: (ParkMood) -> Void
+    @Binding var open: Bool
 
     var body: some View {
         Button {
             withAnimation(.spring(duration: 0.35, bounce: 0.3)) { open.toggle() }
         } label: {
-            ParkChibi(look: look, eyes: .happy, mouth: .open, size: 34)
+            ParkChibi(look: look, mood: mood, size: 34)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(.white.opacity(0.94)))
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: open ? "chevron.right" : "chevron.left")
-                        .font(.system(size: 8, weight: .black))
-                        .foregroundStyle(.white)
-                        .frame(width: 16, height: 16)
-                        .background(parkPink, in: Circle())
-                        .offset(x: 2, y: 2)
-                }
+                .overlay(alignment: .bottomTrailing) { parkMenuBadge(open ? "chevron.right" : "chevron.left") }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Emotes")
+        .accessibilityLabel("Your mood: \(mood.title)")
         // Floats out to the left over the screen, so it moves nothing.
-        .overlay(alignment: .trailing) {
+        .overlay(alignment: .topTrailing) {
             if open {
-                row
-                    .fixedSize()
-                    .offset(x: -54)
-                    .transition(.scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
+                ParkMenuRow(title: "How are you feeling?") {
+                    ForEach(ParkMood.allCases, id: \.self) { choice in
+                        Button {
+                            feel(choice)
+                            withAnimation(.spring(duration: 0.3)) { open = false }
+                        } label: {
+                            ParkMenuChoice(title: choice.title, chosen: choice == mood) {
+                                ParkChibi(look: look, mood: choice, size: 30)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(choice.title)
+                        .accessibilityAddTraits(choice == mood ? .isSelected : [])
+                    }
+                }
+                .offset(x: -54)
+                .transition(.scale(scale: 0.4, anchor: .topTrailing).combined(with: .opacity))
             }
         }
     }
+}
 
-    private var row: some View {
-        HStack(spacing: 4) {
-            ForEach(ParkEmote.menu, id: \.self) { emote in
-                Button {
-                    perform(emote)
-                    withAnimation(.spring(duration: 0.3)) { open = false }
-                } label: {
-                    VStack(spacing: 1) {
-                        ParkEmoteIllustration(emote: emote, look: look, size: 30)
-                            .frame(width: 38, height: 38)
-                            .background(Circle().fill(parkPink.opacity(0.1)))
-                        Text(emote.title)
-                            .font(.system(size: 9, weight: .heavy, design: .rounded))
-                            .foregroundStyle(parkPink)
+/// A hand, under the close button. Tap for a row of moves; the one you pick
+/// you do once, and the row tucks itself away again.
+@available(iOS 18.0, *)
+struct ParkMoveMenu: View {
+
+    let look: ParkLook
+    let perform: (ParkEmote) -> Void
+    @Binding var open: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(duration: 0.35, bounce: 0.3)) { open.toggle() }
+        } label: {
+            Image(systemName: "hand.wave.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(parkPink)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.white.opacity(0.94)))
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                .overlay(alignment: .bottomTrailing) { parkMenuBadge(open ? "chevron.left" : "chevron.right") }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Moves")
+        // Floats out to the right over the screen, so it moves nothing.
+        .overlay(alignment: .topLeading) {
+            if open {
+                ParkMenuRow(title: "Do a move") {
+                    ForEach(ParkEmote.menu, id: \.self) { emote in
+                        Button {
+                            perform(emote)
+                            withAnimation(.spring(duration: 0.3)) { open = false }
+                        } label: {
+                            ParkMenuChoice(title: emote.title, chosen: false) {
+                                ParkEmoteIllustration(emote: emote, look: look, size: 30)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(emote.title)
                     }
-                    .frame(width: 44)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(emote.title)
+                .offset(x: 50)
+                .transition(.scale(scale: 0.4, anchor: .topLeading).combined(with: .opacity))
             }
         }
-        .padding(.vertical, 6)
+    }
+}
+
+/// The small chevron on a menu button, pointing where its menu opens.
+@available(iOS 18.0, *)
+private func parkMenuBadge(_ symbol: String) -> some View {
+    Image(systemName: symbol)
+        .font(.system(size: 8, weight: .black))
+        .foregroundStyle(.white)
+        .frame(width: 16, height: 16)
+        .background(parkPink, in: Circle())
+        .offset(x: 2, y: 2)
+}
+
+/// The glass panel a menu's choices sit in, with its name along the top.
+@available(iOS 18.0, *)
+private struct ParkMenuRow<Choices: View>: View {
+
+    let title: String
+    @ViewBuilder let choices: Choices
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Text(title)
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(parkPink)
+            HStack(spacing: 4) { choices }
+        }
+        .padding(.vertical, 8)
         .padding(.horizontal, 6)
         .background(
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule(style: .continuous).fill(.white.opacity(0.65)))
-                .overlay(Capsule(style: .continuous).stroke(.white.opacity(0.9), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.white.opacity(0.65)))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(.white.opacity(0.9), lineWidth: 1))
                 .shadow(color: parkPink.opacity(0.18), radius: 10, y: 4)
         )
+        .fixedSize()
+    }
+}
+
+/// One choice in a menu: its picture in a circle, and its name.
+@available(iOS 18.0, *)
+private struct ParkMenuChoice<Picture: View>: View {
+
+    let title: String
+    let chosen: Bool
+    @ViewBuilder let picture: Picture
+
+    var body: some View {
+        VStack(spacing: 1) {
+            picture
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(parkPink.opacity(chosen ? 0.28 : 0.1)))
+                .overlay(Circle().stroke(parkPink, lineWidth: chosen ? 1.5 : 0))
+            Text(title)
+                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .foregroundStyle(parkPink)
+        }
+        .frame(width: 44)
     }
 }
 
@@ -755,7 +878,7 @@ struct ParkVoicePanel: View {
                             .background(voice.muted ? coral : parkPink, in: Circle())
                             .offset(x: 2, y: 2)
                     }
-                Text(voice.state == .live ? "Live" : "Waiting…")
+                Text(voice.state == .live ? "Live" : voice.state == .cantConnect ? "Can't connect" : "Waiting…")
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
