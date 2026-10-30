@@ -19,6 +19,9 @@ import SwiftUI
 
 struct BouquetBuilderView: View {
 
+    /// Called once a bouquet has really gone.
+    var onSent: () -> Void = {}
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var bouquet = Bouquet()
@@ -865,6 +868,7 @@ struct BouquetBuilderView: View {
                 hasNote: !bouquet.letter.isEmpty,
                 flowers: bouquet.stems.count
             )
+            onSent()
 
             withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { sent = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) { dismiss() }

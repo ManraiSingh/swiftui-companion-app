@@ -885,6 +885,17 @@ class PetViewModel: ObservableObject {
         )
     }
 
+    /// Love earned away from the home screen. Says how much really counted,
+    /// since the score stops at 100.
+    @discardableResult
+    func addLove(_ points: Int) -> Int {
+        let before = pet.loveScore
+        pet.loveScore = min(100, before + points)
+        pet.lastUpdated = Date()
+        save()
+        return pet.loveScore - before
+    }
+
     func addEvent(title: String, person: String) {
 
         // No local insert here — listenForEvents is the single source of

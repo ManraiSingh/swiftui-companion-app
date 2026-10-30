@@ -78,6 +78,10 @@ final class ZiggyParkWorld {
 
     /// Called with the name of each part of the walk as you arrive in it.
     var onAreaChange: ((String) -> Void)?
+    /// You earned love by walking, this many points.
+    var onWalkLove: ((Int) -> Void)?
+    /// Your partner's mood changed, and how they look, to show it with.
+    var onPartnerMood: ((ParkMood, ParkLook) -> Void)?
     private var area = ""
 
     /// Called when a surprise starts, yours or your partner's.
@@ -197,6 +201,16 @@ final class ZiggyParkWorld {
     /// close, otherwise the way the camera is looking.
     private var emoteFacing: Float?
     private var partnerWasHere = false
+
+    // Love for walking: every half minute actually on the move, each reward
+    // bigger than the last, starting again with each walk.
+    static let firstWalkLove = 5
+    private let walkLoveEvery: Float = 30
+    private var walkedFor: Float = 0
+    private var lastWalkTick = Date().timeIntervalSinceReferenceDate
+    private var nextWalkLove = ZiggyParkWorld.firstWalkLove
+    private(set) var mood: ParkMood = .normal
+    private var partnerMood: ParkMood = .normal
     private var company: Company = .solo
 
     private var subscription: EventSubscription?
@@ -808,6 +822,20 @@ final class ZiggyParkWorld {
         meMove.position = scenery.constrain(meMove.position, radius: 0.2)
         meMove.faceTravel(dt: dt)
 
+        // By the real clock, not `dt`: that is capped to keep movement steady,
+        // so a phone running slowly would earn slowly too.
+        let clock = Date().timeIntervalSinceReferenceDate
+        let elapsed = Float(min(0.5, clock - lastWalkTick))
+        lastWalkTick = clock
+        if meMove.speed > 0.2 {
+            walkedFor += elapsed
+            if walkedFor >= walkLoveEvery {
+                walkedFor -= walkLoveEvery
+                onWalkLove?(nextWalkLove)
+                nextWalkLove += ZiggyParkWorld.firstWalkLove
+            }
+        }
+
         let here = ParkCity.area(at: [meMove.position.x, meMove.position.z])
         if here != area {
             area = here
@@ -1292,18 +1320,36 @@ struct ZiggyParkView: View {
     @State private var loaded = false
     /// Which step of the first-walk tour is showing, if any.
     @State private var tourStep: Int?
+    @State private var mood: ParkMood = .normal
+    @State private var moodMenuOpen = false
+    @State private var moveMenuOpen = false
+    /// Your partner's mood and look, once they've shown one.
+    @State private var partnerFace: (mood: ParkMood, look: ParkLook)?
     @AppStorage("parkTourSeen") private var tourSeen = false
 
     private let pink = Color(red: 0.93, green: 0.36, blue: 0.53)
 
-    init(world: ZiggyParkWorld = ZiggyParkWorld()) {
+    /// Takes points earned walking; gives back how many really counted.
+    private let earnLove: (Int) -> Int
+
+    init(world: ZiggyParkWorld = ZiggyParkWorld(), earnLove: @escaping (Int) -> Int = { $0 }) {
         _world = State(initialValue: world)
+        self.earnLove = earnLove
     }
 
     var body: some View {
         ZStack {
             RealityView { content in
                 world.onCompanyChange = { next in company = next }
+                world.onWalkLove = { points in
+                    let gained = earnLove(points)
+                    if gained > 0 { show("Lovely walk! +\(gained) love") }
+                }
+                world.onPartnerMood = { next, look in
+                    partnerFace = (next, look)
+                    guard next != .normal else { return }
+                    show("\(partnerName ?? "Your love") is feeling \(next.word)")
+                }
                 world.onAreaChange = { name in
                     withAnimation(.easeOut(duration: 0.4)) { areaBanner = name }
                     Task {
