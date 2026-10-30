@@ -8,15 +8,22 @@
 //  little scene: Fuji far off, a lily pond with a torii standing in it,
 //  cherry trees, a path winding off into it, and a string of paper lanterns
 //  overhead. On a light theme it is a sunny afternoon, petals drifting
-//  down. On a dark theme it is golden evening: the sun setting beside Fuji,
-//  pink clouds, the lanterns lit. When Ziggy is asleep it is night: stars
-//  and a moon on the water, fireflies. When Ziggy is sad it rains.
+//  down, turning to golden evening at six. On a dark theme it is golden
+//  evening all day: the sun setting beside Fuji, pink clouds, the lanterns
+//  lit. From ten until morning, while Ziggy sleeps, it is night on both:
+//  stars and a moon on the water, fireflies. When Ziggy is sad it rains.
+//
+//  It sits on the home screen for as long as the app is open, so it is
+//  drawn in two layers: everything that stays still once, and only the
+//  little that moves — clouds, lanterns, petals — over it, slowly. `paused`
+//  stops even that whenever the card can't be seen.
 //
 //  When your partner is out walking in the park right now, they appear as a
 //  little figure on the path, so you can see them there from home.
 //
-//  `ParkPresence` is what knows that: it listens to the same walkers your
-//  phone writes to in the park.
+//  `ParkPresence` is what knows that, from the small presence note your
+//  phone leaves while you walk — not the walkers themselves, which change
+//  up to eight times a second, each one a read paid for on this phone.
 //
 
 import Combine
@@ -35,12 +42,15 @@ struct HomeParkScene: View {
     var raining = false
     /// Your partner is walking in the park right now.
     var partnerWalking = false
+    /// The card can't be seen, or shouldn't move: hold still.
+    var paused = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            Canvas { context, size in
-                draw(&context, size, t: t)
+        ZStack {
+            Canvas { context, size in drawStill(&context, size) }
+            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: paused)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                Canvas { context, size in drawMoving(&context, size, t: t) }
             }
         }
     }
@@ -62,7 +72,8 @@ struct HomeParkScene: View {
         [tone(0x9FD4F5, 0x5E4E91, 0x1B1A4A), tone(0xCDE8F7, 0xD77A9E, 0x342F78), tone(0xFFE2C6, 0xFFB37A, 0x6B57A8)]
     }
 
-    private func draw(_ c: inout GraphicsContext, _ size: CGSize, t: Double) {
+    /// Everything that stays still, drawn once.
+    private func drawStill(_ c: inout GraphicsContext, _ size: CGSize) {
         let w = size.width, h = size.height
         func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x * w, y: y * h) }
         let horizon = 0.58
@@ -102,21 +113,12 @@ struct HomeParkScene: View {
                    with: .radialGradient(Gradient(colors: [Color(hex: 0xFFB36B).opacity(0.8), Color(hex: 0xFF8F7A).opacity(0.25), .clear]), center: sun, startRadius: 0, endRadius: sr * 4))
             c.fill(Path(ellipseIn: CGRect(x: sun.x - sr, y: sun.y - sr, width: sr * 2, height: sr * 2)),
                    with: .linearGradient(Gradient(colors: [Color(hex: 0xFFE7A8), Color(hex: 0xFFB45E)]), startPoint: CGPoint(x: sun.x, y: sun.y - sr), endPoint: CGPoint(x: sun.x, y: sun.y + sr)))
-            // Clouds lit from below.
-            for (i, base) in [(0.18, 0.13), (0.55, 0.08)].enumerated() {
-                let drift = (t * 0.004 + Double(i) * 0.37).truncatingRemainder(dividingBy: 1.3) - 0.15
-                cloud(&c, center: p(base.0 + drift, base.1), size: w * 0.11, colour: Color(hex: 0xFFC3A6).opacity(0.9))
-            }
         } else {
-            // The sun, and a couple of slow clouds.
+            // The sun.
             let sun = p(0.84, 0.15), sr = w * 0.055
             c.fill(Path(ellipseIn: CGRect(x: sun.x - sr * 3, y: sun.y - sr * 3, width: sr * 6, height: sr * 6)),
                    with: .radialGradient(Gradient(colors: [Color(hex: 0xFFF1B8).opacity(0.75), .clear]), center: sun, startRadius: 0, endRadius: sr * 3))
             c.fill(Path(ellipseIn: CGRect(x: sun.x - sr, y: sun.y - sr, width: sr * 2, height: sr * 2)), with: .color(Color(hex: 0xFFF4C9)))
-            for (i, base) in [(0.18, 0.13), (0.55, 0.08)].enumerated() {
-                let drift = (t * 0.004 + Double(i) * 0.37).truncatingRemainder(dividingBy: 1.3) - 0.15
-                cloud(&c, center: p(base.0 + drift, base.1), size: w * 0.11)
-            }
         }
 
         // Mount Fuji, far off — framed in the gap between the speech
@@ -195,18 +197,35 @@ struct HomeParkScene: View {
         }
 
         // The pond, with its torii standing in the water.
-        pond(&c, center: p(0.88, 0.67), rx: w * 0.17, ry: h * 0.06, t: t)
+        pond(&c, center: p(0.88, 0.67), rx: w * 0.17, ry: h * 0.06)
         torii(&c, at: p(0.95, 0.655), size: w * 0.075)
+
+        // A big cherry tree framing the left.
+        // Up on the far grass, clear of the words on this side of the card.
+        cherry(&c, at: p(0.03, 0.6), size: w * 0.15)
+
+    }
+
+    /// Everything that moves, over the still park.
+    private func drawMoving(_ c: inout GraphicsContext, _ size: CGSize, t: Double) {
+        let w = size.width, h = size.height
+        func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x * w, y: y * h) }
+
+        // Slow clouds, lit pink from below in the evening.
+        if time != .night {
+            for (i, base) in [(0.18, 0.13), (0.55, 0.08)].enumerated() {
+                let drift = (t * 0.004 + Double(i) * 0.37).truncatingRemainder(dividingBy: 1.3) - 0.15
+                cloud(&c, center: p(base.0 + drift, base.1), size: w * 0.11,
+                      colour: time == .evening ? Color(hex: 0xFFC3A6).opacity(0.9) : .white.opacity(0.92))
+            }
+        }
 
         // Your partner, out walking on the path.
         if partnerWalking {
             let bob = abs(sin(t * 5)) * 2
-            let at = p(0.84, 0.86)
+            let at = p(0.92, 0.92)
             walker(&c, at: CGPoint(x: at.x, y: at.y - bob), size: w * 0.022)
         }
-
-        // A big cherry tree framing the left.
-        cherry(&c, at: p(0.05, 0.66), size: w * 0.15, t: t)
 
         // Paper lanterns strung across the top.
         lanternString(&c, size, t: t)
@@ -274,7 +293,7 @@ struct HomeParkScene: View {
 
     /// A round pond: a pebble rim, the water, lily pads and a flower, and
     /// the light lying on it — the sun's glint, or the moon's reflection.
-    private func pond(_ c: inout GraphicsContext, center: CGPoint, rx: Double, ry: Double, t: Double) {
+    private func pond(_ c: inout GraphicsContext, center: CGPoint, rx: Double, ry: Double) {
         let rim = CGRect(x: center.x - rx * 1.06, y: center.y - ry * 1.12, width: rx * 2.12, height: ry * 2.3)
         c.fill(Path(ellipseIn: rim), with: .color(tone(0xEBDDBF, 0xC9A58A, 0x4E5570)))
         let water = Path(ellipseIn: CGRect(x: center.x - rx, y: center.y - ry, width: rx * 2, height: ry * 2))
@@ -297,9 +316,8 @@ struct HomeParkScene: View {
             }
         } else {
             for k in 0..<3 {
-                let shimmer = 0.5 + 0.5 * sin(t * 1.2 + Double(k) * 2)
                 inner.fill(Path(roundedRect: CGRect(x: center.x - rx * 0.55 + Double(k) * rx * 0.35, y: center.y - ry * 0.5 + Double(k % 2) * ry * 0.35, width: rx * 0.2, height: 2), cornerRadius: 1),
-                           with: .color(.white.opacity(0.4 + 0.4 * shimmer)))
+                           with: .color(.white.opacity(0.65)))
             }
         }
         // Lily pads, each with a little notch cut out.
@@ -339,7 +357,7 @@ struct HomeParkScene: View {
     }
 
 
-    private func cherry(_ c: inout GraphicsContext, at base: CGPoint, size s: Double, t: Double) {
+    private func cherry(_ c: inout GraphicsContext, at base: CGPoint, size s: Double) {
         let bark = tone(0x6E4A3A, 0x5A3A32, 0x3E2C30)
         var trunk = Path()
         trunk.move(to: CGPoint(x: base.x - s * 0.08, y: base.y))
@@ -351,8 +369,7 @@ struct HomeParkScene: View {
         let pinks: [Color] = [tone(0xF7B3CA, 0xB8678A, 0x8F4D72), tone(0xFFD3E1, 0xC97C9C, 0xB0628B), tone(0xF29BB8, 0xA3587B, 0x7A3F62)]
         let puffs: [(Double, Double, Double)] = [(-0.45, -1.0, 0.42), (0.35, -1.05, 0.45), (-0.05, -1.35, 0.5), (0.6, -1.4, 0.35), (-0.6, -1.4, 0.33), (0.1, -0.85, 0.38)]
         for (i, (dx, dy, r)) in puffs.enumerated() {
-            let sway = sin(t * 0.9 + Double(i)) * s * 0.01
-            c.fill(Path(ellipseIn: CGRect(x: base.x + dx * s - r * s + sway, y: base.y + dy * s - r * s, width: r * s * 2, height: r * s * 1.8)),
+            c.fill(Path(ellipseIn: CGRect(x: base.x + dx * s - r * s, y: base.y + dy * s - r * s, width: r * s * 2, height: r * s * 1.8)),
                    with: .color(pinks[i % pinks.count]))
         }
     }
@@ -436,12 +453,15 @@ private extension Color {
 
 // MARK: - Is your partner in the park?
 
-/// Watches the park's walkers, so home knows when your partner is out
-/// walking right now — and who.
+/// Watches the park's presence notes, so home knows when your partner is
+/// out walking right now — and who. Only runs while home is on screen.
 @MainActor
 final class ParkPresence: ObservableObject {
 
     @Published private(set) var partnerName: String?
+
+    /// How long a presence note counts for without being renewed.
+    private static let lifetime: Double = 45
 
     private var listener: ListenerRegistration?
     private var timer: Timer?
@@ -453,7 +473,7 @@ final class ParkPresence: ObservableObject {
         listener = Firestore.firestore()
             .collection("relationships").document(code)
             .collection("games").document("ziggyPark")
-            .collection("walkers")
+            .collection("presence")
             .addSnapshotListener { [weak self] snapshot, _ in
                 guard let snapshot else { return }
                 var walkers: [String: (name: String, sentAt: Double, here: Bool)] = [:]
@@ -467,7 +487,8 @@ final class ParkPresence: ObservableObject {
                     self?.evaluate()
                 }
             }
-        // Someone who stops reporting has left, even without saying so.
+        // Someone whose note stops being renewed has left, even without
+        // saying so.
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.evaluate() }
         }
@@ -478,12 +499,14 @@ final class ParkPresence: ObservableObject {
         listener = nil
         timer?.invalidate()
         timer = nil
+        walkers = [:]
+        partnerName = nil
     }
 
     private func evaluate() {
         let me = FirestoreManager.shared.currentDeviceID
         let now = Date().timeIntervalSince1970
-        let walking = walkers.first { id, w in id != me && w.here && now - w.sentAt < 20 }
+        let walking = walkers.first { id, w in id != me && w.here && now - w.sentAt < Self.lifetime }
         let name = walking.map { $0.value.name.isEmpty ? "Your love" : $0.value.name }
         if name != partnerName { partnerName = name }
     }

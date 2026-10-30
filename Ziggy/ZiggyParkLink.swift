@@ -169,6 +169,17 @@ final class ZiggyParkLink {
 
     // MARK: Lifecycle
 
+    private var lastPresence: Double = 0
+
+    /// A small note saying you are in the park, renewed every so often, for
+    /// the home screen to read. It could read `walkers`, but those change up
+    /// to eight times a second, and every change is a read it would pay for.
+    private func sayPresence(here: Bool) {
+        lastPresence = Self.clock
+        game?.collection("presence").document(myID)
+            .setData(["name": UserManager.shared.username, "here": here, "t": lastPresence])
+    }
+
     func start() {
         let code = RelationshipManager.shared.relationshipCode
         guard !code.isEmpty else { return }
@@ -178,6 +189,7 @@ final class ZiggyParkLink {
             .collection("games").document("ziggyPark")
         self.game = game
         walkers = game.collection("walkers")
+        sayPresence(here: true)
         countLove(code: code)
 
         walkersListener = walkers?.addSnapshotListener { [weak self] snapshot, error in
@@ -198,6 +210,7 @@ final class ZiggyParkLink {
     /// than after the timeout.
     func stop() {
         walkers?.document(myID).setData(["here": false], merge: true)
+        sayPresence(here: false)
         walkersListener?.remove()
         trickListener?.remove()
         notesListener?.remove()
@@ -237,6 +250,7 @@ final class ZiggyParkLink {
             if !drifted && !turned && !changedPace && !ziggyChanged && last.look == look && last.lead == lead && !due { return }
         }
         lastSent = (position, velocity, heading, look, ziggy, lead, now)
+        if now - lastPresence > 15 { sayPresence(here: true) }
 
         var fields: [String: Any] = [
             "x": position.x, "z": position.y,

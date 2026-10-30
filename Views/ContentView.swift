@@ -781,6 +781,9 @@ struct ContentView: View {
     @State private var showLoveInfo = false
     @State private var showPark = false
     @StateObject private var parkPresence = ParkPresence()
+    /// Home is the tab showing. The park on the card only runs while it is.
+    @State private var heroOnScreen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Bouquets the two of you have exchanged, and the one waiting to be seen.
     @State private var bouquets: [Bouquet] = []
@@ -1699,31 +1702,41 @@ struct ContentView: View {
         )
     }
 
-    /// Ziggy is out in the park — the same park you walk in. Sunny on a
-    /// light theme, golden evening with the lanterns lit on a dark one,
-    /// night on both while he sleeps, and raining when he is sad — as his
-    /// room used to. Your partner shows up on the
-    /// path when they are out walking, and tapping the park takes you there.
+    /// Ziggy is out in the park — the same park you walk in, at the time
+    /// of day it is for you (see `parkTime`), raining when he is sad, as his
+    /// room used to. Your partner shows up on the path when they are out
+    /// walking, and tapping the park takes you there.
     private var heroBackground: some View {
         HomeParkScene(time: parkTime, raining: petVM.pet.settledMoodImage == "ziggu_cry",
-                      partnerWalking: parkPresence.partnerName != nil)
+                      partnerWalking: parkPresence.partnerName != nil,
+                      paused: !parkOnScreen || reduceMotion || ProcessInfo.processInfo.isLowPowerModeEnabled)
             .clipShape(RoundedRectangle(cornerRadius: 40))
             .contentShape(RoundedRectangle(cornerRadius: 40))
             .onTapGesture { openPark() }
-            .task { parkPresence.start() }
+            .onAppear { heroOnScreen = true }
+            .onDisappear { heroOnScreen = false }
+            .onChange(of: parkOnScreen, initial: true) { _, showing in
+                if showing { parkPresence.start() } else { parkPresence.stop() }
+            }
+    }
+
+    /// While the park itself is open it knows who's there on its own.
+    private var parkOnScreen: Bool {
+        heroOnScreen && scenePhase == .active && !showPark
     }
 
     private var isNightPark: Bool {
         themes.theme.isDark
     }
 
-    /// Keyed off the pet's settled mood, not whatever face he is pulling,
-    /// so a passing message doesn't flick the sky between evening and night.
-    /// Night while he sleeps, on either theme; otherwise a sunny day on a
-    /// light theme and golden evening on a dark one.
+    /// Night from ten until morning, while Ziggy sleeps. Otherwise golden
+    /// evening on a dark theme; a light one is sunny until six, then evening
+    /// too. The hour rather than his mood, so a hungry Ziggy at midnight
+    /// doesn't bring the sun out.
     private var parkTime: ParkTime {
-        if petVM.pet.settledMoodImage == "ziggy_sleep" { return .night }
-        return isNightPark ? .evening : .day
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour >= 22 || hour < 6 { return .night }
+        return isNightPark || hour >= 18 ? .evening : .day
     }
 
     private func openPark() {
