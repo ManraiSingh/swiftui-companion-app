@@ -97,6 +97,9 @@ enum ZiggyAnalytics {
         case .sticker:     return "sticker"
         case .brush:       return "brush"
         case .general:     return "settings"
+        case .parkMoods:   return "park_moods"
+        case .parkMoves:   return "park_moves"
+        case .playWithZiggy: return "play_with_ziggy"
         }
     }
 }

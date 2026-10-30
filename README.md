@@ -58,7 +58,7 @@ Ziggy is eight separate drawings, one per mood, so an accessory is drawn in code
 A shared prompt each day drawn from a bank of over 200. Answers are revealed once both partners have responded.
 
 **Ziggy Forever**
-An optional subscription covering unlimited books and pages, the full instant archive, saving to Photos, unlimited bouquets, the complete sticker drawer and unwatermarked PDF export. The entitlement is written to the relationship document rather than held on one device, so a single purchase unlocks the app for both partners and neither phone has to reach the billing provider to know the answer.
+An optional subscription covering unlimited books and pages, the full instant archive, saving to Photos, unlimited bouquets, the complete sticker drawer, unwatermarked PDF export, and in the park, playing with Ziggy plus the extra moods and moves. The entitlement is written to the relationship document rather than held on one device, so a single purchase unlocks the app for both partners and neither phone has to reach the billing provider to know the answer.
 
 **Home Screen widget**
 A WidgetKit extension showing Ziggy's current mood in a room that follows the clock, the partner's latest message, or their most recent doodle. Includes a guided walkthrough for adding it, since iOS provides no way to install a widget programmatically.

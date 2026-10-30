@@ -441,6 +441,7 @@ enum PaywallReason {
 
     case books, pages, bouquets, savePhoto, wholeBook, oldInstants
     case sticker, brush, general
+    case parkMoods, parkMoves, playWithZiggy
 
     var title: String {
         switch self {
@@ -453,6 +454,9 @@ enum PaywallReason {
         case .sticker:     return "The whole drawer"
         case .brush:       return "Every pen in the tin"
         case .general:     return "Ziggy Forever"
+        case .parkMoods:   return "Show how you really feel"
+        case .parkMoves:   return "Every move in the park"
+        case .playWithZiggy: return "Play with Ziggy"
         }
     }
 
@@ -476,6 +480,12 @@ enum PaywallReason {
             return "Ziggy Forever opens every brush — fountain, marker, monoline, watercolour and crayon."
         case .general:
             return "Everything you two make together, kept for good."
+        case .parkMoods:
+            return "Ziggy Forever adds Love, Sad and Angry to your faces in the park, for both of you."
+        case .parkMoves:
+            return "Ziggy Forever adds Yay, Dance and Bow to your moves in the park, for both of you."
+        case .playWithZiggy:
+            return "Pet him, give him a treat and play catch with Ziggy Forever, for both of you."
         }
     }
 }

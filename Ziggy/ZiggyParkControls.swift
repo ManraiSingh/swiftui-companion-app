@@ -561,6 +561,10 @@ struct ParkMoodMenu: View {
     let look: ParkLook
     let mood: ParkMood
     let feel: (ParkMood) -> Void
+    /// Ziggy Forever is on, so the paid moods are open.
+    let unlocked: Bool
+    /// A paid mood was picked without it.
+    let locked: () -> Void
     @Binding var open: Bool
 
     var body: some View {
@@ -581,10 +585,10 @@ struct ParkMoodMenu: View {
                 ParkMenuRow(title: "How are you feeling?") {
                     ForEach(ParkMood.allCases, id: \.self) { choice in
                         Button {
-                            feel(choice)
+                            if choice.isPaid && !unlocked { locked() } else { feel(choice) }
                             withAnimation(.spring(duration: 0.3)) { open = false }
                         } label: {
-                            ParkMenuChoice(title: choice.title, chosen: choice == mood) {
+                            ParkMenuChoice(title: choice.title, chosen: choice == mood, locked: choice.isPaid && !unlocked) {
                                 ParkChibi(look: look, mood: choice, size: 30)
                             }
                         }
@@ -607,6 +611,10 @@ struct ParkMoveMenu: View {
 
     let look: ParkLook
     let perform: (ParkEmote) -> Void
+    /// Ziggy Forever is on, so the paid moves are open.
+    let unlocked: Bool
+    /// A paid move was picked without it.
+    let locked: () -> Void
     @Binding var open: Bool
 
     var body: some View {
@@ -629,10 +637,10 @@ struct ParkMoveMenu: View {
                 ParkMenuRow(title: "Do a move") {
                     ForEach(ParkEmote.menu, id: \.self) { emote in
                         Button {
-                            perform(emote)
+                            if emote.isPaid && !unlocked { locked() } else { perform(emote) }
                             withAnimation(.spring(duration: 0.3)) { open = false }
                         } label: {
-                            ParkMenuChoice(title: emote.title, chosen: false) {
+                            ParkMenuChoice(title: emote.title, chosen: false, locked: emote.isPaid && !unlocked) {
                                 ParkEmoteIllustration(emote: emote, look: look, size: 30)
                             }
                         }
@@ -645,6 +653,17 @@ struct ParkMoveMenu: View {
             }
         }
     }
+}
+
+/// The small padlock on anything that is part of Ziggy Forever.
+@available(iOS 18.0, *)
+private var parkLockBadge: some View {
+    Image(systemName: "lock.fill")
+        .font(.system(size: 7, weight: .black))
+        .foregroundStyle(.white)
+        .frame(width: 15, height: 15)
+        .background(parkPink, in: Circle())
+        .overlay(Circle().stroke(.white, lineWidth: 1))
 }
 
 /// The small chevron on a menu button, pointing where its menu opens.
@@ -691,6 +710,7 @@ private struct ParkMenuChoice<Picture: View>: View {
 
     let title: String
     let chosen: Bool
+    let locked: Bool
     @ViewBuilder let picture: Picture
 
     var body: some View {
@@ -699,6 +719,7 @@ private struct ParkMenuChoice<Picture: View>: View {
                 .frame(width: 38, height: 38)
                 .background(Circle().fill(parkPink.opacity(chosen ? 0.28 : 0.1)))
                 .overlay(Circle().stroke(parkPink, lineWidth: chosen ? 1.5 : 0))
+                .overlay(alignment: .bottomTrailing) { if locked { parkLockBadge } }
             Text(title)
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .foregroundStyle(parkPink)
@@ -1050,7 +1071,11 @@ struct ParkTrickMenu: View {
 
     let perform: (Ziggy3DTrick) -> Void
     let play: (ZiggyPlay) -> Void
-    @State private var open = false
+    /// Ziggy Forever is on, so playing with him is open.
+    let unlocked: Bool
+    /// Playing was picked without it.
+    let locked: () -> Void
+    @Binding var open: Bool
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
@@ -1113,7 +1138,7 @@ struct ParkTrickMenu: View {
                     }
                     .foregroundStyle(parkPink)
                     .padding(.horizontal, 8)
-                    .frame(width: 136, height: 36)
+                    .frame(width: 156, height: 36)
                     .background(Color(red: 1, green: 0.95, blue: 0.96), in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -1130,7 +1155,7 @@ struct ParkTrickMenu: View {
 
             ForEach(ZiggyPlay.allCases, id: \.self) { kind in
                 Button {
-                    play(kind)
+                    if unlocked { play(kind) } else { locked() }
                     withAnimation(.spring(duration: 0.3)) { open = false }
                 } label: {
                     HStack(spacing: 8) {
@@ -1147,10 +1172,13 @@ struct ParkTrickMenu: View {
                         Text(kind.title)
                             .font(.system(size: 14, weight: .bold, design: .rounded))
                         Spacer(minLength: 0)
+                        if !unlocked {
+                            Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold))
+                        }
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 8)
-                    .frame(width: 136, height: 36)
+                    .frame(width: 156, height: 36)
                     .background(LinearGradient(colors: [Color(red: 1, green: 0.62, blue: 0.72), parkPink], startPoint: .top, endPoint: .bottom), in: Capsule())
                 }
                 .buttonStyle(.plain)

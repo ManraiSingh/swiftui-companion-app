@@ -47,6 +47,9 @@ enum ParkLook: Int, CaseIterable {
 enum ParkMood: String, CaseIterable {
     case normal, happy, love, sad, angry
 
+    /// Part of Ziggy Forever.
+    var isPaid: Bool { [.love, .sad, .angry].contains(self) }
+
     var title: String {
         switch self {
         case .normal: return "Normal"
@@ -76,6 +79,9 @@ enum ParkEmote: String, CaseIterable {
 
     /// The ones in the emote menu; the rest belong to playing with Ziggy.
     static let menu: [ParkEmote] = [.wave, .love, .yay, .dance, .bow]
+
+    /// Part of Ziggy Forever.
+    var isPaid: Bool { [.yay, .dance, .bow].contains(self) }
 
     var title: String {
         switch self {

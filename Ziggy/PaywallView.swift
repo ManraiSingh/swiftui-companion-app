@@ -195,6 +195,9 @@ struct PaywallView: View {
 
             perk("doc.text.fill", "Print the whole book",
                  "A clean PDF of everything you made")
+
+            perk("pawprint.fill", "More in the park",
+                 "Play with Ziggy, plus every mood and move")
         }
         .padding(18)
         .background(
