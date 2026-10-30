@@ -339,15 +339,16 @@ final class ZiggyParkWorld {
         }
     }
 
-    /// 0 at golden hour, 1 at night: a minute of sunset, dusk drawing in,
-    /// a long night, then dawn and round again.
+    /// 0 at golden hour, 1 at night: nearly three minutes of sunset, dusk
+    /// drawing in, a shorter night, then dawn and round again. Mostly golden,
+    /// so the park you walk into looks like the one on the home card.
     private static func night(at time: Float) -> Float {
         let t = time.truncatingRemainder(dividingBy: 330)
         func ease(_ x: Float) -> Float { let c = min(1, max(0, x)); return c * c * (3 - 2 * c) }
-        if t < 55 { return 0 }
-        if t < 100 { return ease((t - 55) / 45) }
-        if t < 280 { return 1 }
-        return 1 - ease((t - 280) / 50)
+        if t < 170 { return 0 }
+        if t < 215 { return ease((t - 170) / 45) }
+        if t < 285 { return 1 }
+        return 1 - ease((t - 285) / 45)
     }
 
     private static func mix(_ a: UInt32, _ b: UInt32, _ t: Float) -> UIColor {
@@ -366,14 +367,14 @@ final class ZiggyParkWorld {
         let n = Self.night(at: now)
         nightAmount = n
 
-        sunLight.light.intensity = 3900 + (420 - 3900) * n
+        sunLight.light.intensity = 3900 + (900 - 3900) * n
         sunLight.light.color = Self.mix(0xFFCB95, 0x9FB4FF, n)
-        fillLight.light.intensity = 900 + (420 - 900) * n
+        fillLight.light.intensity = 900 + (700 - 900) * n
         fillLight.light.color = Self.mix(0xCDBEFF, 0x5E6FC8, n)
         scenery.setNight(n)
 
         // Dim the light from the sky itself as the evening goes.
-        let exponent: Float = 0.4 + (-1.9 - 0.4) * n
+        let exponent: Float = 0.4 + (-1.1 - 0.4) * n
         if abs(exponent - skyExponent) > 0.02, let sky = skyLight, var ibl = sky.components[ImageBasedLightComponent.self] {
             ibl.intensityExponent = exponent
             sky.components.set(ibl)
