@@ -239,7 +239,7 @@ class FirestoreManager {
                         "updatedAt": Timestamp()
                     ], merge: true) { error in
                         if let error {
-                            print("Device token save error:", error.localizedDescription)
+                            ziggyLog("Device token save error:", error.localizedDescription)
                         }
                     }
             }
@@ -299,7 +299,7 @@ class FirestoreManager {
                     // the caller's side, and the difference is the whole
                     // question when somebody's book fails to come back.
                     if let error {
-                        print("Relationship lookup failed:", error.localizedDescription)
+                        ziggyLog("Relationship lookup failed:", error.localizedDescription)
                     }
 
                     DispatchQueue.main.async {
@@ -339,7 +339,7 @@ class FirestoreManager {
                 .setData(["members": [uid]], merge: true) { error in
 
                     if let error {
-                        print("Could not free the seat:", error.localizedDescription)
+                        ziggyLog("Could not free the seat:", error.localizedDescription)
                     }
 
                     DispatchQueue.main.async { completion(error == nil) }
@@ -560,7 +560,7 @@ class FirestoreManager {
                 .addSnapshotListener { snapshot, error in
 
                     if let error = error {
-                        print("Pet listener error:", error.localizedDescription)
+                        ziggyLog("Pet listener error:", error.localizedDescription)
                         return
                     }
 
@@ -635,7 +635,7 @@ class FirestoreManager {
                 .addSnapshotListener { snapshot, error in
 
                     if let error = error {
-                        print("Emotion listener error:", error.localizedDescription)
+                        ziggyLog("Emotion listener error:", error.localizedDescription)
                         return
                     }
 
@@ -761,53 +761,79 @@ class FirestoreManager {
         }
     }
 
-    /// Permanently deletes everything stored for this relationship
-    /// (pet, instants, emotions, events, games, daily questions) and the
+    /// Permanently deletes everything stored for this relationship, and the
     /// relationship document itself. Used for the App Store-required
     /// "delete my data" path. Only touches the current relationship.
+    ///
+    /// Firestore does not delete what is nested under a document, and a phone
+    /// cannot ask what collections exist, so every one is named here. Anything
+    /// new stored under a relationship has to be added to this list, or it
+    /// outlives the promise this function makes.
+    ///
+    /// The relationship goes last, and only if everything else went: the rules
+    /// that allow all of this read its member list, so once it has gone,
+    /// whatever is left can never be reached again. Reports false if anything
+    /// failed, with the relationship still there so it can be tried again.
     func deleteRelationshipData(
-        completion: @escaping () -> Void
+        completion: @escaping (Bool) -> Void
     ) {
         guard !relationshipCode.isEmpty else {
-            completion()
+            completion(true)
             return
         }
 
         let relRef = db.collection("relationships")
             .document(relationshipCode)
 
-        let subcollections = [
-            "data", "emotions", "events", "games", "dailyQuestions"
-        ]
-
-        let group = DispatchGroup()
-
-        for sub in subcollections {
-
-            group.enter()
-            relRef.collection(sub).getDocuments { [weak self] snapshot, _ in
-
-                guard let self = self else {
-                    group.leave()
-                    return
+        Task {
+            do {
+                for sub in ["data", "emotions", "events", "dailyQuestions", "instants",
+                            "bouquets", "devices", "scrapbookMeta"] {
+                    try await deleteAll(in: relRef.collection(sub))
                 }
+                try await deleteAll(in: relRef.collection("scrapbooks"), nested: ["pages", "elements"])
 
-                let docs = snapshot?.documents ?? []
-                guard !docs.isEmpty else {
-                    group.leave()
-                    return
+                // Named one by one: these can exist under a game document
+                // that was never itself written, which no listing would show.
+                let park = relRef.collection("games").document("ziggyPark")
+                for sub in ["walkers", "presence", "voice", "notes"] {
+                    try await deleteAll(in: park.collection(sub))
                 }
+                let booth = relRef.collection("games").document("photobooth")
+                for sub in ["live", "shots"] {
+                    try await deleteAll(in: booth.collection(sub))
+                }
+                try await deleteAll(in: relRef.collection("games"))
 
-                let batch = self.db.batch()
-                for doc in docs {
-                    batch.deleteDocument(doc.reference)
-                }
-                batch.commit { _ in group.leave() }
+                try await relRef.delete()
+                await MainActor.run { completion(true) }
+            } catch {
+                ziggyLog("Could not delete everything:", error.localizedDescription)
+                await MainActor.run { completion(false) }
             }
         }
+    }
 
-        group.notify(queue: .main) {
-            relRef.delete { _ in completion() }
+    /// Empties a collection, and the collections named in `nested` under each
+    /// of its documents, a level at a time. In pages, because one batch can
+    /// hold only 500 writes. From the server, never the cache: a phone that
+    /// is offline should fail here rather than delete half of what it can see.
+    private func deleteAll(in collection: CollectionReference, nested: [String] = []) async throws {
+        while true {
+            let page = try await collection.limit(to: 400).getDocuments(source: .server)
+            guard !page.documents.isEmpty else { return }
+
+            if let next = nested.first {
+                for doc in page.documents {
+                    try await deleteAll(in: doc.reference.collection(next), nested: Array(nested.dropFirst()))
+                }
+            }
+
+            let batch = db.batch()
+            for doc in page.documents {
+                batch.deleteDocument(doc.reference)
+            }
+            try await batch.commit()
         }
     }
 
@@ -3307,7 +3333,7 @@ class FirestoreManager {
             .addSnapshotListener { snapshot, error in
 
                 if let error {
-                    print("Bouquets failed:", error.localizedDescription)
+                    ziggyLog("Bouquets failed:", error.localizedDescription)
                 }
 
                 let all = (snapshot?.documents ?? []).map { document -> Bouquet in
@@ -3353,7 +3379,7 @@ class FirestoreManager {
             .addSnapshotListener { snapshot, error in
 
                 if let error {
-                    print("Instant archive failed:", error.localizedDescription)
+                    ziggyLog("Instant archive failed:", error.localizedDescription)
                 }
 
                 let kept = (snapshot?.documents ?? []).map { document -> ArchivedInstant in

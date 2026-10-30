@@ -61,7 +61,7 @@ enum ZiggyKeychain {
 
         #if DEBUG
         if fallback != errSecSuccess {
-            print("Keychain: could not store \(key) (\(status) then \(fallback))")
+            ziggyLog("Keychain: could not store \(key) (\(status) then \(fallback))")
         }
         #endif
     }
@@ -84,7 +84,7 @@ enum ZiggyKeychain {
         else {
             #if DEBUG
             if status != errSecItemNotFound {
-                print("Keychain: could not read \(key) (\(status))")
+                ziggyLog("Keychain: could not read \(key) (\(status))")
             }
             #endif
             return nil
@@ -98,4 +98,12 @@ enum ZiggyKeychain {
         query[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
         SecItemDelete(query as CFDictionary)
     }
+}
+
+/// For the developer's eyes: prints in a debug build, and nothing at all in
+/// the App Store one.
+func ziggyLog(_ items: Any...) {
+    #if DEBUG
+    print(items.map { "\($0)" }.joined(separator: " "))
+    #endif
 }

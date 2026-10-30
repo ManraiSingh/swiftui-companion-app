@@ -198,9 +198,9 @@ final class ZiggySubscription: ObservableObject {
             // approval. Restoring a moment later picks it up, and nobody is
             // charged twice for asking.
             #if DEBUG
-            print("Purchase finished with no active entitlement.")
-            print("  active:", result.customerInfo.entitlements.active.keys.sorted())
-            print("  all:   ", result.customerInfo.entitlements.all.keys.sorted())
+            ziggyLog("Purchase finished with no active entitlement.")
+            ziggyLog("  active:", result.customerInfo.entitlements.active.keys.sorted())
+            ziggyLog("  all:   ", result.customerInfo.entitlements.all.keys.sorted())
             #endif
 
             lastError = "The purchase went through, but we couldn't unlock it yet. "

@@ -26,6 +26,7 @@ struct SettingsView: View {
     @State private var seatFreed = false
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
+    @State private var deleteFailed = false
     @State private var savedFlash = false
     @State private var copiedFlash = false
     @State private var paywall: PaywallReason?
@@ -374,6 +375,11 @@ struct SettingsView: View {
                 Text(account.isSignedIn
                      ? "This permanently removes your account and your shared \(petVM.pet.name), photos and messages for both of you. We'll ask Apple to confirm it's you first. This cannot be undone."
                      : "This permanently removes your shared \(petVM.pet.name), photos and messages for both of you. This cannot be undone.")
+            }
+            .alert("Couldn't delete everything", isPresented: $deleteFailed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Some of your data is still there. Check your connection and try again.")
             }
             .fullScreenCover(isPresented: $showSkinStore) {
                 SkinStoreView(petName: petVM.pet.name)
@@ -795,7 +801,15 @@ struct SettingsView: View {
 
             // The data goes while the account still exists, because Firestore's
             // rules are what let this device touch it at all.
-            FirestoreManager.shared.deleteRelationshipData {
+            FirestoreManager.shared.deleteRelationshipData { deleted in
+
+                // Anything left behind must stay reachable, so the account
+                // and the relationship stay too, ready to try again.
+                guard deleted else {
+                    isDeleting = false
+                    deleteFailed = true
+                    return
+                }
 
                 // Then the account itself. Apple requires an app offering
                 // sign-in to offer deletion from inside the app, and requires

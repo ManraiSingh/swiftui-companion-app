@@ -381,7 +381,7 @@ final class ZiggyAccount: ObservableObject {
                     // who never paired has no relationship — so it stays quiet
                     // and the ordinary pairing screen does its job.
                     #if DEBUG
-                    print("Recovery: no relationship found for this account")
+                    ziggyLog("Recovery: no relationship found for this account")
                     #endif
                     return
                 }
